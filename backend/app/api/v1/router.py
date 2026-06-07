@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.endpoints import (
-    auth, billing, branches, crm, dashboard, doctors, expenses, inventory, patients,
+    assistant, auth, billing, branches, crm, dashboard, doctors, expenses, inventory, patients,
     platform, public, purchasing, referrals, results, settings, suppliers, tests, users,
 )
 
@@ -15,6 +15,7 @@ api_router.include_router(platform.router)
 api_router.include_router(public.router)
 api_router.include_router(settings.router)
 api_router.include_router(dashboard.router)
+api_router.include_router(assistant.router)
 api_router.include_router(patients.router)
 api_router.include_router(doctors.router)
 api_router.include_router(tests.router)

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
 import { AnimatedPage } from "./animated-page";
+import { SmartAssistant } from "@/components/assistant/smart-assistant";
 import { useAuthStore } from "@/stores/auth-store";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
@@ -20,17 +21,19 @@ export function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden mesh-bg" dir={dir}>
-      <div className="hidden shrink-0 md:block">
+      {/* Sidebar always visible on desktop */}
+      <div className="hidden shrink-0 md:flex">
         <AppSidebar variant={variant} />
       </div>
 
+      {/* Mobile drawer only */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent
           side={dir === "rtl" ? "right" : "left"}
           className="w-64 border-sidebar-border p-0"
-          showCloseButton={false}
+          showCloseButton
         >
-          <AppSidebar variant={variant} expanded onNavigate={() => setMobileOpen(false)} />
+          <AppSidebar variant={variant} onNavigate={() => setMobileOpen(false)} />
         </SheetContent>
       </Sheet>
 
@@ -46,6 +49,8 @@ export function DashboardLayout({
           </div>
         </main>
       </div>
+
+      {variant === "lab" && <SmartAssistant />}
     </div>
   );
 }

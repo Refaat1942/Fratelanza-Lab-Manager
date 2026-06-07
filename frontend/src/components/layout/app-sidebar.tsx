@@ -43,59 +43,33 @@ const platformModules = [
 
 interface AppSidebarProps {
   variant?: "lab" | "platform";
-  expanded?: boolean;
   onNavigate?: () => void;
 }
 
-export function AppSidebar({ variant = "lab", expanded = false, onNavigate }: AppSidebarProps) {
+export function AppSidebar({ variant = "lab", onNavigate }: AppSidebarProps) {
   const pathname = usePathname();
   const locale = useAuthStore((s) => s.locale);
   const modules = variant === "platform" ? platformModules : labModules;
 
   return (
-    <aside
-      className={cn(
-        "group/sidebar flex h-full flex-col border-sidebar-border bg-sidebar transition-[width] duration-300 ease-out",
-        expanded ? "w-64 border-e" : "w-[76px] border-e hover:w-64"
-      )}
-    >
-      {/* Logo — always visible */}
+    <aside className="flex h-full w-64 shrink-0 flex-col border-e border-sidebar-border bg-sidebar">
       <div className="relative shrink-0 overflow-hidden border-b border-sidebar-border">
-        <div className="absolute inset-x-0 top-0 h-1 gradient-brand animate-pulse-soft" />
-        <div className="flex h-[72px] items-center gap-3 px-3 pt-1">
+        <div className="absolute inset-x-0 top-0 h-1 gradient-brand" />
+        <div className="flex h-[76px] items-center gap-3 px-4 pt-1">
           {variant === "lab" ? (
-            <AppBrand
-              showName
-              size="sm"
-              href="/dashboard"
-              nameClassName={cn(
-                "transition-all duration-300",
-                expanded
-                  ? "opacity-100"
-                  : "w-0 overflow-hidden opacity-0 group-hover/sidebar:w-auto group-hover/sidebar:opacity-100"
-              )}
-            />
+            <AppBrand showName size="sm" href="/dashboard" />
           ) : (
             <Link href="/platform" className="flex items-center gap-3">
               <div className="logo-ring flex h-10 w-10 shrink-0 items-center justify-center rounded-xl gradient-brand text-white">
                 <Microscope className="h-5 w-5" />
               </div>
-              <p
-                className={cn(
-                  "truncate text-sm font-bold gradient-brand-text transition-all duration-300",
-                  expanded
-                    ? "opacity-100"
-                    : "w-0 overflow-hidden opacity-0 group-hover/sidebar:w-auto group-hover/sidebar:opacity-100"
-                )}
-              >
-                {t(locale, "appName")}
-              </p>
+              <p className="truncate text-sm font-bold gradient-brand-text">{t(locale, "appName")}</p>
             </Link>
           )}
         </div>
       </div>
 
-      <nav className="flex-1 overflow-x-hidden overflow-y-auto p-2">
+      <nav className="flex-1 overflow-y-auto p-3">
         <ul className="space-y-1">
           {modules.map(({ href, icon: Icon, key }) => {
             const active =
@@ -108,24 +82,13 @@ export function AppSidebar({ variant = "lab", expanded = false, onNavigate }: Ap
                 <Link
                   href={href}
                   onClick={onNavigate}
-                  title={!expanded ? label : undefined}
                   className={cn(
                     "sidebar-nav-item",
-                    active ? "sidebar-nav-item-active" : "sidebar-nav-item-inactive",
-                    !expanded && "justify-center px-2.5 group-hover/sidebar:justify-start group-hover/sidebar:px-3"
+                    active ? "sidebar-nav-item-active" : "sidebar-nav-item-inactive"
                   )}
                 >
                   <Icon className="h-[18px] w-[18px] shrink-0" />
-                  <span
-                    className={cn(
-                      "truncate whitespace-nowrap transition-all duration-300",
-                      expanded
-                        ? "opacity-100"
-                        : "w-0 overflow-hidden opacity-0 group-hover/sidebar:w-auto group-hover/sidebar:opacity-100"
-                    )}
-                  >
-                    {label}
-                  </span>
+                  <span className="truncate">{label}</span>
                 </Link>
               </li>
             );
@@ -133,16 +96,9 @@ export function AppSidebar({ variant = "lab", expanded = false, onNavigate }: Ap
         </ul>
       </nav>
 
-      <div className="shrink-0 border-t border-sidebar-border p-3">
-        <div className="h-1.5 rounded-full gradient-brand opacity-80" />
-        <p
-          className={cn(
-            "mt-2 truncate text-[10px] text-muted-foreground transition-opacity duration-200",
-            expanded ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
-          )}
-        >
-          LabMaster © 2026
-        </p>
+      <div className="shrink-0 border-t border-sidebar-border p-4">
+        <div className="mb-2 h-1.5 rounded-full gradient-brand opacity-80" />
+        <p className="text-[10px] text-muted-foreground">LabMaster © 2026</p>
       </div>
     </aside>
   );
