@@ -2,7 +2,7 @@ import hashlib
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -76,7 +76,10 @@ class AuthService:
     async def platform_login(self, data: PlatformLoginRequest) -> TokenResponse:
         username = data.username.strip().lower()
         result = await self.db.execute(
-            select(PlatformUser).where(PlatformUser.username == username, PlatformUser.is_active.is_(True))
+            select(PlatformUser).where(
+                func.lower(PlatformUser.username) == username,
+                PlatformUser.is_active.is_(True),
+            )
         )
         user = result.scalar_one_or_none()
         if not user or not verify_password(data.password, user.password_hash):

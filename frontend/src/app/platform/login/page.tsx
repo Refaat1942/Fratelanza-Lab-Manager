@@ -59,7 +59,9 @@ export default function PlatformLoginPage() {
                   required
                   className="h-11 bg-background"
                   autoComplete="username"
+                  placeholder="superadmin"
                 />
+                <p className="text-xs text-muted-foreground">Default owner account: superadmin / Admin@123</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
