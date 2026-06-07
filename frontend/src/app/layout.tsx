@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { Tajawal, JetBrains_Mono } from "next/font/google";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { BrandingTheme } from "@/components/branding/branding-theme";
+import { LocaleDirection } from "@/components/layout/locale-direction";
 import "./globals.css";
 
-const plusJakarta = Plus_Jakarta_Sans({
+const tajawal = Tajawal({
   variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "700", "800"],
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -27,12 +28,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" suppressHydrationWarning>
-      <body className={`${plusJakarta.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
-        <TooltipProvider>
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <body className={`${tajawal.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
+        <TooltipProvider delay={0}>
+          <LocaleDirection />
           <BrandingTheme />
           {children}
-          <Toaster />
+          <Toaster position="top-center" richColors />
         </TooltipProvider>
       </body>
     </html>

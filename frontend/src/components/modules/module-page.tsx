@@ -32,7 +32,7 @@ export function ModulePage({
       </div>
 
       {data.length === 0 ? (
-        <Card className="border-dashed">
+        <Card className="border-dashed border-border/60 shadow-card">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Construction className="mb-4 h-12 w-12 text-muted-foreground/50" />
             <h3 className="text-lg font-medium">

@@ -23,9 +23,9 @@ export default function SettingsPage() {
     company_name: "",
     company_name_ar: "",
     logo_url: "",
-    primary_color: "#1e3a5f",
-    secondary_color: "#2d5a87",
-    accent_color: "#c9a227",
+    primary_color: "#0F766E",
+    secondary_color: "#14B8A6",
+    accent_color: "#CCFBF1",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -218,7 +218,7 @@ export default function SettingsPage() {
                 <div
                   className="rounded-xl p-6 text-center text-white"
                   style={{
-                    background: `linear-gradient(145deg, ${form.primary_color} 0%, #0f172a 100%)`,
+                    background: `linear-gradient(145deg, ${form.primary_color || "#0F766E"} 0%, #134e4a 100%)`,
                   }}
                 >
                   <div className="mx-auto mb-4 flex justify-center">

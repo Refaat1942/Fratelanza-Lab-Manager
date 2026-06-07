@@ -43,7 +43,13 @@ const platformModules = [
   { href: "/platform/audit", icon: FileText, key: "auditLogs" as const },
 ];
 
-export function AppSidebar({ variant = "lab" }: { variant?: "lab" | "platform" }) {
+interface AppSidebarProps {
+  variant?: "lab" | "platform";
+  expanded?: boolean;
+  onNavigate?: () => void;
+}
+
+export function AppSidebar({ variant = "lab", expanded = false, onNavigate }: AppSidebarProps) {
   const pathname = usePathname();
   const locale = useAuthStore((s) => s.locale);
   const branding = useBrandingStore((s) => s.branding);
@@ -51,53 +57,86 @@ export function AppSidebar({ variant = "lab" }: { variant?: "lab" | "platform" }
   const labTitle = variant === "lab" ? displayName(branding, locale) : t(locale, "appName");
 
   return (
-    <aside className="flex h-full w-64 flex-col bg-sidebar text-sidebar-foreground shadow-xl">
-      <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-5">
+    <aside
+      className={cn(
+        "group/sidebar flex h-full flex-col border-sidebar-border bg-sidebar transition-[width] duration-300 ease-out",
+        expanded ? "w-60 border-e" : "w-[72px] border-e hover:w-60"
+      )}
+    >
+      <div className="flex h-14 shrink-0 items-center gap-3 overflow-hidden border-b border-sidebar-border px-3">
         {variant === "lab" ? (
           <BrandingLogo
             logoUrl={branding.logo_url}
             alt={labTitle}
             size="sm"
-            className="rounded-lg bg-sidebar-primary ring-0"
-            accentColor={branding.primary_color}
+            className="shrink-0 rounded-lg ring-1 ring-border/50"
+            accentColor="#0f766e"
           />
         ) : (
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
-            <Microscope className="h-5 w-5 text-sidebar-primary-foreground" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <Microscope className="h-4 w-4" />
           </div>
         )}
-        <div className="min-w-0">
-          <h1 className="text-sm font-bold leading-tight truncate">{labTitle}</h1>
+        <div
+          className={cn(
+            "min-w-0 transition-opacity duration-200",
+            expanded ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+          )}
+        >
+          <h1 className="truncate text-sm font-bold text-foreground">{labTitle}</h1>
           {variant === "platform" && (
-            <p className="text-[10px] text-sidebar-foreground/60">{t(locale, "platform")}</p>
+            <p className="truncate text-[10px] text-muted-foreground">{t(locale, "platform")}</p>
           )}
         </div>
       </div>
-      <nav className="flex-1 overflow-y-auto p-3">
+
+      <nav className="flex-1 overflow-x-hidden overflow-y-auto p-2">
         <ul className="space-y-0.5">
           {modules.map(({ href, icon: Icon, key }) => {
-            const active = pathname === href || (href !== "/platform" && href !== "/dashboard" && pathname.startsWith(href + "/")) || pathname === href;
+            const active =
+              pathname === href ||
+              (href !== "/platform" && href !== "/dashboard" && pathname.startsWith(href + "/"));
+            const label = t(locale, key);
+
             return (
               <li key={href}>
                 <Link
                   href={href}
+                  onClick={onNavigate}
+                  title={!expanded ? label : undefined}
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200",
-                    active
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    "sidebar-nav-item",
+                    active ? "sidebar-nav-item-active" : "sidebar-nav-item-inactive",
+                    !expanded && "justify-center px-2.5 group-hover/sidebar:justify-start group-hover/sidebar:px-3"
                   )}
                 >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  {t(locale, key)}
+                  <Icon className={cn("h-[18px] w-[18px] shrink-0", active && "text-primary")} />
+                  <span
+                    className={cn(
+                      "truncate whitespace-nowrap transition-all duration-200",
+                      expanded
+                        ? "opacity-100"
+                        : "w-0 overflow-hidden opacity-0 group-hover/sidebar:w-auto group-hover/sidebar:opacity-100"
+                    )}
+                  >
+                    {label}
+                  </span>
                 </Link>
               </li>
             );
           })}
         </ul>
       </nav>
-      <div className="border-t border-sidebar-border p-4 text-[10px] text-sidebar-foreground/50">
-        LabMaster Egypt © 2026
+
+      <div className="shrink-0 border-t border-sidebar-border p-3">
+        <p
+          className={cn(
+            "truncate text-[10px] text-muted-foreground transition-opacity duration-200",
+            expanded ? "opacity-100" : "opacity-0 group-hover/sidebar:opacity-100"
+          )}
+        >
+          LabMaster © 2026
+        </p>
       </div>
     </aside>
   );

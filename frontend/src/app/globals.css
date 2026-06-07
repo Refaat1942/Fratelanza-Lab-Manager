@@ -43,80 +43,103 @@
   --radius-xl: calc(var(--radius) * 1.4);
 }
 
-/* LabMaster Egypt — Professional Navy & Gold */
+/* LabMaster — Premium SaaS (Teal palette) */
 :root {
-  --background: oklch(0.985 0.004 265);
-  --foreground: oklch(0.22 0.03 265);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.03 265);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.03 265);
-  --primary: oklch(0.42 0.09 265);
-  --primary-foreground: oklch(0.99 0.005 265);
-  --secondary: oklch(0.94 0.015 265);
-  --secondary-foreground: oklch(0.32 0.05 265);
-  --muted: oklch(0.96 0.008 265);
-  --muted-foreground: oklch(0.48 0.02 265);
-  --accent: oklch(0.72 0.12 75);
-  --accent-foreground: oklch(0.28 0.06 75);
-  --destructive: oklch(0.55 0.22 25);
-  --border: oklch(0.91 0.012 265);
-  --input: oklch(0.93 0.012 265);
-  --ring: oklch(0.42 0.09 265);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.2 0.04 265);
-  --sidebar-foreground: oklch(0.95 0.01 265);
-  --sidebar-primary: oklch(0.72 0.12 75);
-  --sidebar-primary-foreground: oklch(0.2 0.04 265);
-  --sidebar-accent: oklch(0.26 0.045 265);
-  --sidebar-accent-foreground: oklch(0.95 0.01 265);
-  --sidebar-border: oklch(0.3 0.04 265);
-  --chart-1: oklch(0.42 0.09 265);
-  --chart-2: oklch(0.55 0.08 250);
-  --chart-3: oklch(0.72 0.12 75);
-  --chart-4: oklch(0.6 0.1 200);
-  --chart-5: oklch(0.5 0.06 280);
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --secondary: #14b8a6;
+  --secondary-foreground: #ffffff;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #ccfbf1;
+  --accent-foreground: #0f766e;
+  --destructive: #dc2626;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #0f766e;
+  --radius: 0.75rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #475569;
+  --sidebar-primary: #0f766e;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #f1f5f9;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #e2e8f0;
+  --chart-1: #0f766e;
+  --chart-2: #14b8a6;
+  --chart-3: #2dd4bf;
+  --chart-4: #5eead4;
+  --chart-5: #99f6e4;
 }
 
 @layer base {
-  * { @apply border-border outline-ring/50; }
-  body { @apply bg-background text-foreground antialiased; }
-  html { @apply font-sans scroll-smooth; }
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  html {
+    @apply font-sans scroll-smooth;
+  }
 }
 
 @layer utilities {
+  .shadow-card {
+    box-shadow:
+      0 1px 2px 0 rgb(15 23 42 / 0.04),
+      0 1px 3px 0 rgb(15 23 42 / 0.06);
+  }
+  .shadow-card-md {
+    box-shadow:
+      0 4px 6px -1px rgb(15 23 42 / 0.05),
+      0 2px 4px -2px rgb(15 23 42 / 0.05);
+  }
+  .shadow-card-lg {
+    box-shadow:
+      0 10px 15px -3px rgb(15 23 42 / 0.06),
+      0 4px 6px -4px rgb(15 23 42 / 0.06);
+  }
   .gradient-hero {
-    background: linear-gradient(
-      145deg,
-      oklch(0.16 0.045 265) 0%,
-      oklch(0.24 0.06 265) 45%,
-      oklch(0.32 0.07 255) 100%
-    );
+    background: linear-gradient(145deg, #0f766e 0%, #0d9488 40%, #134e4a 100%);
   }
   .gradient-card {
-    background: linear-gradient(145deg, oklch(1 0 0) 0%, oklch(0.98 0.008 265) 100%);
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   }
-  .glass {
-    background: oklch(1 0 0 / 0.92);
-    backdrop-filter: blur(16px);
-  }
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
+  .glass-header {
+    background: rgb(255 255 255 / 0.85);
+    backdrop-filter: blur(12px);
   }
   .animate-fade-up {
-    animation: fadeUp 0.6s ease-out forwards;
+    animation: fadeUp 0.45s ease-out forwards;
   }
   .stat-glow {
-    box-shadow: 0 4px 24px oklch(0.42 0.09 265 / 0.12);
+    box-shadow: 0 4px 20px rgb(15 118 110 / 0.12);
   }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
+  .sidebar-nav-item {
+    @apply relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200;
+  }
+  .sidebar-nav-item-active {
+    @apply bg-primary/10 text-primary;
+  }
+  .sidebar-nav-item-inactive {
+    @apply text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+  }
 }
 
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

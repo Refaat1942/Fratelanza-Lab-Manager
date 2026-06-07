@@ -29,6 +29,7 @@ function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
+  const dir = locale === "ar" ? "rtl" : "ltr";
 
   const fetchBranding = useCallback(async (code: string) => {
     const trimmed = code.trim().toLowerCase();
@@ -76,7 +77,7 @@ function LoginPageContent() {
       setStoreTenant(tenantCode);
       persistBranding(branding);
       if (user.tenant_id) localStorage.setItem("tenant_id", user.tenant_id);
-      toast.success("Welcome back!");
+      toast.success(locale === "ar" ? "مرحباً بعودتك!" : "Welcome back!");
       router.push(redirect);
     } catch (err) {
       toast.error(getApiError(err));
@@ -89,53 +90,60 @@ function LoginPageContent() {
   const accent = branding.primary_color || DEFAULT_BRANDING.primary_color;
 
   return (
-    <div className="flex min-h-screen">
-      <div
-        className="relative hidden lg:flex lg:w-1/2 flex-col items-center justify-center p-12 text-white overflow-hidden"
-        style={{
-          background: `linear-gradient(145deg, ${accent} 0%, #0f172a 55%, #1e293b 100%)`,
-        }}
-      >
-        <div className="pointer-events-none absolute inset-0 opacity-20">
-          <div className="absolute -top-20 -right-20 h-72 w-72 rounded-full bg-white/30 blur-3xl" />
-          <div className="absolute -bottom-20 -left-20 h-72 w-72 rounded-full bg-amber-400/20 blur-3xl" />
+    <div className="flex min-h-screen bg-background" dir={dir}>
+      <div className="gradient-hero relative hidden lg:flex lg:w-[48%] flex-col items-center justify-center overflow-hidden p-12 text-white">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 -end-24 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute -bottom-24 -start-24 h-80 w-80 rounded-full bg-secondary/30 blur-3xl" />
         </div>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative z-10 flex flex-col items-center text-center max-w-md"
+          className="relative z-10 flex max-w-md flex-col items-center text-center"
         >
           {loadingBrand ? (
-            <Loader2 className="h-12 w-12 animate-spin text-white/70 mb-8" />
+            <Loader2 className="mb-8 h-12 w-12 animate-spin text-white/70" />
           ) : (
             <BrandingLogo
               logoUrl={branding.logo_url}
               alt={name}
               size="xl"
-              className="mb-8 bg-white/10 ring-white/30"
+              className="mb-8 bg-white/10 ring-white/20"
               accentColor="#ffffff"
             />
           )}
           <h1 className="text-4xl font-bold tracking-tight">{name}</h1>
-          <p className="mt-4 text-lg text-white/80 leading-relaxed">
+          <p className="mt-4 text-lg leading-relaxed text-white/85">
             {locale === "ar"
               ? "نظام إدارة المختبرات الطبية — ERP و LIMS متكامل"
               : "Medical Laboratory ERP & LIMS — patients, tests, billing & more"}
           </p>
-          <p className="mt-8 text-sm text-white/50">Powered by LabMaster Egypt</p>
+          <p className="mt-10 text-sm text-white/50">Powered by LabMaster Egypt</p>
         </motion.div>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center bg-background p-6">
-        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="w-full max-w-md">
-          <Card className="w-full border-0 shadow-xl">
+      <div className="flex flex-1 flex-col items-center justify-center p-6 sm:p-10">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md"
+        >
+          <Card className="border-border/60 shadow-card-lg">
             <CardHeader className="text-center pb-2 lg:hidden">
               <div className="mx-auto mb-3">
                 <BrandingLogo logoUrl={branding.logo_url} alt={name} size="md" accentColor={accent} />
               </div>
-              <CardTitle className="text-2xl font-semibold tracking-tight">{name}</CardTitle>
+              <CardTitle className="text-2xl font-bold tracking-tight">{name}</CardTitle>
               <CardDescription>
                 {locale === "ar" ? "تسجيل دخول المختبر" : "Laboratory Sign In"}
+              </CardDescription>
+            </CardHeader>
+            <CardHeader className="hidden pb-2 lg:block">
+              <CardTitle className="text-xl font-bold">
+                {locale === "ar" ? "تسجيل الدخول" : "Sign In"}
+              </CardTitle>
+              <CardDescription>
+                {locale === "ar" ? "أدخل بيانات حساب المختبر" : "Enter your laboratory credentials"}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -147,7 +155,7 @@ function LoginPageContent() {
                     value={tenantCode}
                     onChange={(e) => setTenantCode(e.target.value)}
                     required
-                    className="h-11"
+                    className="h-11 bg-background"
                     autoComplete="organization"
                     placeholder={locale === "ar" ? "مثال: demo-lab" : "e.g. demo-lab"}
                   />
@@ -159,7 +167,7 @@ function LoginPageContent() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
-                    className="h-11"
+                    className="h-11 bg-background"
                     autoComplete="username"
                   />
                 </div>
@@ -171,21 +179,27 @@ function LoginPageContent() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="h-11"
+                    className="h-11 bg-background"
                     autoComplete="current-password"
                   />
                 </div>
                 <Button
                   type="submit"
-                  className="h-11 w-full text-base text-white"
+                  className="h-11 w-full text-base font-semibold"
                   disabled={loading}
                   style={{ backgroundColor: accent }}
                 >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : locale === "ar" ? "دخول" : "Sign In"}
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : locale === "ar" ? (
+                    "دخول"
+                  ) : (
+                    "Sign In"
+                  )}
                 </Button>
               </form>
-              <p className="mt-4 text-center text-sm text-muted-foreground">
-                <Link href="/platform/login" className="hover:underline" style={{ color: accent }}>
+              <p className="mt-5 text-center text-sm text-muted-foreground">
+                <Link href="/platform/login" className="font-medium text-primary hover:underline">
                   {locale === "ar" ? "بوابة مالك المنصة ←" : "Platform admin portal →"}
                 </Link>
               </p>
@@ -199,11 +213,13 @@ function LoginPageContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      }
+    >
       <LoginPageContent />
     </Suspense>
   );

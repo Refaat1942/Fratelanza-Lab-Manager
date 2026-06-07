@@ -1,6 +1,6 @@
 "use client";
 
-import { Globe, LogOut, User } from "lucide-react";
+import { Globe, LogOut, Menu, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -13,7 +13,11 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useRouter } from "next/navigation";
 import type { Locale } from "@/lib/i18n";
 
-export function AppHeader() {
+interface AppHeaderProps {
+  onMenuClick?: () => void;
+}
+
+export function AppHeader({ onMenuClick }: AppHeaderProps) {
   const { user, locale, setLocale, logout } = useAuthStore();
   const router = useRouter();
 
@@ -31,35 +35,58 @@ export function AppHeader() {
     .toUpperCase() || "LM";
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card px-6">
-      <div />
+    <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center justify-between border-b border-border glass-header px-4 sm:px-6">
       <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
+          onClick={onMenuClick}
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-2 sm:gap-3">
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
-            <Globe className="h-4 w-4 mr-2" />
-            {locale === "ar" ? "العربية" : "English"}
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground" />
+            }
+          >
+            <Globe className="h-4 w-4" />
+            <span className="hidden sm:inline">{locale === "ar" ? "العربية" : "English"}</span>
           </DropdownMenuTrigger>
-          <DropdownMenuContent>
+          <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => setLocale("ar" as Locale)}>العربية</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setLocale("en" as Locale)}>English</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
         <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" className="flex items-center gap-2" />}>
-            <Avatar className="h-8 w-8">
-              <AvatarFallback>{initials}</AvatarFallback>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="ghost" className="flex items-center gap-2 rounded-full pe-1 ps-1 hover:bg-muted" />
+            }
+          >
+            <Avatar className="h-8 w-8 ring-2 ring-primary/10">
+              <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                {initials}
+              </AvatarFallback>
             </Avatar>
-            <span className="hidden sm:inline text-sm">{user?.full_name}</span>
+            <span className="hidden sm:inline max-w-[120px] truncate text-sm font-medium">
+              {user?.full_name}
+            </span>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
+              <User className="h-4 w-4" />
               {user?.username || user?.email}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+              <LogOut className="h-4 w-4" />
+              {locale === "ar" ? "تسجيل الخروج" : "Logout"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

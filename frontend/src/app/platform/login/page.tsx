@@ -38,14 +38,14 @@ export default function PlatformLoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center gradient-hero p-4">
+    <div className="flex min-h-screen items-center justify-center gradient-hero p-4" dir="rtl">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
-        <Card className="glass border-white/10 shadow-2xl">
+        <Card className="border-border/60 bg-card shadow-card-lg">
           <CardHeader className="text-center">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/20">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
               <Shield className="h-7 w-7 text-primary" />
             </div>
-            <CardTitle className="text-2xl font-semibold tracking-tight">SaaS Owner Portal</CardTitle>
+            <CardTitle className="text-2xl font-bold tracking-tight">SaaS Owner Portal</CardTitle>
             <CardDescription>منصة مالك لاب ماستر مصر</CardDescription>
           </CardHeader>
           <CardContent>
@@ -57,7 +57,7 @@ export default function PlatformLoginPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   required
-                  className="h-11"
+                  className="h-11 bg-background"
                   autoComplete="username"
                 />
               </div>
@@ -69,16 +69,16 @@ export default function PlatformLoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="h-11"
+                  className="h-11 bg-background"
                   autoComplete="current-password"
                 />
               </div>
-              <Button type="submit" className="h-11 w-full" disabled={loading}>
+              <Button type="submit" className="h-11 w-full font-semibold" disabled={loading}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign In"}
               </Button>
             </form>
             <p className="mt-4 text-center text-sm text-muted-foreground">
-              <Link href="/login" className="text-primary hover:underline">
+              <Link href="/login" className="font-medium text-primary hover:underline">
                 ← Laboratory login
               </Link>
             </p>
