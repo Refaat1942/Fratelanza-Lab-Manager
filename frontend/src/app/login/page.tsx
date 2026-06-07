@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -157,8 +156,13 @@ function LoginPageContent() {
                     required
                     className="h-11 bg-background"
                     autoComplete="organization"
-                    placeholder={locale === "ar" ? "مثال: demo-lab" : "e.g. demo-lab"}
+                    placeholder="demo-lab"
                   />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {locale === "ar"
+                      ? "المعرّف الفريد لمختبرك عند التسجيل (أحرف إنجليزية صغيرة، بدون مسافات). للتجربة استخدم: demo-lab"
+                      : "Your lab's unique ID from registration (lowercase, no spaces). For demo use: demo-lab"}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="username">{locale === "ar" ? "اسم المستخدم" : "Username"}</Label>
@@ -197,11 +201,6 @@ function LoginPageContent() {
                   )}
                 </Button>
               </form>
-              <p className="mt-5 text-center text-sm text-muted-foreground">
-                <Link href="/platform/login" className="font-medium text-primary hover:underline">
-                  {locale === "ar" ? "بوابة مالك المنصة ←" : "Platform admin portal →"}
-                </Link>
-              </p>
             </CardContent>
           </Card>
         </motion.div>
