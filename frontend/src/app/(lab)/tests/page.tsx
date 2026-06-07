@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, MoreHorizontal, Trash2 } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,7 @@ export default function TestsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyTest);
   const [saving, setSaving] = useState(false);
 
@@ -67,20 +68,27 @@ export default function TestsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const createTest = async (e: React.FormEvent) => {
+  const saveTest = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    const payload = {
+      category_id: form.category_id,
+      name: form.name,
+      name_ar: form.name_ar,
+      price: parseFloat(form.price) || 0,
+      cost: parseFloat(form.cost) || 0,
+      turnaround_hours: parseInt(form.turnaround_hours, 10) || 24,
+    };
     try {
-      await api.post("/tests", {
-        category_id: form.category_id,
-        name: form.name,
-        name_ar: form.name_ar,
-        price: parseFloat(form.price) || 0,
-        cost: parseFloat(form.cost) || 0,
-        turnaround_hours: parseInt(form.turnaround_hours, 10) || 24,
-      });
-      toast.success(locale === "ar" ? "تم إضافة التحليل" : "Test created");
+      if (editId) {
+        await api.put(`/tests/${editId}`, payload);
+        toast.success(locale === "ar" ? "تم تحديث التحليل" : "Test updated");
+      } else {
+        await api.post("/tests", payload);
+        toast.success(locale === "ar" ? "تم إضافة التحليل" : "Test created");
+      }
       setOpen(false);
+      setEditId(null);
       setForm(emptyTest);
       load();
     } catch (err) {
@@ -88,6 +96,19 @@ export default function TestsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const openEdit = (test: Test) => {
+    setEditId(test.id);
+    setForm({
+      category_id: test.category_id,
+      name: test.name,
+      name_ar: test.name_ar,
+      price: String(test.price),
+      cost: String(test.cost),
+      turnaround_hours: String(test.turnaround_hours),
+    });
+    setOpen(true);
   };
 
   const deleteTest = async (id: string) => {
@@ -136,6 +157,9 @@ export default function TestsPage() {
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => openEdit(row.original)}>
+              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+            </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deleteTest(row.original.id)}>
               <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
@@ -154,16 +178,16 @@ export default function TestsPage() {
             {locale === "ar" ? "كتالوج التحاليل بالعربية والإنجليزية" : "Test catalog with Arabic/English names and prices"}
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyTest); } }}>
           <DialogTrigger render={<Button className="shadow-md" />}>
             <Plus className="mr-2 h-4 w-4" />
             {t(locale, "create")}
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>{locale === "ar" ? "تحليل جديد" : "New Test"}</DialogTitle>
+              <DialogTitle>{editId ? (locale === "ar" ? "تعديل تحليل" : "Edit Test") : (locale === "ar" ? "تحليل جديد" : "New Test")}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={createTest} className="space-y-4">
+            <form onSubmit={saveTest} className="space-y-4">
               <div className="space-y-2">
                 <Label>{locale === "ar" ? "الفئة" : "Category"} *</Label>
                 <Select value={form.category_id} onValueChange={(v) => v && setForm({ ...form, category_id: v })}>

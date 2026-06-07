@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.orders import LabOrder, LabOrderItem, LabResult, LabResultValue, OrderStatus, ResultStatus
 from app.models.patients import Patient, PatientVisit, VisitStatus
-from app.models.tests import Test
+from app.models.tests import Test, TestResultTemplate
 from app.models.tenant_config import Branch
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.results import LabOrderCreate, ResultEntryCreate
@@ -179,6 +179,47 @@ class ResultsService:
         lab_result.notes = data.notes
         await self.db.flush()
         return lab_result
+
+    async def get_result_form(self, tenant_id: UUID, result_id: UUID) -> dict:
+        result = await self.db.execute(
+            select(LabResult, Test, Patient, LabOrder)
+            .join(Test, LabResult.test_id == Test.id)
+            .join(LabOrder, LabResult.order_id == LabOrder.id)
+            .join(Patient, LabOrder.patient_id == Patient.id)
+            .where(LabResult.id == result_id, LabResult.tenant_id == tenant_id, LabResult.deleted_at.is_(None))
+        )
+        row = result.first()
+        if not row:
+            raise ValueError("Result not found")
+        lab_result, test, patient, order = row
+        tpl_result = await self.db.execute(
+            select(TestResultTemplate)
+            .where(TestResultTemplate.test_id == test.id, TestResultTemplate.tenant_id == tenant_id)
+            .order_by(TestResultTemplate.sort_order)
+        )
+        templates = tpl_result.scalars().all()
+        if not templates:
+            templates = [
+                type("T", (), {"parameter_name": "Result", "parameter_name_ar": "النتيجة", "unit": "", "field_type": "text", "sort_order": 0})()
+            ]
+        return {
+            "result_id": str(lab_result.id),
+            "order_number": order.order_number,
+            "patient_name": patient.full_name,
+            "test_name": test.name,
+            "test_id": str(test.id),
+            "status": lab_result.status.value,
+            "fields": [
+                {
+                    "parameter_name": t.parameter_name,
+                    "parameter_name_ar": getattr(t, "parameter_name_ar", None),
+                    "unit": t.unit,
+                    "field_type": getattr(t, "field_type", "numeric"),
+                    "sort_order": getattr(t, "sort_order", i),
+                }
+                for i, t in enumerate(templates)
+            ],
+        }
 
     async def release_result(self, tenant_id: UUID, result_id: UUID) -> LabResult:
         result = await self.db.execute(

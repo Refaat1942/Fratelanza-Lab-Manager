@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.common import MessageResponse, PaginationParams
-from app.schemas.tests import TestCategoryResponse, TestCreate, TestResponse, TestUpdate
+from app.schemas.tests import ResultTemplateField, ResultTemplateUpdate, TestCategoryResponse, TestCreate, TestResponse, TestUpdate
 from app.services.test_service import TestService
 
 router = APIRouter(prefix="/tests", tags=["Tests"])
@@ -79,6 +79,52 @@ async def update_test(
     if not test:
         raise HTTPException(status_code=404, detail="Test not found")
     return TestResponse.model_validate(test)
+
+
+@router.get("/{test_id}/result-template", response_model=list[ResultTemplateField])
+async def get_result_template(
+    test_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("tests.read"),
+):
+    templates = await TestService(db).get_result_template(tenant.id, test_id)
+    return [
+        ResultTemplateField(
+            parameter_name=t.parameter_name,
+            parameter_name_ar=t.parameter_name_ar,
+            unit=t.unit,
+            field_type=t.field_type,
+            sort_order=t.sort_order,
+            options=t.options,
+        )
+        for t in templates
+    ]
+
+
+@router.put("/{test_id}/result-template", response_model=list[ResultTemplateField])
+async def save_result_template(
+    test_id: UUID,
+    data: ResultTemplateUpdate,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("tests.update"),
+):
+    try:
+        templates = await TestService(db).save_result_template(tenant.id, test_id, data)
+        return [
+            ResultTemplateField(
+                parameter_name=t.parameter_name,
+                parameter_name_ar=t.parameter_name_ar,
+                unit=t.unit,
+                field_type=t.field_type,
+                sort_order=t.sort_order,
+                options=t.options,
+            )
+            for t in templates
+        ]
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.delete("/{test_id}", response_model=MessageResponse)

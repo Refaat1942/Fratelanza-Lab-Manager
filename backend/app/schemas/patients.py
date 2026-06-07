@@ -50,11 +50,13 @@ class PatientResponse(BaseModel):
     gender: Optional[Gender] = None
     date_of_birth: Optional[date] = None
     phone: Optional[str] = None
+    phone_secondary: Optional[str] = None
     email: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
     governorate: Optional[str] = None
     blood_type: Optional[str] = None
+    notes: Optional[str] = None
     branch_id: Optional[UUID] = None
     created_at: datetime
 

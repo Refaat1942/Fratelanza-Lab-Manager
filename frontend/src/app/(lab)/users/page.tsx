@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
@@ -58,6 +59,17 @@ export default function UsersPage() {
     }
   };
 
+  const deactivateUser = async (id: string) => {
+    if (!confirm(locale === "ar" ? "تعطيل المستخدم؟" : "Deactivate user?")) return;
+    try {
+      await api.delete(`/users/${id}`);
+      toast.success(locale === "ar" ? "تم التعطيل" : "User deactivated");
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
+
   const columns: ColumnDef<UserRow>[] = [
     { accessorKey: "username", header: locale === "ar" ? "اسم المستخدم" : "Username" },
     { accessorKey: "full_name", header: locale === "ar" ? "الاسم" : "Name" },
@@ -72,6 +84,21 @@ export default function UsersPage() {
       accessorKey: "is_active",
       header: "Active",
       cell: ({ row }) => <Badge variant={row.original.is_active ? "default" : "secondary"}>{row.original.is_active ? "Yes" : "No"}</Badge>,
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => row.original.is_active ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="text-destructive" onClick={() => deactivateUser(row.original.id)}>
+              <Trash2 className="mr-2 h-4 w-4" />{locale === "ar" ? "تعطيل" : "Deactivate"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null,
     },
   ];
 

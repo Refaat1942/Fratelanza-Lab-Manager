@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.common import MessageResponse, PaginationParams
@@ -31,6 +32,36 @@ async def list_inventory(
         "page_size": result.page_size,
         "pages": result.pages,
     }
+
+
+@router.get("/import/template")
+async def download_import_template(
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("inventory.read"),
+):
+    content = InventoryService.generate_import_template()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=inventory_import_template.xlsx"},
+    )
+
+
+@router.post("/import")
+async def import_inventory(
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("inventory.manage"),
+    file: UploadFile = File(...),
+):
+    if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Upload an Excel file (.xlsx)")
+    content = await file.read()
+    try:
+        result = await InventoryService(db).import_from_excel(tenant.id, content, user.id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("", response_model=InventoryItemResponse, status_code=status.HTTP_201_CREATED)

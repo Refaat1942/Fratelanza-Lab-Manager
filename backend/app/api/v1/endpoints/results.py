@@ -62,6 +62,19 @@ async def create_order(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/{result_id}/form")
+async def get_result_form(
+    result_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("results.read"),
+):
+    try:
+        return await ResultsService(db).get_result_form(tenant.id, result_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
 @router.post("/{result_id}/enter")
 async def enter_result(
     result_id: UUID,

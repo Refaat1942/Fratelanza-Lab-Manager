@@ -4,9 +4,9 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.tests import Test, TestCategory
+from app.models.tests import Test, TestCategory, TestResultTemplate
 from app.schemas.common import PaginatedResponse, PaginationParams
-from app.schemas.tests import TestCreate, TestUpdate
+from app.schemas.tests import ResultTemplateUpdate, TestCreate, TestUpdate
 from app.services.audit_service import AuditService
 
 
@@ -81,3 +81,38 @@ class TestService:
             entity_type="test", entity_id=str(test.id),
         )
         return True
+
+    async def get_result_template(self, tenant_id: UUID, test_id: UUID) -> list[TestResultTemplate]:
+        result = await self.db.execute(
+            select(TestResultTemplate)
+            .where(TestResultTemplate.tenant_id == tenant_id, TestResultTemplate.test_id == test_id)
+            .order_by(TestResultTemplate.sort_order)
+        )
+        return list(result.scalars().all())
+
+    async def save_result_template(self, tenant_id: UUID, test_id: UUID, data: ResultTemplateUpdate) -> list[TestResultTemplate]:
+        test = await self.get_test(tenant_id, test_id)
+        if not test:
+            raise ValueError("Test not found")
+        existing = await self.db.execute(
+            select(TestResultTemplate).where(TestResultTemplate.test_id == test_id, TestResultTemplate.tenant_id == tenant_id)
+        )
+        for row in existing.scalars().all():
+            await self.db.delete(row)
+        await self.db.flush()
+        templates = []
+        for i, field in enumerate(data.fields):
+            t = TestResultTemplate(
+                tenant_id=tenant_id,
+                test_id=test_id,
+                parameter_name=field.parameter_name,
+                parameter_name_ar=field.parameter_name_ar,
+                unit=field.unit,
+                field_type=field.field_type,
+                sort_order=field.sort_order if field.sort_order else i,
+                options=field.options,
+            )
+            self.db.add(t)
+            templates.append(t)
+        await self.db.flush()
+        return templates

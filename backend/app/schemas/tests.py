@@ -55,3 +55,16 @@ class TestCategoryResponse(BaseModel):
     is_active: bool
 
     model_config = {"from_attributes": True}
+
+
+class ResultTemplateField(BaseModel):
+    parameter_name: str
+    parameter_name_ar: Optional[str] = None
+    unit: Optional[str] = None
+    field_type: str = "numeric"
+    sort_order: int = 0
+    options: Optional[dict] = None
+
+
+class ResultTemplateUpdate(BaseModel):
+    fields: list[ResultTemplateField]

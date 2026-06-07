@@ -194,8 +194,8 @@ export default function TenantsPage() {
                 <Input value={form.name_ar} onChange={(e) => setForm({ ...form, name_ar: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>Email *</Label>
-                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
+                <Label>Email</Label>
+                <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label>Admin Name *</Label>

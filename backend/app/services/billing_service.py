@@ -144,3 +144,59 @@ class BillingService:
         invoice.status = InvoiceStatus.CANCELLED
         await self.db.flush()
         return True
+
+    async def get_invoice_detail(self, tenant_id: UUID, invoice_id: UUID) -> dict | None:
+        result = await self.db.execute(
+            select(Invoice, Patient)
+            .join(Patient, Invoice.patient_id == Patient.id)
+            .where(Invoice.id == invoice_id, Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
+        )
+        row = result.first()
+        if not row:
+            return None
+        inv, patient = row
+        items_result = await self.db.execute(select(InvoiceItem).where(InvoiceItem.invoice_id == invoice_id))
+        items = items_result.scalars().all()
+        payments_result = await self.db.execute(
+            select(Payment).where(Payment.invoice_id == invoice_id).order_by(Payment.paid_at.desc())
+        )
+        payments = payments_result.scalars().all()
+        return {
+            "id": inv.id,
+            "invoice_number": inv.invoice_number,
+            "patient_id": inv.patient_id,
+            "patient_name": patient.full_name,
+            "status": inv.status.value,
+            "subtotal": float(inv.subtotal),
+            "discount": float(inv.discount),
+            "tax": float(inv.tax),
+            "total": float(inv.total),
+            "paid_amount": float(inv.paid_amount),
+            "balance": float(inv.total) - float(inv.paid_amount),
+            "issued_at": inv.issued_at,
+            "notes": inv.notes,
+            "items": [
+                {"description": i.description, "quantity": float(i.quantity), "unit_price": float(i.unit_price), "total": float(i.total)}
+                for i in items
+            ],
+            "payments": [
+                {"amount": float(p.amount), "method": p.method.value, "paid_at": p.paid_at, "reference": p.reference}
+                for p in payments
+            ],
+        }
+
+    async def get_financial_summary(self, tenant_id: UUID) -> dict:
+        inv_result = await self.db.execute(
+            select(
+                func.coalesce(func.sum(Invoice.total), 0),
+                func.coalesce(func.sum(Invoice.paid_amount), 0),
+                func.count(Invoice.id),
+            ).where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
+        )
+        total, paid, count = inv_result.one()
+        return {
+            "total_invoiced": float(total),
+            "total_collected": float(paid),
+            "outstanding": float(total) - float(paid),
+            "invoice_count": count,
+        }

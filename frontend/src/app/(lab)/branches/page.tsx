@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, MoreHorizontal, Trash2 } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ export default function BranchesPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyBranch);
   const [saving, setSaving] = useState(false);
 
@@ -53,13 +54,19 @@ export default function BranchesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const createBranch = async (e: React.FormEvent) => {
+  const saveBranch = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.post("/branches", form);
-      toast.success(locale === "ar" ? "تم إضافة الفرع" : "Branch created");
+      if (editId) {
+        await api.put(`/branches/${editId}`, form);
+        toast.success(locale === "ar" ? "تم تحديث الفرع" : "Branch updated");
+      } else {
+        await api.post("/branches", form);
+        toast.success(locale === "ar" ? "تم إضافة الفرع" : "Branch created");
+      }
       setOpen(false);
+      setEditId(null);
       setForm(emptyBranch);
       load();
     } catch (err) {
@@ -67,6 +74,19 @@ export default function BranchesPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const openEdit = (branch: Branch) => {
+    setEditId(branch.id);
+    setForm({
+      code: branch.code,
+      name: branch.name,
+      name_ar: branch.name_ar || "",
+      city: branch.city || "",
+      governorate: branch.governorate || "",
+      phone: branch.phone || "",
+    });
+    setOpen(true);
   };
 
   const deleteBranch = async (id: string) => {
@@ -103,6 +123,9 @@ export default function BranchesPage() {
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => openEdit(row.original)}>
+              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+            </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deleteBranch(row.original.id)}>
               <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
@@ -121,20 +144,20 @@ export default function BranchesPage() {
             {locale === "ar" ? "عمليات متعددة الفروع" : "Multi-branch operations with separate inventory and revenue"}
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyBranch); } }}>
           <DialogTrigger render={<Button className="shadow-md" />}>
             <Plus className="mr-2 h-4 w-4" />
             {t(locale, "create")}
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>{locale === "ar" ? "فرع جديد" : "New Branch"}</DialogTitle>
+              <DialogTitle>{editId ? (locale === "ar" ? "تعديل فرع" : "Edit Branch") : (locale === "ar" ? "فرع جديد" : "New Branch")}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={createBranch} className="space-y-4">
+            <form onSubmit={saveBranch} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Code *</Label>
-                  <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />
+                  <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required disabled={!!editId} />
                 </div>
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "الهاتف" : "Phone"}</Label>

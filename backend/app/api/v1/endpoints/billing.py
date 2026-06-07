@@ -58,6 +58,28 @@ async def record_payment(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/summary")
+async def financial_summary(
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("billing.read"),
+):
+    return await BillingService(db).get_financial_summary(tenant.id)
+
+
+@router.get("/invoices/{invoice_id}")
+async def get_invoice_detail(
+    invoice_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("billing.read"),
+):
+    detail = await BillingService(db).get_invoice_detail(tenant.id, invoice_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return detail
+
+
 @router.delete("/invoices/{invoice_id}", response_model=MessageResponse)
 async def delete_invoice(
     invoice_id: UUID,

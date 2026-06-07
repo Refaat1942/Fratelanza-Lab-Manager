@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
@@ -23,17 +24,20 @@ interface Supplier {
   is_active: boolean;
 }
 
+const emptyForm = { name: "", phone: "", contact_person: "" };
+
 export default function SuppliersPage() {
   const locale = useAuthStore((s) => s.locale);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", phone: "", contact_person: "" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get("/suppliers")
+    api.get("/suppliers?page_size=100")
       .then((res) => setSuppliers(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
@@ -41,20 +45,32 @@ export default function SuppliersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const create = async (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.post("/suppliers", form);
-      toast.success("Supplier created");
+      if (editId) {
+        await api.put(`/suppliers/${editId}`, form);
+        toast.success(locale === "ar" ? "تم التحديث" : "Supplier updated");
+      } else {
+        await api.post("/suppliers", form);
+        toast.success(locale === "ar" ? "تم الإضافة" : "Supplier created");
+      }
       setOpen(false);
-      setForm({ name: "", phone: "", contact_person: "" });
+      setEditId(null);
+      setForm(emptyForm);
       load();
     } catch (err) {
       toast.error(getApiError(err));
     } finally {
       setSaving(false);
     }
+  };
+
+  const openEdit = (s: Supplier) => {
+    setEditId(s.id);
+    setForm({ name: s.name, phone: s.phone || "", contact_person: s.contact_person || "" });
+    setOpen(true);
   };
 
   const columns: ColumnDef<Supplier>[] = [
@@ -68,13 +84,28 @@ export default function SuppliersPage() {
       cell: ({ row }) => <Badge variant={row.original.is_active ? "default" : "secondary"}>{row.original.is_active ? "Active" : "Inactive"}</Badge>,
     },
     {
-      id: "del",
+      id: "actions",
       cell: ({ row }) => (
-        <Button size="sm" variant="ghost" onClick={async () => {
-          if (!confirm("Delete?")) return;
-          await api.delete(`/suppliers/${row.original.id}`);
-          load();
-        }}><Trash2 className="h-4 w-4" /></Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => openEdit(row.original)}>
+              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive" onClick={async () => {
+              if (!confirm(locale === "ar" ? "حذف المورد؟" : "Delete supplier?")) return;
+              try {
+                await api.delete(`/suppliers/${row.original.id}`);
+                toast.success("Deleted");
+                load();
+              } catch (err) { toast.error(getApiError(err)); }
+            }}>
+              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ),
     },
   ];
@@ -86,11 +117,11 @@ export default function SuppliersPage() {
           <h1 className="text-3xl font-bold tracking-tight">{t(locale, "suppliers")}</h1>
           <p className="text-muted-foreground">{suppliers.length} suppliers</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyForm); } }}>
           <DialogTrigger render={<Button />}><Plus className="mr-2 h-4 w-4" />{t(locale, "create")}</DialogTrigger>
           <DialogContent>
-            <DialogHeader><DialogTitle>New Supplier</DialogTitle></DialogHeader>
-            <form onSubmit={create} className="space-y-4">
+            <DialogHeader><DialogTitle>{editId ? "Edit Supplier" : "New Supplier"}</DialogTitle></DialogHeader>
+            <form onSubmit={save} className="space-y-4">
               <div className="space-y-2"><Label>Name *</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
               <div className="space-y-2"><Label>Contact</Label><Input value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} /></div>
               <div className="space-y-2"><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>

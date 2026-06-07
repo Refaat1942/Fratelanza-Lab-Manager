@@ -17,12 +17,21 @@ export const DEFAULT_BRANDING: TenantBranding = {
   logo_url: "/labmaster-logo.svg",
 };
 
+/** Resolve logo/upload URLs — uses same-origin API path in browser so images work in production */
 export function resolveAssetUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  // Static assets in /public (e.g. /labmaster-logo.svg)
   if (path.startsWith("/") && !path.startsWith("/uploads")) return path;
+
+  const uploadPath = path.startsWith("/uploads") ? path : `/uploads/${path}`;
+
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/api/v1${uploadPath}`;
+  }
+
   const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
-  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  return `${base}${uploadPath}`;
 }
 
 export function displayName(branding: TenantBranding, locale: "ar" | "en"): string {

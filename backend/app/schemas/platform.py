@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 from app.models.platform import BillingCycle, PlanTier, SubscriptionStatus, TenantStatus
 
@@ -37,7 +37,7 @@ class TenantCreate(BaseModel):
     code: str = Field(min_length=2, max_length=50)
     name: str
     name_ar: Optional[str] = None
-    email: EmailStr
+    email: Optional[str] = None
     phone: Optional[str] = None
     tax_number: Optional[str] = None
     plan_id: UUID
@@ -49,7 +49,7 @@ class TenantCreate(BaseModel):
 class TenantUpdate(BaseModel):
     name: Optional[str] = None
     name_ar: Optional[str] = None
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     phone: Optional[str] = None
     tax_number: Optional[str] = None
     status: Optional[TenantStatus] = None
@@ -62,7 +62,7 @@ class TenantResponse(BaseModel):
     code: str
     name: str
     name_ar: Optional[str] = None
-    email: str
+    email: Optional[str] = None
     phone: Optional[str] = None
     status: TenantStatus
     locale: str

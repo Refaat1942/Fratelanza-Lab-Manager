@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, MoreHorizontal, Trash2 } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ export default function DoctorsPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyDoctor);
   const [saving, setSaving] = useState(false);
 
@@ -52,22 +53,43 @@ export default function DoctorsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const createDoctor = async (e: React.FormEvent) => {
+  const saveDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    const payload = { ...form, commission_rate: parseFloat(form.commission_rate) || 0 };
     try {
-      await api.post("/doctors", {
-        ...form,
-        commission_rate: parseFloat(form.commission_rate) || 0,
-      });
-      toast.success(locale === "ar" ? "تم إضافة الطبيب" : "Doctor created");
+      if (editId) {
+        await api.put(`/doctors/${editId}`, payload);
+        toast.success(locale === "ar" ? "تم تحديث الطبيب" : "Doctor updated");
+      } else {
+        await api.post("/doctors", payload);
+        toast.success(locale === "ar" ? "تم إضافة الطبيب" : "Doctor created");
+      }
       setOpen(false);
+      setEditId(null);
       setForm(emptyDoctor);
       load();
     } catch (err) {
       toast.error(getApiError(err));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openEdit = async (doctor: Doctor) => {
+    try {
+      const { data } = await api.get(`/doctors/${doctor.id}`);
+      setEditId(doctor.id);
+      setForm({
+        full_name: data.full_name || "",
+        full_name_ar: data.full_name_ar || "",
+        specialty: data.specialty || "",
+        phone: data.phone || "",
+        commission_rate: String(data.commission_rate ?? 0),
+      });
+      setOpen(true);
+    } catch (err) {
+      toast.error(getApiError(err));
     }
   };
 
@@ -113,6 +135,9 @@ export default function DoctorsPage() {
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => openEdit(row.original)}>
+              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+            </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deleteDoctor(row.original.id)}>
               <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
@@ -131,16 +156,16 @@ export default function DoctorsPage() {
             {locale === "ar" ? "قاعدة بيانات الأطباء والعمولات" : "Doctor database, commissions, and referrals"}
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyDoctor); } }}>
           <DialogTrigger render={<Button className="shadow-md" />}>
             <Plus className="mr-2 h-4 w-4" />
             {t(locale, "create")}
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>{locale === "ar" ? "طبيب جديد" : "New Doctor"}</DialogTitle>
+              <DialogTitle>{editId ? (locale === "ar" ? "تعديل طبيب" : "Edit Doctor") : (locale === "ar" ? "طبيب جديد" : "New Doctor")}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={createDoctor} className="space-y-4">
+            <form onSubmit={saveDoctor} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>

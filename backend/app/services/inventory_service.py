@@ -1,10 +1,13 @@
+from io import BytesIO
 from typing import Optional
 from uuid import UUID
 
+from openpyxl import Workbook, load_workbook
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.inventory import InventoryBatch, InventoryItem
+from app.models.inventory import InventoryBatch, InventoryCategory, InventoryItem
+from app.models.tenant_config import Branch
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.inventory import InventoryItemCreate, InventoryItemUpdate
 from app.services.audit_service import AuditService
@@ -89,3 +92,73 @@ class InventoryService:
             entity_type="inventory_item", entity_id=str(item.id),
         )
         return True
+
+    @staticmethod
+    def generate_import_template() -> bytes:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Inventory"
+        headers = ["SKU", "Name", "Name_AR", "Category", "Unit", "Unit_Cost", "Quantity", "Reorder_Level", "Batch_Number"]
+        ws.append(headers)
+        ws.append(["GLV-001", "Nitrile Gloves", "قفازات", "glove", "box", 150, 100, 10, "B-001"])
+        ws.append(["TUB-EDTA", "EDTA Tube", "أنبوب EDTA", "tube", "piece", 3.5, 500, 50, "B-002"])
+        buf = BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
+    async def import_from_excel(self, tenant_id: UUID, content: bytes, user_id: UUID, branch_id: Optional[UUID] = None) -> dict:
+        if not branch_id:
+            branch_id = await self.db.scalar(
+                select(Branch.id).where(Branch.tenant_id == tenant_id, Branch.deleted_at.is_(None)).limit(1)
+            )
+        wb = load_workbook(BytesIO(content), read_only=True)
+        ws = wb.active
+        created, updated = 0, 0
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        for row in rows:
+            if not row or not row[0]:
+                continue
+            sku, name, name_ar, category, unit, unit_cost, quantity, reorder, batch = (
+                str(row[0]).strip(),
+                str(row[1] or "").strip(),
+                str(row[2] or name or "").strip(),
+                str(row[3] or "other").strip().lower(),
+                str(row[4] or "piece").strip(),
+                float(row[5] or 0),
+                float(row[6] or 0),
+                float(row[7] or 0),
+                str(row[8] or f"B-{row[0]}").strip(),
+            )
+            try:
+                cat = InventoryCategory(category)
+            except ValueError:
+                cat = InventoryCategory.OTHER
+            existing = await self.db.scalar(
+                select(InventoryItem).where(
+                    InventoryItem.tenant_id == tenant_id, InventoryItem.sku == sku, InventoryItem.deleted_at.is_(None)
+                )
+            )
+            if existing:
+                existing.name = name or existing.name
+                existing.name_ar = name_ar or existing.name_ar
+                existing.unit_cost = unit_cost
+                existing.reorder_level = reorder
+                updated += 1
+                item = existing
+            else:
+                item = InventoryItem(
+                    tenant_id=tenant_id, branch_id=branch_id, sku=sku, name=name, name_ar=name_ar,
+                    category=cat, unit=unit, unit_cost=unit_cost, reorder_level=reorder,
+                )
+                self.db.add(item)
+                await self.db.flush()
+                created += 1
+            if quantity > 0:
+                self.db.add(
+                    InventoryBatch(
+                        tenant_id=tenant_id, item_id=item.id, branch_id=branch_id,
+                        batch_number=batch, quantity=quantity, unit_cost=unit_cost,
+                    )
+                )
+        await self.db.flush()
+        return {"created": created, "updated": updated, "total_rows": len(rows)}

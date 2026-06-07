@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { useEffect, useState } from "react";
 import { Microscope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveAssetUrl } from "@/lib/branding";
@@ -22,7 +22,12 @@ const sizes = {
 
 export function BrandingLogo({ logoUrl, alt, size = "md", className, accentColor }: BrandingLogoProps) {
   const resolved = resolveAssetUrl(logoUrl);
+  const [failed, setFailed] = useState(false);
   const s = sizes[size];
+
+  useEffect(() => {
+    setFailed(false);
+  }, [logoUrl]);
 
   return (
     <div
@@ -33,14 +38,13 @@ export function BrandingLogo({ logoUrl, alt, size = "md", className, accentColor
       )}
       style={{ backgroundColor: accentColor ? `${accentColor}22` : undefined }}
     >
-      {resolved ? (
-        <Image
+      {resolved && !failed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
           src={resolved}
           alt={alt}
-          width={s.img}
-          height={s.img}
           className="h-full w-full object-contain p-1"
-          unoptimized={resolved.includes("/uploads/")}
+          onError={() => setFailed(true)}
         />
       ) : (
         <Microscope className={cn(s.icon, "text-primary")} style={{ color: accentColor }} />

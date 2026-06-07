@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
@@ -29,7 +29,7 @@ class RefreshTokenRequest(BaseModel):
 
 class UserCreate(BaseModel):
     username: str = Field(min_length=2, max_length=64)
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     password: str = Field(min_length=8)
     full_name: str
     full_name_ar: Optional[str] = None
