@@ -27,12 +27,19 @@ Commercial SaaS ERP + Laboratory Information Management System (LIMS) for medica
 
 ```bash
 ssh root@187.124.15.14
+
+# 1. Deploy app
 curl -fsSL https://raw.githubusercontent.com/Refaat1942/Fratelanza-Lab-Manager/main/deploy/hostinger/deploy.sh | bash
+
+# 2. Connect domain (use a SUBDOMAIN — e.g. labmaster.yourdomain.com)
+cd /opt/labmaster
+sudo bash deploy/hostinger/setup-domain.sh labmaster.yourdomain.com
+sudo bash deploy/hostinger/enable-ssl.sh labmaster.yourdomain.com
 ```
 
-Uses isolated ports `13000`/`18000` — your other projects on `80`/`443`/`3000` stay untouched.
+Uses isolated ports + a **separate nginx site** — your other projects stay untouched.
 
-Full guide: [docs/DEPLOYMENT_HOSTINGER.md](docs/DEPLOYMENT_HOSTINGER.md)
+Guides: [Domain Setup](docs/DOMAIN_SETUP.md) | [VPS Deploy](docs/DEPLOYMENT_HOSTINGER.md)
 
 ## Quick Start (Local)
 
