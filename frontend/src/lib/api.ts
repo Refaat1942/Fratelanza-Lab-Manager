@@ -17,7 +17,7 @@ api.interceptors.request.use((config) => {
     if (token) config.headers.Authorization = `Bearer ${token}`;
 
     // Platform APIs must NOT send tenant header (causes 403/400)
-    if (!isPlatform && !url.startsWith("/platform") && !url.startsWith("/auth/platform")) {
+    if (!isPlatform && !url.startsWith("/platform") && !url.startsWith("/auth/platform") && !url.startsWith("/public")) {
       const tenantId = localStorage.getItem("tenant_id");
       if (tenantId) config.headers["X-Tenant-Id"] = tenantId;
     }

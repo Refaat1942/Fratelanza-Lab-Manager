@@ -55,7 +55,7 @@ export function AppHeader() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem>
               <User className="mr-2 h-4 w-4" />
-              {user?.email}
+              {user?.username || user?.email}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />

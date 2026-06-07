@@ -63,6 +63,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - labmaster_uploads:/app/uploads
     command: >
       sh -c "alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
     networks:
@@ -88,6 +90,8 @@ services:
 volumes:
   labmaster_postgres_data:
     name: labmaster_postgres_data
+  labmaster_uploads:
+    name: labmaster_uploads
 
 networks:
   labmaster_net:

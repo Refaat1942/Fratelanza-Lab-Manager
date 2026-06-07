@@ -5,11 +5,13 @@ import { useRouter, usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
+import { useBrandingStore } from "@/stores/branding-store";
 
 export function LabAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { setUser } = useAuthStore();
+  const { setBranding } = useBrandingStore();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -21,11 +23,11 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    api
-      .get("/auth/me")
-      .then((res) => {
-        setUser(res.data);
-        if (res.data.tenant_id) localStorage.setItem("tenant_id", res.data.tenant_id);
+    Promise.all([api.get("/auth/me"), api.get("/settings/branding")])
+      .then(([meRes, brandRes]) => {
+        setUser(meRes.data);
+        setBranding(brandRes.data);
+        if (meRes.data.tenant_id) localStorage.setItem("tenant_id", meRes.data.tenant_id);
         localStorage.removeItem("is_platform_admin");
         setReady(true);
       })
@@ -33,7 +35,7 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
         localStorage.clear();
         router.replace("/login");
       });
-  }, [router, pathname, setUser]);
+  }, [router, pathname, setUser, setBranding]);
 
   if (!ready) {
     return (

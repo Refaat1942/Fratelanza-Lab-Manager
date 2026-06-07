@@ -9,6 +9,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useBrandingStore } from "@/stores/branding-store";
+import { BrandingLogo } from "@/components/branding/branding-logo";
+import { displayName } from "@/lib/branding";
 import { t } from "@/lib/i18n";
 
 const labModules = [
@@ -43,16 +46,28 @@ const platformModules = [
 export function AppSidebar({ variant = "lab" }: { variant?: "lab" | "platform" }) {
   const pathname = usePathname();
   const locale = useAuthStore((s) => s.locale);
+  const branding = useBrandingStore((s) => s.branding);
   const modules = variant === "platform" ? platformModules : labModules;
+  const labTitle = variant === "lab" ? displayName(branding, locale) : t(locale, "appName");
 
   return (
     <aside className="flex h-full w-64 flex-col bg-sidebar text-sidebar-foreground shadow-xl">
       <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
-          <Microscope className="h-5 w-5 text-sidebar-primary-foreground" />
-        </div>
-        <div>
-          <h1 className="text-sm font-bold leading-tight">{t(locale, "appName")}</h1>
+        {variant === "lab" ? (
+          <BrandingLogo
+            logoUrl={branding.logo_url}
+            alt={labTitle}
+            size="sm"
+            className="rounded-lg bg-sidebar-primary ring-0"
+            accentColor={branding.primary_color}
+          />
+        ) : (
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary">
+            <Microscope className="h-5 w-5 text-sidebar-primary-foreground" />
+          </div>
+        )}
+        <div className="min-w-0">
+          <h1 className="text-sm font-bold leading-tight truncate">{labTitle}</h1>
           {variant === "platform" && (
             <p className="text-[10px] text-sidebar-foreground/60">{t(locale, "platform")}</p>
           )}

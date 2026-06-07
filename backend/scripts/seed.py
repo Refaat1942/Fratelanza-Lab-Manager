@@ -176,7 +176,7 @@ async def seed() -> None:
                 tenant_id=tenant.id,
                 company_name="Demo Medical Laboratory",
                 company_name_ar="مختبر العرض الطبي",
-                primary_color="#0F766E",
+                primary_color="#1e3a5f",
             )
         )
         await db.flush()
