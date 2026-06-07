@@ -19,7 +19,7 @@ import {
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
-import { api } from "@/lib/api";
+import { api, getApiError } from "@/lib/api";
 import { toast } from "sonner";
 
 interface Tenant {
@@ -59,7 +59,7 @@ export default function TenantsPage() {
     ]).then(([tRes, pRes]) => {
       setTenants(tRes.data);
       setPlans(pRes.data);
-    }).catch(() => toast.error("Failed to load"))
+    }).catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
   };
 
@@ -83,8 +83,8 @@ export default function TenantsPage() {
       setOpen(false);
       setForm(emptyForm);
       load();
-    } catch {
-      toast.error("Failed to create laboratory");
+    } catch (err) {
+      toast.error(getApiError(err));
     }
   };
 

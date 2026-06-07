@@ -15,11 +15,11 @@ export function DashboardLayout({
   const dir = locale === "ar" ? "rtl" : "ltr";
 
   return (
-    <div className="flex h-screen" dir={dir}>
+    <div className="flex h-screen bg-muted/30" dir={dir}>
       <AppSidebar variant={variant} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <AppHeader />
-        <main className="flex-1 overflow-y-auto bg-background p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-6 animate-fade-up">{children}</main>
       </div>
     </div>
   );

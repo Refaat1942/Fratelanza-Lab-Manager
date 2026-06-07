@@ -37,6 +37,7 @@ export const useAuthStore = create<AuthState>()(
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
         localStorage.removeItem("tenant_id");
+        localStorage.removeItem("is_platform_admin");
         set({ user: null, tenantCode: null });
       },
       hasPermission: (perm) => {

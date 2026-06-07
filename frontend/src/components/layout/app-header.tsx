@@ -18,8 +18,9 @@ export function AppHeader() {
   const router = useRouter();
 
   const handleLogout = () => {
+    const isPlatform = localStorage.getItem("is_platform_admin") === "true";
     logout();
-    router.push("/login");
+    router.push(isPlatform ? "/platform/login" : "/login");
   };
 
   const initials = user?.full_name

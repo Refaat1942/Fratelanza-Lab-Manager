@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, MoreHorizontal } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
-import { api } from "@/lib/api";
+import { api, getApiError } from "@/lib/api";
 import { toast } from "sonner";
 
 interface Patient {
@@ -28,18 +30,55 @@ interface Patient {
   created_at: string;
 }
 
+const emptyPatient = {
+  full_name: "", full_name_ar: "", phone: "", national_id: "",
+  email: "", address: "", city: "", governorate: "",
+};
+
 export default function PatientsPage() {
   const locale = useAuthStore((s) => s.locale);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(emptyPatient);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    api
-      .get("/patients")
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get("/patients")
       .then((res) => setPatients(res.data.items || []))
-      .catch(() => toast.error("Failed to load patients"))
+      .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const createPatient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.post("/patients", form);
+      toast.success(locale === "ar" ? "تم إضافة المريض" : "Patient created");
+      setOpen(false);
+      setForm(emptyPatient);
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deletePatient = async (id: string) => {
+    if (!confirm(locale === "ar" ? "حذف المريض؟" : "Delete patient?")) return;
+    try {
+      await api.delete(`/patients/${id}`);
+      toast.success("Deleted");
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
 
   const columns: ColumnDef<Patient>[] = [
     { accessorKey: "patient_code", header: locale === "ar" ? "الكود" : "Code" },
@@ -47,9 +86,9 @@ export default function PatientsPage() {
       accessorKey: "full_name",
       header: locale === "ar" ? "الاسم" : "Name",
       cell: ({ row }) => (
-        <div>
-          <div className="font-medium">{locale === "ar" ? row.original.full_name_ar || row.original.full_name : row.original.full_name}</div>
-        </div>
+        <span className="font-medium">
+          {locale === "ar" ? row.original.full_name_ar || row.original.full_name : row.original.full_name}
+        </span>
       ),
     },
     { accessorKey: "phone", header: locale === "ar" ? "الهاتف" : "Phone" },
@@ -57,23 +96,22 @@ export default function PatientsPage() {
     {
       accessorKey: "gender",
       header: locale === "ar" ? "النوع" : "Gender",
-      cell: ({ row }) =>
-        row.original.gender ? (
-          <Badge variant="outline">{row.original.gender}</Badge>
-        ) : (
-          "-"
-        ),
+      cell: ({ row }) => row.original.gender ? <Badge variant="outline">{row.original.gender}</Badge> : "—",
     },
     {
       id: "actions",
-      cell: () => (
+      cell: ({ row }) => (
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>{t(locale, "edit")}</DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive">{t(locale, "delete")}</DropdownMenuItem>
+            <DropdownMenuItem>
+              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive" onClick={() => deletePatient(row.original.id)}>
+              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       ),
@@ -85,25 +123,60 @@ export default function PatientsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">{t(locale, "patients")}</h1>
-          <p className="text-muted-foreground">
-            {locale === "ar" ? "إدارة سجل المرضى والزيارات" : "Manage patient records and visits"}
-          </p>
+          <p className="text-muted-foreground">{patients.length} {locale === "ar" ? "مريض" : "patients"}</p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          {t(locale, "create")}
-        </Button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger render={<Button className="shadow-md" />}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t(locale, "create")}
+          </DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{locale === "ar" ? "مريض جديد" : "New Patient"}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={createPatient} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>
+                  <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "الاسم (عربي)" : "Name (AR)"}</Label>
+                  <Input value={form.full_name_ar} onChange={(e) => setForm({ ...form, full_name_ar: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "الهاتف" : "Phone"}</Label>
+                  <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "الرقم القومي" : "National ID"}</Label>
+                  <Input value={form.national_id} onChange={(e) => setForm({ ...form, national_id: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <Button type="submit" className="w-full" disabled={saving}>
+                {saving ? "Saving..." : t(locale, "save")}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {loading ? (
-        <p className="text-muted-foreground">Loading...</p>
+        <div className="flex h-40 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
       ) : (
         <DataTable
           columns={columns}
           data={patients}
           searchPlaceholder={t(locale, "search")}
-          onExport={() => toast.info("Export feature - connect to API")}
-          onPrint={() => window.print()}
+          onExport={() => toast.info("Export coming soon")}
         />
       )}
     </div>
