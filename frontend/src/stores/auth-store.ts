@@ -39,6 +39,7 @@ export const useAuthStore = create<AuthState>()(
         localStorage.removeItem("refresh_token");
         localStorage.removeItem("tenant_id");
         localStorage.removeItem("is_platform_admin");
+        localStorage.removeItem("labmaster-branding");
         set({ user: null, tenantCode: null });
       },
       hasPermission: (perm) => {

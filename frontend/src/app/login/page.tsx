@@ -62,6 +62,7 @@ function LoginPageContent() {
     e.preventDefault();
     setLoading(true);
     localStorage.removeItem("is_platform_admin");
+    localStorage.removeItem("tenant_id");
     try {
       const { data: tokens } = await api.post("/auth/login", {
         username,

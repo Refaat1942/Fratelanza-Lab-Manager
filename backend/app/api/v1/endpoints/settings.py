@@ -11,7 +11,7 @@ router = APIRouter(prefix="/settings", tags=["Settings"])
 async def get_branding(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("settings.manage"),
+    user: CurrentUser,
 ):
     svc = BrandingService(db)
     branding = await svc.get_by_tenant_id(tenant.id)

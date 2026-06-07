@@ -40,6 +40,7 @@ export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyPatient);
   const [saving, setSaving] = useState(false);
 
@@ -53,13 +54,19 @@ export default function PatientsPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const createPatient = async (e: React.FormEvent) => {
+  const savePatient = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await api.post("/patients", form);
-      toast.success(locale === "ar" ? "تم إضافة المريض" : "Patient created");
+      if (editId) {
+        await api.put(`/patients/${editId}`, form);
+        toast.success(locale === "ar" ? "تم تحديث المريض" : "Patient updated");
+      } else {
+        await api.post("/patients", form);
+        toast.success(locale === "ar" ? "تم إضافة المريض" : "Patient created");
+      }
       setOpen(false);
+      setEditId(null);
       setForm(emptyPatient);
       load();
     } catch (err) {
@@ -67,6 +74,18 @@ export default function PatientsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const openEdit = (patient: Patient) => {
+    setEditId(patient.id);
+    setForm({
+      full_name: patient.full_name,
+      full_name_ar: patient.full_name_ar || "",
+      phone: patient.phone || "",
+      national_id: patient.national_id || "",
+      email: "", address: "", city: "", governorate: "",
+    });
+    setOpen(true);
   };
 
   const deletePatient = async (id: string) => {
@@ -106,7 +125,7 @@ export default function PatientsPage() {
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openEdit(row.original)}>
               <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deletePatient(row.original.id)}>
@@ -125,16 +144,16 @@ export default function PatientsPage() {
           <h1 className="text-3xl font-bold">{t(locale, "patients")}</h1>
           <p className="text-muted-foreground">{patients.length} {locale === "ar" ? "مريض" : "patients"}</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditId(null); setForm(emptyPatient); } }}>
           <DialogTrigger render={<Button className="shadow-md" />}>
             <Plus className="mr-2 h-4 w-4" />
             {t(locale, "create")}
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>{locale === "ar" ? "مريض جديد" : "New Patient"}</DialogTitle>
+              <DialogTitle>{editId ? (locale === "ar" ? "تعديل مريض" : "Edit Patient") : (locale === "ar" ? "مريض جديد" : "New Patient")}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={createPatient} className="space-y-4">
+            <form onSubmit={savePatient} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>

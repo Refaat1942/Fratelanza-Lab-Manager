@@ -23,12 +23,18 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    Promise.all([api.get("/auth/me"), api.get("/settings/branding")])
-      .then(([meRes, brandRes]) => {
-        setUser(meRes.data);
-        setBranding(brandRes.data);
-        if (meRes.data.tenant_id) localStorage.setItem("tenant_id", meRes.data.tenant_id);
+    api
+      .get("/auth/me")
+      .then(async (res) => {
+        setUser(res.data);
+        if (res.data.tenant_id) localStorage.setItem("tenant_id", res.data.tenant_id);
         localStorage.removeItem("is_platform_admin");
+        try {
+          const brandRes = await api.get("/settings/branding");
+          setBranding(brandRes.data);
+        } catch {
+          /* branding optional — don't block app */
+        }
         setReady(true);
       })
       .catch(() => {

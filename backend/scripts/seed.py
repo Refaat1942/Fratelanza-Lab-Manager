@@ -24,7 +24,12 @@ from app.models.platform import (
 )
 from app.models.tenant_config import Branch, TenantBranding
 from app.models.tests import Test, TestCategory
-from app.models.inventory import InventoryCategory, InventoryItem
+from app.models.billing import Invoice, InvoiceItem, InvoiceStatus
+from app.models.inventory import InventoryBatch, InventoryCategory, InventoryItem
+from app.models.orders import LabOrder, LabOrderItem, LabResult, OrderStatus, ResultStatus
+from app.models.patients import Gender, Patient, PatientVisit, VisitStatus
+from app.models.doctors import Doctor
+from app.models.tests import Test
 
 PERMISSIONS = [
     ("patients.read", "patients", "read", "View patients", "عرض المرضى"),
@@ -205,19 +210,61 @@ async def seed() -> None:
         db.add(UserRole(user_id=admin.id, role_id=admin_role.id))
 
         for sku, name, name_ar, cat, unit, cost in EGYPTIAN_INVENTORY:
+            item = InventoryItem(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                sku=sku,
+                name=name,
+                name_ar=name_ar,
+                category=cat,
+                unit=unit,
+                unit_cost=cost,
+                reorder_level=10,
+            )
+            db.add(item)
+            await db.flush()
             db.add(
-                InventoryItem(
+                InventoryBatch(
                     tenant_id=tenant.id,
+                    item_id=item.id,
                     branch_id=branch.id,
-                    sku=sku,
-                    name=name,
-                    name_ar=name_ar,
-                    category=cat,
-                    unit=unit,
+                    batch_number=f"B-{sku}",
+                    quantity=50 if cat != InventoryCategory.REAGENT else 20,
                     unit_cost=cost,
-                    reorder_level=10,
                 )
             )
+
+        demo_doctor = Doctor(
+            tenant_id=tenant.id,
+            code="DR-001",
+            full_name="Dr. Ahmed Hassan",
+            full_name_ar="د. أحمد حسن",
+            specialty="Internal Medicine",
+            phone="+201100000001",
+            commission_rate=10,
+        )
+        db.add(demo_doctor)
+        await db.flush()
+
+        demo_patients = [
+            ("P000001", "Mohamed Ali", "محمد علي", "+201200000001"),
+            ("P000002", "Sara Ibrahim", "سارة إبراهيم", "+201200000002"),
+            ("P000003", "Omar Farouk", "عمر فاروق", "+201200000003"),
+        ]
+        patient_objs = []
+        for code, name, name_ar, phone in demo_patients:
+            p = Patient(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                patient_code=code,
+                full_name=name,
+                full_name_ar=name_ar,
+                phone=phone,
+                gender=Gender.MALE,
+            )
+            db.add(p)
+            await db.flush()
+            patient_objs.append(p)
 
         for cat_code, cat_name, cat_name_ar, tests in EGYPTIAN_TESTS:
             category = TestCategory(
@@ -240,6 +287,89 @@ async def seed() -> None:
                         cost=cost,
                     )
                 )
+
+        await db.flush()
+        glu_test = await db.execute(
+            select(Test).where(Test.tenant_id == tenant.id, Test.code == "GLU")
+        )
+        glu = glu_test.scalar_one()
+        cbc_test = await db.execute(
+            select(Test).where(Test.tenant_id == tenant.id, Test.code == "CBC")
+        )
+        cbc = cbc_test.scalar_one()
+
+        now = datetime.now(timezone.utc)
+        visit = PatientVisit(
+            tenant_id=tenant.id,
+            patient_id=patient_objs[0].id,
+            branch_id=branch.id,
+            visit_number="V00001",
+            visit_date=now,
+            status=VisitStatus.IN_PROGRESS,
+            referring_doctor_id=demo_doctor.id,
+        )
+        db.add(visit)
+        await db.flush()
+
+        order = LabOrder(
+            tenant_id=tenant.id,
+            visit_id=visit.id,
+            patient_id=patient_objs[0].id,
+            branch_id=branch.id,
+            order_number="ORD-00001",
+            status=OrderStatus.IN_LAB,
+            ordered_at=now,
+            referring_doctor_id=demo_doctor.id,
+        )
+        db.add(order)
+        await db.flush()
+
+        for test in [glu, cbc]:
+            item = LabOrderItem(
+                tenant_id=tenant.id,
+                order_id=order.id,
+                test_id=test.id,
+                price=float(test.price),
+            )
+            db.add(item)
+            await db.flush()
+            db.add(
+                LabResult(
+                    tenant_id=tenant.id,
+                    order_id=order.id,
+                    order_item_id=item.id,
+                    test_id=test.id,
+                    branch_id=branch.id,
+                    status=ResultStatus.PENDING,
+                )
+            )
+
+        invoice = Invoice(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient_objs[0].id,
+            visit_id=visit.id,
+            order_id=order.id,
+            invoice_number="INV-00001",
+            status=InvoiceStatus.ISSUED,
+            subtotal=float(glu.price) + float(cbc.price),
+            total=float(glu.price) + float(cbc.price),
+            issued_at=now,
+        )
+        db.add(invoice)
+        await db.flush()
+        for test in [glu, cbc]:
+            db.add(
+                InvoiceItem(
+                    tenant_id=tenant.id,
+                    invoice_id=invoice.id,
+                    test_id=test.id,
+                    description=test.name,
+                    quantity=1,
+                    unit_price=float(test.price),
+                    total=float(test.price),
+                )
+            )
 
         await db.commit()
         print("Seed completed successfully!")
