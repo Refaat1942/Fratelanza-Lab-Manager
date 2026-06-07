@@ -1,0 +1,80 @@
+from typing import Annotated, Optional
+from uuid import UUID
+
+from fastapi import Depends, Header, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.security import verify_token
+from app.db.session import get_db
+from app.models.auth import Permission, Role, RolePermission, User, UserRole
+from app.models.platform import Tenant, TenantStatus
+
+security = HTTPBearer(auto_error=False)
+
+
+async def get_current_user(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)],
+) -> User:
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    payload = verify_token(credentials.credentials)
+    if not payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    user_id = payload.get("sub")
+    result = await db.execute(
+        select(User)
+        .options(
+            selectinload(User.roles).selectinload(UserRole.role).selectinload(Role.permissions).selectinload(RolePermission.permission)
+        )
+        .where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+    return user
+
+
+async def get_current_tenant(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    x_tenant_id: Annotated[Optional[str], Header()] = None,
+) -> Tenant:
+    tenant_id = x_tenant_id or (str(user.tenant_id) if user.tenant_id else None)
+    if not tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant context required")
+    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id, Tenant.deleted_at.is_(None)))
+    tenant = result.scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    if tenant.status in (TenantStatus.SUSPENDED, TenantStatus.LOCKED, TenantStatus.EXPIRED):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Tenant account is {tenant.status.value}")
+    return tenant
+
+
+def get_user_permissions(user: User) -> set[str]:
+    permissions: set[str] = set()
+    if user.is_tenant_admin:
+        return {"*"}
+    for user_role in user.roles:
+        for role_perm in user_role.role.permissions:
+            permissions.add(role_perm.permission.code)
+    return permissions
+
+
+def require_permission(permission_code: str):
+    async def _checker(user: Annotated[User, Depends(get_current_user)]) -> User:
+        perms = get_user_permissions(user)
+        if "*" not in perms and permission_code not in perms:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+        return user
+
+    return _checker
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]
+CurrentTenant = Annotated[Tenant, Depends(get_current_tenant)]
+DbSession = Annotated[AsyncSession, Depends(get_db)]
