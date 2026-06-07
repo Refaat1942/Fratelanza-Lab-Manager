@@ -46,6 +46,17 @@ interface TenantAdmin {
   is_active: boolean;
 }
 
+interface TenantLimits {
+  max_users: number;
+  max_branches: number;
+  current_users: number;
+  current_branches: number;
+  plan_max_users?: number;
+  plan_max_branches?: number;
+  max_users_override?: number;
+  max_branches_override?: number;
+}
+
 interface TenantDetail {
   id: string;
   code: string;
@@ -55,7 +66,10 @@ interface TenantDetail {
   phone?: string;
   tax_number?: string;
   status: string;
+  max_users_override?: number;
+  max_branches_override?: number;
   admin?: TenantAdmin;
+  limits?: TenantLimits;
 }
 
 const emptyForm = {
@@ -66,6 +80,7 @@ const emptyForm = {
 const emptyEditForm = {
   name: "", name_ar: "", email: "", phone: "", tax_number: "", status: "active",
   admin_username: "", admin_password: "", admin_name: "", admin_name_ar: "",
+  max_users_override: "", max_branches_override: "",
 };
 
 export default function TenantsPage() {
@@ -78,6 +93,7 @@ export default function TenantsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editCode, setEditCode] = useState("");
+  const [editLimits, setEditLimits] = useState<TenantLimits | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -123,6 +139,7 @@ export default function TenantsPage() {
       const { data } = await api.get<TenantDetail>(`/platform/tenants/${tenant.id}`);
       setEditId(tenant.id);
       setEditCode(data.code);
+      setEditLimits(data.limits || null);
       setEditForm({
         name: data.name || "",
         name_ar: data.name_ar || "",
@@ -134,6 +151,8 @@ export default function TenantsPage() {
         admin_password: "",
         admin_name: data.admin?.full_name || "",
         admin_name_ar: data.admin?.full_name_ar || "",
+        max_users_override: data.max_users_override?.toString() || "",
+        max_branches_override: data.max_branches_override?.toString() || "",
       });
       setEditOpen(true);
     } catch (err) {
@@ -153,6 +172,8 @@ export default function TenantsPage() {
         phone: editForm.phone || null,
         tax_number: editForm.tax_number || null,
         status: editForm.status,
+        max_users_override: editForm.max_users_override ? Number(editForm.max_users_override) : null,
+        max_branches_override: editForm.max_branches_override ? Number(editForm.max_branches_override) : null,
       });
 
       const adminPayload: Record<string, string> = {};
@@ -359,6 +380,53 @@ export default function TenantsPage() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="border-t border-border/60 pt-4">
+              <p className="mb-3 text-sm font-semibold">
+                {locale === "ar" ? "حدود المستخدمين والفروع" : "User & Branch Limits"}
+              </p>
+              {editLimits && (
+                <p className="mb-3 text-xs text-muted-foreground">
+                  {locale === "ar"
+                    ? `الاستخدام الحالي: ${editLimits.current_users}/${editLimits.max_users} مستخدم، ${editLimits.current_branches}/${editLimits.max_branches} فرع`
+                    : `Current usage: ${editLimits.current_users}/${editLimits.max_users} users, ${editLimits.current_branches}/${editLimits.max_branches} branches`}
+                  {editLimits.plan_max_users != null && (
+                    <span className="block mt-1">
+                      {locale === "ar"
+                        ? `حدود الباقة: ${editLimits.plan_max_users} مستخدم، ${editLimits.plan_max_branches} فرع`
+                        : `Plan defaults: ${editLimits.plan_max_users} users, ${editLimits.plan_max_branches} branches`}
+                    </span>
+                  )}
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "حد المستخدمين" : "Max Users"}</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={editForm.max_users_override}
+                    onChange={(e) => setEditForm({ ...editForm, max_users_override: e.target.value })}
+                    placeholder={editLimits?.plan_max_users?.toString() || "5"}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "حد الفروع" : "Max Branches"}</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={editForm.max_branches_override}
+                    onChange={(e) => setEditForm({ ...editForm, max_branches_override: e.target.value })}
+                    placeholder={editLimits?.plan_max_branches?.toString() || "1"}
+                  />
+                </div>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {locale === "ar"
+                  ? "اترك الحقل فارغاً لاستخدام حدود الباقة الافتراضية"
+                  : "Leave blank to use subscription plan defaults"}
+              </p>
             </div>
 
             <div className="border-t border-border/60 pt-4">

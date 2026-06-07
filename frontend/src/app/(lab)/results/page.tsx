@@ -39,6 +39,7 @@ export default function ResultsPage() {
   const [enterId, setEnterId] = useState<string | null>(null);
   const [formMeta, setFormMeta] = useState<{ patient_name: string; test_name: string; order_number: string } | null>(null);
   const [fields, setFields] = useState<ResultField[]>([]);
+  const [designOpen, setDesignOpen] = useState(false);
   const [designTestId, setDesignTestId] = useState<string | null>(null);
   const [designFields, setDesignFields] = useState<ResultField[]>([]);
 
@@ -117,6 +118,7 @@ export default function ResultsPage() {
     try {
       await api.put(`/tests/${designTestId}/result-template`, { fields: designFields });
       toast.success(locale === "ar" ? "تم حفظ نموذج النتيجة" : "Result form saved");
+      setDesignOpen(false);
       setDesignTestId(null);
     } catch (err) {
       toast.error(getApiError(err));
@@ -154,8 +156,17 @@ export default function ResultsPage() {
           <p className="text-muted-foreground">{results.length} {locale === "ar" ? "نتيجة" : "results"}</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={!!designTestId} onOpenChange={() => setDesignTestId(null)}>
-            <DialogTrigger render={<Button variant="outline" onClick={(e) => e.preventDefault()} />}>
+          <Dialog
+            open={designOpen}
+            onOpenChange={(open) => {
+              setDesignOpen(open);
+              if (!open) {
+                setDesignTestId(null);
+                setDesignFields([]);
+              }
+            }}
+          >
+            <DialogTrigger render={<Button variant="outline" />}>
               <Settings2 className="mr-2 h-4 w-4" />
               {locale === "ar" ? "تصميم النموذج" : "Design Form"}
             </DialogTrigger>

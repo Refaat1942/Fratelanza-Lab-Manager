@@ -2,9 +2,17 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.branding import BrandingResponse, BrandingUpdate
+from app.schemas.platform import TenantLimitsResponse
 from app.services.branding_service import BrandingService
+from app.services.tenant_limits_service import TenantLimitsService
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
+
+
+@router.get("/limits", response_model=TenantLimitsResponse)
+async def get_limits(db: DbSession, tenant: CurrentTenant, user: CurrentUser):
+    limits = await TenantLimitsService(db).get_limits(tenant.id)
+    return TenantLimitsResponse.model_validate(limits)
 
 
 @router.get("/branding", response_model=BrandingResponse)

@@ -129,6 +129,9 @@ class AuthService:
         )
 
     async def create_user(self, tenant_id: UUID, data: UserCreate) -> User:
+        from app.services.tenant_limits_service import TenantLimitsService
+
+        await TenantLimitsService(self.db).assert_can_add_user(tenant_id)
         username = data.username.strip().lower()
         user = User(
             tenant_id=tenant_id,

@@ -55,6 +55,19 @@ class TenantUpdate(BaseModel):
     status: Optional[TenantStatus] = None
     locale: Optional[str] = None
     custom_domain: Optional[str] = None
+    max_users_override: Optional[int] = Field(None, ge=1)
+    max_branches_override: Optional[int] = Field(None, ge=1)
+
+
+class TenantLimitsResponse(BaseModel):
+    max_users: int
+    max_branches: int
+    current_users: int
+    current_branches: int
+    plan_max_users: Optional[int] = None
+    plan_max_branches: Optional[int] = None
+    max_users_override: Optional[int] = None
+    max_branches_override: Optional[int] = None
 
 
 class TenantResponse(BaseModel):
@@ -68,6 +81,8 @@ class TenantResponse(BaseModel):
     status: TenantStatus
     locale: str
     custom_domain: Optional[str] = None
+    max_users_override: Optional[int] = None
+    max_branches_override: Optional[int] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -149,6 +164,7 @@ class TenantDetailResponse(TenantResponse):
     plan_name: Optional[str] = None
     plan_tier: Optional[PlanTier] = None
     admin: Optional[TenantAdminResponse] = None
+    limits: Optional[TenantLimitsResponse] = None
 
 
 class SubscriptionListItem(BaseModel):

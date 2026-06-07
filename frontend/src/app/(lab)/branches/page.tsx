@@ -38,6 +38,7 @@ const emptyBranch = {
 export default function BranchesPage() {
   const locale = useAuthStore((s) => s.locale);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [limits, setLimits] = useState<{ max_branches: number; current_branches: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -46,8 +47,11 @@ export default function BranchesPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get("/branches")
-      .then((res) => setBranches(res.data || []))
+    Promise.all([api.get("/branches"), api.get("/settings/limits")])
+      .then(([branchRes, limitsRes]) => {
+        setBranches(branchRes.data || []);
+        setLimits(limitsRes.data);
+      })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
   }, []);
@@ -141,11 +145,24 @@ export default function BranchesPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t(locale, "branches")}</h1>
           <p className="text-muted-foreground">
-            {locale === "ar" ? "عمليات متعددة الفروع" : "Multi-branch operations with separate inventory and revenue"}
+            {limits
+              ? locale === "ar"
+                ? `${limits.current_branches} / ${limits.max_branches} فرع`
+                : `${limits.current_branches} / ${limits.max_branches} branches`
+              : locale === "ar"
+                ? "عمليات متعددة الفروع"
+                : "Multi-branch operations with separate inventory and revenue"}
           </p>
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyBranch); } }}>
-          <DialogTrigger render={<Button className="shadow-md" />}>
+          <DialogTrigger
+            render={
+              <Button
+                className="shadow-md"
+                disabled={!!limits && limits.current_branches >= limits.max_branches && !editId}
+              />
+            }
+          >
             <Plus className="mr-2 h-4 w-4" />
             {t(locale, "create")}
           </DialogTrigger>

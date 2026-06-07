@@ -20,6 +20,9 @@ class BranchService:
         return list(result.scalars().all())
 
     async def create_branch(self, tenant_id: UUID, data: BranchCreate) -> Branch:
+        from app.services.tenant_limits_service import TenantLimitsService
+
+        await TenantLimitsService(self.db).assert_can_add_branch(tenant_id)
         if data.is_headquarters:
             result = await self.db.execute(
                 select(Branch).where(

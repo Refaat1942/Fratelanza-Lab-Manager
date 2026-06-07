@@ -290,6 +290,9 @@ class PlatformService:
         return sub
 
     async def change_plan(self, tenant_id: UUID, data: TenantChangePlanRequest, admin_id: UUID) -> Optional[TenantSubscription]:
+        from app.services.tenant_limits_service import TenantLimitsService
+
+        await TenantLimitsService(self.db).assert_plan_downgrade_allowed(tenant_id, data.plan_id)
         return await self.renew_subscription(
             tenant_id,
             SubscriptionRenewRequest(plan_id=data.plan_id, days=None, amount_paid=data.amount_paid, auto_renew=data.auto_renew),

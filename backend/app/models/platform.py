@@ -73,6 +73,8 @@ class Tenant(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     locale: Mapped[str] = mapped_column(String(5), default="ar")
     timezone: Mapped[str] = mapped_column(String(50), default="Africa/Cairo")
     custom_domain: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
+    max_users_override: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    max_branches_override: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     subscriptions: Mapped[list["TenantSubscription"]] = relationship(back_populates="tenant")
     feature_flags: Mapped[list["TenantFeatureFlag"]] = relationship(back_populates="tenant")

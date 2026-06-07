@@ -28,11 +28,13 @@ from app.schemas.platform import (
     TenantChangePlanRequest,
     TenantCreate,
     TenantDetailResponse,
+    TenantLimitsResponse,
     TenantResponse,
     TenantSubscriptionResponse,
     TenantUpdate,
 )
 from app.services.platform_service import PlatformService
+from app.services.tenant_limits_service import TenantLimitsService
 
 router = APIRouter(prefix="/platform", tags=["SaaS Platform"])
 
@@ -130,6 +132,8 @@ async def get_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
     admin_user = await svc.get_tenant_admin(tenant_id)
     if admin_user:
         detail.admin = TenantAdminResponse.model_validate(admin_user)
+    limits = await TenantLimitsService(db).get_limits(tenant_id)
+    detail.limits = TenantLimitsResponse.model_validate(limits)
     return detail
 
 

@@ -28,6 +28,7 @@ interface UserRow {
 export default function UsersPage() {
   const locale = useAuthStore((s) => s.locale);
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [limits, setLimits] = useState<{ max_users: number; current_users: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ username: "", password: "", full_name: "" });
@@ -35,8 +36,11 @@ export default function UsersPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get("/users")
-      .then((res) => setUsers(res.data.items || []))
+    Promise.all([api.get("/users"), api.get("/settings/limits")])
+      .then(([usersRes, limitsRes]) => {
+        setUsers(usersRes.data.items || []);
+        setLimits(limitsRes.data);
+      })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
   }, []);
@@ -107,10 +111,20 @@ export default function UsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t(locale, "users")}</h1>
-          <p className="text-muted-foreground">{users.length} {locale === "ar" ? "مستخدم" : "users"}</p>
+          <p className="text-muted-foreground">
+            {limits
+              ? locale === "ar"
+                ? `${limits.current_users} / ${limits.max_users} مستخدم`
+                : `${limits.current_users} / ${limits.max_users} users`
+              : `${users.length} ${locale === "ar" ? "مستخدم" : "users"}`}
+          </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger render={<Button />}>
+          <DialogTrigger
+            render={
+              <Button disabled={!!limits && limits.current_users >= limits.max_users} />
+            }
+          >
             <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent>
