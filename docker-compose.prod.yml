@@ -66,7 +66,7 @@ services:
     volumes:
       - labmaster_uploads:/app/uploads
     command: >
-      sh -c "alembic upgrade head && python scripts/seed.py && python scripts/ensure_demo_admin.py && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+      sh -c "alembic upgrade head && python scripts/seed.py && python scripts/ensure_platform_admin.py && python scripts/ensure_demo_admin.py && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
     networks:
       - labmaster_net
 
