@@ -91,7 +91,7 @@ function LoginPageContent() {
 
   return (
     <div className="flex min-h-screen bg-background" dir={dir}>
-      <div className="gradient-hero relative hidden lg:flex lg:w-[48%] flex-col items-center justify-center overflow-hidden p-12 text-white">
+      <div className="gradient-hero-animated relative hidden lg:flex lg:w-[48%] flex-col items-center justify-center overflow-hidden p-12 text-white">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -top-24 -end-24 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
           <div className="absolute -bottom-24 -start-24 h-80 w-80 rounded-full bg-secondary/30 blur-3xl" />
@@ -187,7 +187,6 @@ function LoginPageContent() {
                   type="submit"
                   className="h-11 w-full text-base font-semibold"
                   disabled={loading}
-                  style={{ backgroundColor: accent }}
                 >
                   {loading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />

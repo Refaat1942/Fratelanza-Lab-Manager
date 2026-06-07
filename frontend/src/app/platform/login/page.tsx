@@ -38,7 +38,7 @@ export default function PlatformLoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center gradient-hero p-4" dir="rtl">
+    <div className="flex min-h-screen items-center justify-center gradient-hero-animated p-4" dir="rtl">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
         <Card className="border-border/60 bg-card shadow-card-lg">
           <CardHeader className="text-center">

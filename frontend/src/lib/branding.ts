@@ -13,7 +13,9 @@ export interface TenantBranding {
 export const DEFAULT_BRANDING: TenantBranding = {
   company_name: "LabMaster Egypt",
   company_name_ar: "لاب ماستر مصر",
-  primary_color: "#0F766E",
+  primary_color: "#3B82F6",
+  secondary_color: "#10B981",
+  accent_color: "#8B5CF6",
   logo_url: "/labmaster-logo.svg",
 };
 

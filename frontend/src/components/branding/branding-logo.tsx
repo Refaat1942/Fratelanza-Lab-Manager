@@ -21,7 +21,7 @@ const sizes = {
 };
 
 export function BrandingLogo({ logoUrl, alt, size = "md", className, accentColor }: BrandingLogoProps) {
-  const resolved = resolveAssetUrl(logoUrl);
+  const resolved = resolveAssetUrl(logoUrl || "/labmaster-logo.svg");
   const [failed, setFailed] = useState(false);
   const s = sizes[size];
 

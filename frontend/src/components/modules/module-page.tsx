@@ -6,6 +6,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { t, type TranslationKey } from "@/lib/i18n";
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/data-table/data-table";
+import { PageHeader } from "@/components/layout/page-header";
 
 interface ModulePageProps {
   titleKey: TranslationKey;
@@ -26,10 +27,10 @@ export function ModulePage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">{t(locale, titleKey)}</h1>
-        <p className="text-muted-foreground">{locale === "ar" ? descriptionAr : descriptionEn}</p>
-      </div>
+      <PageHeader
+        title={t(locale, titleKey)}
+        description={locale === "ar" ? descriptionAr : descriptionEn}
+      />
 
       {data.length === 0 ? (
         <Card className="border-dashed border-border/60 shadow-card">

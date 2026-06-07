@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
+import { AnimatedPage } from "./animated-page";
 import { useAuthStore } from "@/stores/auth-store";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
@@ -18,15 +19,15 @@ export function DashboardLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background" dir={dir}>
-      <div className="hidden md:block shrink-0">
+    <div className="flex h-screen overflow-hidden mesh-bg" dir={dir}>
+      <div className="hidden shrink-0 md:block">
         <AppSidebar variant={variant} />
       </div>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent
           side={dir === "rtl" ? "right" : "left"}
-          className="w-60 p-0 border-sidebar-border"
+          className="w-64 border-sidebar-border p-0"
           showCloseButton={false}
         >
           <AppSidebar variant={variant} expanded onNavigate={() => setMobileOpen(false)} />
@@ -34,9 +35,15 @@ export function DashboardLayout({
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <AppHeader onMenuClick={() => setMobileOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 animate-fade-up">
-          <div className="mx-auto max-w-[1600px]">{children}</div>
+        <AppHeader onMenuClick={() => setMobileOpen(true)} variant={variant} />
+        <main className="relative flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="animate-float absolute -top-20 end-0 h-56 w-56 rounded-full bg-emerald-400/10 blur-3xl" />
+            <div className="animate-float absolute bottom-0 start-0 h-64 w-64 rounded-full bg-violet-400/10 blur-3xl [animation-delay:2s]" />
+          </div>
+          <div className="relative mx-auto max-w-[1600px]">
+            <AnimatedPage>{children}</AnimatedPage>
+          </div>
         </main>
       </div>
     </div>

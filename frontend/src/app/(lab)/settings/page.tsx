@@ -23,9 +23,9 @@ export default function SettingsPage() {
     company_name: "",
     company_name_ar: "",
     logo_url: "",
-    primary_color: "#0F766E",
-    secondary_color: "#14B8A6",
-    accent_color: "#CCFBF1",
+    primary_color: "#3B82F6",
+    secondary_color: "#10B981",
+    accent_color: "#8B5CF6",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
