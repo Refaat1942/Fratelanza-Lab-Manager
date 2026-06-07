@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, PlatformAdmin
 from app.schemas.auth import (
     LoginRequest,
     PlatformLoginRequest,
@@ -8,6 +8,7 @@ from app.schemas.auth import (
     TokenResponse,
     UserResponse,
 )
+from app.schemas.platform import PlatformAdminResponse
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -35,6 +36,11 @@ async def refresh_token(data: RefreshTokenRequest, db: DbSession):
         return await AuthService(db).refresh(data.refresh_token)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+
+
+@router.get("/platform/me", response_model=PlatformAdminResponse)
+async def get_platform_me(admin: PlatformAdmin):
+    return PlatformAdminResponse.model_validate(admin)
 
 
 @router.get("/me", response_model=UserResponse)

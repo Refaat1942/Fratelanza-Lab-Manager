@@ -22,6 +22,7 @@ import {
   UserCog,
   Building2,
   Microscope,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -51,7 +52,9 @@ const labModules = [
 const platformModules = [
   { href: "/platform", icon: LayoutDashboard, key: "revenue" as const },
   { href: "/platform/tenants", icon: Microscope, key: "tenants" as const },
+  { href: "/platform/subscriptions", icon: CreditCard, key: "subscriptions" as const },
   { href: "/platform/plans", icon: Receipt, key: "plans" as const },
+  { href: "/platform/audit", icon: FileText, key: "auditLogs" as const },
 ];
 
 export function AppSidebar({ variant = "lab" }: { variant?: "lab" | "platform" }) {

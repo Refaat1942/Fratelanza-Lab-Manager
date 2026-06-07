@@ -24,6 +24,8 @@ export default function PlatformLoginPage() {
       const { data } = await api.post("/auth/platform/login", { email, password });
       localStorage.setItem("access_token", data.access_token);
       localStorage.setItem("refresh_token", data.refresh_token);
+      localStorage.setItem("is_platform_admin", "true");
+      localStorage.removeItem("tenant_id");
       toast.success("Welcome, Platform Admin!");
       router.push("/platform");
     } catch {

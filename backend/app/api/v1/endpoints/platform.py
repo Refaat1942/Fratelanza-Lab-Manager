@@ -2,68 +2,67 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timedelta, timezone
 
-from app.api.deps import DbSession
-from app.core.security import get_password_hash
-from app.models.auth import User
+from app.api.deps import DbSession, PlatformAdmin
 from app.models.platform import (
-    PlatformAuditLog,
     SubscriptionPlan,
     SubscriptionStatus,
     Tenant,
-    TenantFeatureFlag,
     TenantStatus,
     TenantSubscription,
 )
-from app.models.tenant_config import Branch, TenantBranding
 from app.schemas.common import MessageResponse
 from app.schemas.platform import (
     FeatureFlagUpdate,
+    PlatformAuditLogResponse,
+    PlatformAdminResponse,
     RevenueDashboard,
+    SubscriptionListItem,
     SubscriptionPlanCreate,
     SubscriptionPlanResponse,
+    SubscriptionPlanUpdate,
+    SubscriptionRenewRequest,
+    TenantChangePlanRequest,
     TenantCreate,
+    TenantDetailResponse,
     TenantResponse,
+    TenantSubscriptionResponse,
     TenantUpdate,
 )
-from app.services.auth_service import AuthService
-from datetime import datetime, timedelta, timezone
+from app.services.platform_service import PlatformService
 
 router = APIRouter(prefix="/platform", tags=["SaaS Platform"])
 
 
+@router.get("/me", response_model=PlatformAdminResponse)
+async def platform_me(admin: PlatformAdmin):
+    return PlatformAdminResponse.model_validate(admin)
+
+
 @router.get("/dashboard", response_model=RevenueDashboard)
-async def revenue_dashboard(db: DbSession):
+async def revenue_dashboard(db: DbSession, admin: PlatformAdmin):
     total = await db.scalar(select(func.count()).select_from(Tenant).where(Tenant.deleted_at.is_(None)))
     active = await db.scalar(
-        select(func.count())
-        .select_from(TenantSubscription)
-        .where(TenantSubscription.status == SubscriptionStatus.ACTIVE)
+        select(func.count()).select_from(TenantSubscription).where(TenantSubscription.status == SubscriptionStatus.ACTIVE)
     )
     mrr = await db.scalar(
         select(func.coalesce(func.sum(SubscriptionPlan.price_egp), 0))
-        .select_from(TenantSubscription)
-        .join(SubscriptionPlan)
+        .select_from(TenantSubscription).join(SubscriptionPlan)
         .where(TenantSubscription.status == SubscriptionStatus.ACTIVE, SubscriptionPlan.billing_cycle == "monthly")
     )
     yrr = await db.scalar(
         select(func.coalesce(func.sum(SubscriptionPlan.price_egp), 0))
-        .select_from(TenantSubscription)
-        .join(SubscriptionPlan)
+        .select_from(TenantSubscription).join(SubscriptionPlan)
         .where(TenantSubscription.status == SubscriptionStatus.ACTIVE, SubscriptionPlan.billing_cycle == "yearly")
     )
     soon = await db.scalar(
-        select(func.count())
-        .select_from(TenantSubscription)
-        .where(
+        select(func.count()).select_from(TenantSubscription).where(
             TenantSubscription.expires_at <= datetime.now(timezone.utc) + timedelta(days=14),
             TenantSubscription.status == SubscriptionStatus.ACTIVE,
         )
     )
-    suspended = await db.scalar(
-        select(func.count()).select_from(Tenant).where(Tenant.status == TenantStatus.SUSPENDED)
-    )
+    suspended = await db.scalar(select(func.count()).select_from(Tenant).where(Tenant.status == TenantStatus.SUSPENDED))
     return RevenueDashboard(
         total_tenants=total or 0,
         active_subscriptions=active or 0,
@@ -74,8 +73,37 @@ async def revenue_dashboard(db: DbSession):
     )
 
 
+@router.get("/subscriptions", response_model=list[SubscriptionListItem])
+async def list_subscriptions(db: DbSession, admin: PlatformAdmin):
+    rows = await PlatformService(db).list_subscriptions()
+    return [
+        SubscriptionListItem(
+            subscription_id=row["subscription"].id,
+            tenant_id=row["tenant"].id,
+            tenant_code=row["tenant"].code,
+            tenant_name=row["tenant"].name,
+            plan_name=row["plan"].name,
+            plan_tier=row["plan"].tier,
+            status=row["subscription"].status,
+            tenant_status=row["tenant"].status,
+            expires_at=row["subscription"].expires_at,
+            grace_ends_at=row["subscription"].grace_ends_at,
+            auto_renew=row["subscription"].auto_renew,
+            amount_paid=float(row["subscription"].amount_paid),
+            price_egp=float(row["plan"].price_egp),
+        )
+        for row in rows
+    ]
+
+
+@router.get("/audit-logs", response_model=list[PlatformAuditLogResponse])
+async def list_audit_logs(db: DbSession, admin: PlatformAdmin, limit: int = Query(100, le=500)):
+    logs = await PlatformService(db).list_audit_logs(limit)
+    return [PlatformAuditLogResponse.model_validate(log) for log in logs]
+
+
 @router.get("/tenants", response_model=list[TenantResponse])
-async def list_tenants(db: DbSession, status_filter: TenantStatus | None = None):
+async def list_tenants(db: DbSession, admin: PlatformAdmin, status_filter: TenantStatus | None = None):
     query = select(Tenant).where(Tenant.deleted_at.is_(None))
     if status_filter:
         query = query.where(Tenant.status == status_filter)
@@ -83,147 +111,139 @@ async def list_tenants(db: DbSession, status_filter: TenantStatus | None = None)
     return [TenantResponse.model_validate(t) for t in result.scalars().all()]
 
 
+@router.get("/tenants/{tenant_id}", response_model=TenantDetailResponse)
+async def get_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
+    svc = PlatformService(db)
+    tenant = await svc.get_tenant(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    sub = await svc.get_active_subscription(tenant_id)
+    detail = TenantDetailResponse.model_validate(tenant)
+    if sub:
+        detail.subscription = TenantSubscriptionResponse.model_validate(sub)
+        plan = await db.get(SubscriptionPlan, sub.plan_id)
+        if plan:
+            detail.plan_name = plan.name
+            detail.plan_tier = plan.tier
+    return detail
+
+
 @router.post("/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
-async def create_tenant(data: TenantCreate, db: DbSession):
+async def create_tenant(data: TenantCreate, db: DbSession, admin: PlatformAdmin):
     existing = await db.execute(select(Tenant).where(Tenant.code == data.code))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Tenant code already exists")
-
-    plan_result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == data.plan_id))
-    plan = plan_result.scalar_one_or_none()
-    if not plan:
-        raise HTTPException(status_code=404, detail="Plan not found")
-
-    tenant = Tenant(
-        code=data.code,
-        name=data.name,
-        name_ar=data.name_ar,
-        email=data.email,
-        phone=data.phone,
-        tax_number=data.tax_number,
-        status=TenantStatus.TRIAL,
-    )
-    db.add(tenant)
-    await db.flush()
-
-    expires = datetime.now(timezone.utc) + timedelta(days=30 if plan.billing_cycle.value == "monthly" else 365)
-    db.add(
-        TenantSubscription(
-            tenant_id=tenant.id,
-            plan_id=plan.id,
-            status=SubscriptionStatus.ACTIVE,
-            expires_at=expires,
-            amount_paid=plan.price_egp,
-        )
-    )
-    db.add(
-        Branch(
-            tenant_id=tenant.id,
-            code="HQ",
-            name="Headquarters",
-            name_ar="الفرع الرئيسي",
-            is_headquarters=True,
-        )
-    )
-    db.add(
-        TenantBranding(
-            tenant_id=tenant.id,
-            company_name=data.name,
-            company_name_ar=data.name_ar or data.name,
-        )
-    )
-    from app.schemas.auth import UserCreate
-
-    await AuthService(db).create_user(
-        tenant.id,
-        UserCreate(
-            email=data.admin_email,
-            password=data.admin_password,
-            full_name=data.admin_name,
-            is_tenant_admin=True,
-        ),
-    )
-    db.add(
-        PlatformAuditLog(
-            tenant_id=tenant.id,
-            action="tenant_created",
-            entity_type="tenant",
-            entity_id=str(tenant.id),
-            details={"code": data.code, "plan_id": str(data.plan_id)},
-        )
-    )
-    await db.flush()
-    return TenantResponse.model_validate(tenant)
+    try:
+        tenant = await PlatformService(db).create_tenant(data, admin.id)
+        return TenantResponse.model_validate(tenant)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.patch("/tenants/{tenant_id}", response_model=TenantResponse)
-async def update_tenant(tenant_id: UUID, data: TenantUpdate, db: DbSession):
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
-    tenant = result.scalar_one_or_none()
+async def update_tenant(tenant_id: UUID, data: TenantUpdate, db: DbSession, admin: PlatformAdmin):
+    tenant = await PlatformService(db).update_tenant(tenant_id, data, admin.id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    for key, value in data.model_dump(exclude_unset=True).items():
-        setattr(tenant, key, value)
-    await db.flush()
     return TenantResponse.model_validate(tenant)
 
 
-@router.post("/tenants/{tenant_id}/lock", response_model=MessageResponse)
-async def lock_tenant(tenant_id: UUID, db: DbSession):
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
-    tenant = result.scalar_one_or_none()
-    if not tenant:
+@router.delete("/tenants/{tenant_id}", response_model=MessageResponse)
+async def delete_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
+    if not await PlatformService(db).delete_tenant(tenant_id, admin.id):
         raise HTTPException(status_code=404, detail="Tenant not found")
-    tenant.status = TenantStatus.LOCKED
+    return MessageResponse(message="Tenant deleted", message_ar="تم حذف المختبر")
+
+
+@router.post("/tenants/{tenant_id}/suspend", response_model=MessageResponse)
+async def suspend_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
+    if not await PlatformService(db).suspend_tenant(tenant_id, admin.id):
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return MessageResponse(message="Tenant suspended", message_ar="تم تعليق المختبر")
+
+
+@router.post("/tenants/{tenant_id}/activate", response_model=MessageResponse)
+async def activate_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
+    if not await PlatformService(db).activate_tenant(tenant_id, admin.id):
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return MessageResponse(message="Tenant activated", message_ar="تم تفعيل المختبر")
+
+
+@router.post("/tenants/{tenant_id}/lock", response_model=MessageResponse)
+async def lock_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
+    if not await PlatformService(db).lock_tenant(tenant_id, admin.id):
+        raise HTTPException(status_code=404, detail="Tenant not found")
     return MessageResponse(message="Tenant locked", message_ar="تم قفل المختبر")
 
 
 @router.post("/tenants/{tenant_id}/unlock", response_model=MessageResponse)
-async def unlock_tenant(tenant_id: UUID, db: DbSession):
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
-    tenant = result.scalar_one_or_none()
-    if not tenant:
+async def unlock_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
+    if not await PlatformService(db).unlock_tenant(tenant_id, admin.id):
         raise HTTPException(status_code=404, detail="Tenant not found")
-    tenant.status = TenantStatus.ACTIVE
     return MessageResponse(message="Tenant unlocked", message_ar="تم تفعيل المختبر")
 
 
+@router.post("/tenants/{tenant_id}/renew", response_model=TenantSubscriptionResponse)
+async def renew_subscription(tenant_id: UUID, data: SubscriptionRenewRequest, db: DbSession, admin: PlatformAdmin):
+    try:
+        sub = await PlatformService(db).renew_subscription(tenant_id, data, admin.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not sub:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return TenantSubscriptionResponse.model_validate(sub)
+
+
+@router.post("/tenants/{tenant_id}/change-plan", response_model=TenantSubscriptionResponse)
+async def change_plan(tenant_id: UUID, data: TenantChangePlanRequest, db: DbSession, admin: PlatformAdmin):
+    try:
+        sub = await PlatformService(db).change_plan(tenant_id, data, admin.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not sub:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return TenantSubscriptionResponse.model_validate(sub)
+
+
+@router.put("/tenants/{tenant_id}/features", response_model=MessageResponse)
+async def update_feature_flags(tenant_id: UUID, flags: list[FeatureFlagUpdate], db: DbSession, admin: PlatformAdmin):
+    await PlatformService(db).update_feature_flags(tenant_id, flags, admin.id)
+    return MessageResponse(message="Feature flags updated", message_ar="تم تحديث الميزات")
+
+
 @router.get("/plans", response_model=list[SubscriptionPlanResponse])
-async def list_plans(db: DbSession):
-    result = await db.execute(
-        select(SubscriptionPlan).where(SubscriptionPlan.deleted_at.is_(None), SubscriptionPlan.is_active.is_(True))
-    )
+async def list_plans(db: DbSession, admin: PlatformAdmin, include_inactive: bool = False):
+    query = select(SubscriptionPlan).where(SubscriptionPlan.deleted_at.is_(None))
+    if not include_inactive:
+        query = query.where(SubscriptionPlan.is_active.is_(True))
+    result = await db.execute(query.order_by(SubscriptionPlan.tier, SubscriptionPlan.price_egp))
     return [SubscriptionPlanResponse.model_validate(p) for p in result.scalars().all()]
 
 
 @router.post("/plans", response_model=SubscriptionPlanResponse, status_code=status.HTTP_201_CREATED)
-async def create_plan(data: SubscriptionPlanCreate, db: DbSession):
+async def create_plan(data: SubscriptionPlanCreate, db: DbSession, admin: PlatformAdmin):
     plan = SubscriptionPlan(**data.model_dump())
     db.add(plan)
     await db.flush()
     return SubscriptionPlanResponse.model_validate(plan)
 
 
-@router.put("/tenants/{tenant_id}/features", response_model=MessageResponse)
-async def update_feature_flags(tenant_id: UUID, flags: list[FeatureFlagUpdate], db: DbSession):
-    for flag in flags:
-        result = await db.execute(
-            select(TenantFeatureFlag).where(
-                TenantFeatureFlag.tenant_id == tenant_id,
-                TenantFeatureFlag.feature_key == flag.feature_key,
-            )
-        )
-        existing = result.scalar_one_or_none()
-        if existing:
-            existing.is_enabled = flag.is_enabled
-            existing.config = flag.config
-        else:
-            db.add(
-                TenantFeatureFlag(
-                    tenant_id=tenant_id,
-                    feature_key=flag.feature_key,
-                    is_enabled=flag.is_enabled,
-                    config=flag.config,
-                )
-            )
-    return MessageResponse(message="Feature flags updated", message_ar="تم تحديث الميزات")
+@router.patch("/plans/{plan_id}", response_model=SubscriptionPlanResponse)
+async def update_plan(plan_id: UUID, data: SubscriptionPlanUpdate, db: DbSession, admin: PlatformAdmin):
+    plan = await db.get(SubscriptionPlan, plan_id)
+    if not plan or plan.deleted_at:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(plan, key, value)
+    await db.flush()
+    return SubscriptionPlanResponse.model_validate(plan)
+
+
+@router.delete("/plans/{plan_id}", response_model=MessageResponse)
+async def delete_plan(plan_id: UUID, db: DbSession, admin: PlatformAdmin):
+    plan = await db.get(SubscriptionPlan, plan_id)
+    if not plan or plan.deleted_at:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    plan.deleted_at = func.now()
+    plan.is_active = False
+    return MessageResponse(message="Plan deleted", message_ar="تم حذف الباقة")

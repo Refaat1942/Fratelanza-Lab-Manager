@@ -10,9 +10,31 @@ from sqlalchemy.orm import selectinload
 from app.core.security import verify_token
 from app.db.session import get_db
 from app.models.auth import Permission, Role, RolePermission, User, UserRole
-from app.models.platform import Tenant, TenantStatus
+from app.models.platform import PlatformUser, Tenant, TenantStatus
 
 security = HTTPBearer(auto_error=False)
+
+
+async def get_platform_admin(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)],
+) -> PlatformUser:
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    payload = verify_token(credentials.credentials)
+    if not payload or payload.get("role") != "platform_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Platform admin access required")
+    admin_id = payload.get("sub")
+    result = await db.execute(
+        select(PlatformUser).where(PlatformUser.id == admin_id, PlatformUser.is_active.is_(True))
+    )
+    admin = result.scalar_one_or_none()
+    if not admin:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Platform admin not found")
+    return admin
+
+
+PlatformAdmin = Annotated[PlatformUser, Depends(get_platform_admin)]
 
 
 async def get_current_user(

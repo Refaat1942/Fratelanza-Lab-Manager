@@ -57,6 +57,55 @@ export default function PlatformDashboardPage() {
           </Card>
         ))}
       </div>
+
+      {data && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                {locale === "ar" ? "إجراءات سريعة" : "Quick Actions"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <a href="/platform/tenants" className="text-sm text-primary hover:underline">
+                {locale === "ar" ? "إدارة المختبرات" : "Manage Laboratories"}
+              </a>
+              <span className="text-muted-foreground">·</span>
+              <a href="/platform/subscriptions" className="text-sm text-primary hover:underline">
+                {locale === "ar" ? "تجديد الاشتراكات" : "Renew Subscriptions"}
+              </a>
+              <span className="text-muted-foreground">·</span>
+              <a href="/platform/plans" className="text-sm text-primary hover:underline">
+                {locale === "ar" ? "تعديل الباقات" : "Edit Plans"}
+              </a>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                {locale === "ar" ? "تنبيهات" : "Alerts"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm space-y-2">
+              {data.expiring_soon > 0 && (
+                <p className="text-amber-600">
+                  {data.expiring_soon} {locale === "ar" ? "اشتراك ينتهي خلال 14 يوم" : "subscriptions expiring in 14 days"}
+                </p>
+              )}
+              {data.suspended_tenants > 0 && (
+                <p className="text-red-600">
+                  {data.suspended_tenants} {locale === "ar" ? "مختبر معلق" : "suspended laboratories"}
+                </p>
+              )}
+              {data.expiring_soon === 0 && data.suspended_tenants === 0 && (
+                <p className="text-muted-foreground">
+                  {locale === "ar" ? "لا توجد تنبيهات" : "No alerts"}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
