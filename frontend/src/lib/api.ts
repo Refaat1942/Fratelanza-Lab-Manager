@@ -29,6 +29,15 @@ api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
     const config = error.config as typeof error.config & { _retry?: boolean };
+    if (error.response?.status === 403 && typeof window !== "undefined") {
+      const detail = (error.response?.data as { detail?: string })?.detail;
+      if (typeof detail === "string" && detail.startsWith("Tenant account is")) {
+        localStorage.clear();
+        sessionStorage.setItem("login_error", detail);
+        window.location.href = "/login?suspended=1";
+        return Promise.reject(error);
+      }
+    }
     if (error.response?.status === 401 && typeof window !== "undefined" && config) {
       const isPlatform = localStorage.getItem("is_platform_admin") === "true";
       const refresh = localStorage.getItem("refresh_token");

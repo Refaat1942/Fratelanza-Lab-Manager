@@ -29,6 +29,7 @@ from app.schemas.platform import (
     TenantUpdate,
 )
 from app.services.auth_service import AuthService
+from app.services.tenant_access_service import BLOCKED_STATUSES, TenantAccessService
 
 settings = get_settings()
 
@@ -149,8 +150,11 @@ class PlatformService:
         tenant = await self.get_tenant(tenant_id)
         if not tenant:
             return None
-        for key, value in data.model_dump(exclude_unset=True).items():
+        updates = data.model_dump(exclude_unset=True)
+        for key, value in updates.items():
             setattr(tenant, key, value)
+        if updates.get("status") in BLOCKED_STATUSES:
+            await TenantAccessService(self.db).revoke_tenant_sessions(tenant.id)
         await self.log_action(admin_id, "tenant_updated", "tenant", tenant.id, str(tenant.id))
         return tenant
 
@@ -217,6 +221,7 @@ class PlatformService:
         sub = await self.get_active_subscription(tenant_id)
         if sub:
             sub.status = SubscriptionStatus.CANCELLED
+        await TenantAccessService(self.db).revoke_tenant_sessions(tenant.id)
         await self.log_action(admin_id, "tenant_suspended", "tenant", tenant.id, str(tenant.id))
         return True
 
@@ -236,6 +241,7 @@ class PlatformService:
         if not tenant:
             return False
         tenant.status = TenantStatus.LOCKED
+        await TenantAccessService(self.db).revoke_tenant_sessions(tenant.id)
         await self.log_action(admin_id, "tenant_locked", "tenant", tenant.id, str(tenant.id))
         return True
 

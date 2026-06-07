@@ -16,6 +16,7 @@ from app.core.security import (
 )
 from app.models.auth import RefreshToken, Role, RolePermission, User, UserRole
 from app.models.platform import PlatformUser, Tenant
+from app.services.tenant_access_service import TenantAccessService
 from app.schemas.auth import LoginRequest, PlatformLoginRequest, TokenResponse, UserCreate
 
 settings = get_settings()
@@ -54,6 +55,8 @@ class AuthService:
             raise ValueError("Invalid credentials")
         if not user.is_active:
             raise ValueError("Account is inactive")
+        if user.tenant_id:
+            await TenantAccessService(self.db).assert_tenant_active(user.tenant_id)
 
         permissions = self._extract_permissions(user)
         access_token = create_access_token(
@@ -111,6 +114,8 @@ class AuthService:
         user = user_result.scalar_one_or_none()
         if not user or not user.is_active:
             raise ValueError("User not found")
+        if user.tenant_id:
+            await TenantAccessService(self.db).assert_tenant_active(user.tenant_id)
 
         permissions = await self._get_permissions(user.id)
         access_token = create_access_token(

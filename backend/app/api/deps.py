@@ -10,7 +10,8 @@ from sqlalchemy.orm import selectinload
 from app.core.security import verify_token
 from app.db.session import get_db
 from app.models.auth import Permission, Role, RolePermission, User, UserRole
-from app.models.platform import PlatformUser, Tenant, TenantStatus
+from app.models.platform import PlatformUser, Tenant
+from app.services.tenant_access_service import BLOCKED_STATUSES, TenantAccessService
 
 security = HTTPBearer(auto_error=False)
 
@@ -73,7 +74,7 @@ async def get_current_tenant(
     tenant = result.scalar_one_or_none()
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-    if tenant.status in (TenantStatus.SUSPENDED, TenantStatus.LOCKED, TenantStatus.EXPIRED):
+    if tenant.status in BLOCKED_STATUSES:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Tenant account is {tenant.status.value}")
     return tenant
 

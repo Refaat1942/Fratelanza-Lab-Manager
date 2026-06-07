@@ -10,6 +10,7 @@ from app.schemas.auth import (
 )
 from app.schemas.platform import PlatformAdminResponse
 from app.services.auth_service import AuthService
+from app.services.tenant_access_service import TenantAccessService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -19,7 +20,10 @@ async def login(data: LoginRequest, db: DbSession):
     try:
         return await AuthService(db).login(data)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+        msg = str(e)
+        if msg.startswith("Tenant account is"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=msg)
 
 
 @router.post("/platform/login", response_model=TokenResponse)
@@ -35,7 +39,10 @@ async def refresh_token(data: RefreshTokenRequest, db: DbSession):
     try:
         return await AuthService(db).refresh(data.refresh_token)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+        msg = str(e)
+        if msg.startswith("Tenant account is"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=msg)
 
 
 @router.get("/platform/me", response_model=PlatformAdminResponse)
@@ -44,7 +51,13 @@ async def get_platform_me(admin: PlatformAdmin):
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(user: CurrentUser):
+async def get_me(user: CurrentUser, db: DbSession):
+    if user.tenant_id:
+        try:
+            await TenantAccessService(db).assert_tenant_active(user.tenant_id)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
     roles = [ur.role.name for ur in user.roles]
     permissions: list[str] = []
     if user.is_tenant_admin:

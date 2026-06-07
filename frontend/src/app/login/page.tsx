@@ -58,6 +58,19 @@ function LoginPageContent() {
     return () => clearTimeout(timer);
   }, [tenantCode, fetchBranding]);
 
+  useEffect(() => {
+    const stored = sessionStorage.getItem("login_error");
+    if (stored || searchParams.get("suspended")) {
+      const msg =
+        stored ||
+        (locale === "ar"
+          ? "تم تعليق حساب المختبر. تواصل مع إدارة المنصة."
+          : "This laboratory account is suspended. Contact platform support.");
+      toast.error(msg);
+      sessionStorage.removeItem("login_error");
+    }
+  }, [searchParams, locale]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);

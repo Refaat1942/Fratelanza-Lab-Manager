@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, getApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useBrandingStore } from "@/stores/branding-store";
 
@@ -37,9 +37,13 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
         }
         setReady(true);
       })
-      .catch(() => {
+      .catch((err) => {
+        const msg = getApiError(err);
+        if (msg.startsWith("Tenant account is")) {
+          sessionStorage.setItem("login_error", msg);
+        }
         localStorage.clear();
-        router.replace("/login");
+        router.replace(msg.startsWith("Tenant account is") ? "/login?suspended=1" : "/login");
       });
   }, [router, pathname, setUser, setBranding]);
 
