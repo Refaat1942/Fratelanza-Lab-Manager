@@ -1,0 +1,97 @@
+# LabMaster Egypt - Production compose for Hostinger VPS
+# SAFE: Uses isolated ports and project name — does NOT touch other projects.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# Default ports (change in .env.production if conflicts):
+#   Frontend: 13000   Backend: 18000   Postgres: 15432   Redis: 16379
+
+name: labmaster
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: labmaster-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-labmaster}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:-labmaster}
+    volumes:
+      - labmaster_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${LABMASTER_DB_PORT:-15432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-labmaster}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - labmaster_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: labmaster-redis
+    restart: unless-stopped
+    ports:
+      - "${LABMASTER_REDIS_PORT:-16379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - labmaster_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: labmaster-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-labmaster}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-labmaster}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:-labmaster}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-labmaster}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env.production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:13000"]}
+      REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: production
+      DEBUG: "false"
+    ports:
+      - "${LABMASTER_API_PORT:-18000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head && python scripts/seed.py && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    networks:
+      - labmaster_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:18000/api/v1}
+    container_name: labmaster-frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:18000/api/v1}
+    ports:
+      - "${LABMASTER_WEB_PORT:-13000}:3000"
+    depends_on:
+      - backend
+    networks:
+      - labmaster_net
+
+volumes:
+  labmaster_postgres_data:
+    name: labmaster_postgres_data
+
+networks:
+  labmaster_net:
+    name: labmaster_net
+    driver: bridge

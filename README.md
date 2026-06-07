@@ -23,7 +23,18 @@ Commercial SaaS ERP + Laboratory Information Management System (LIMS) for medica
 | Auth | JWT + Refresh Tokens + RBAC |
 | Deployment | Docker, Nginx, Ubuntu VPS |
 
-## Quick Start
+## Deploy on Hostinger VPS (Safe — won't touch existing projects)
+
+```bash
+ssh root@187.124.15.14
+curl -fsSL https://raw.githubusercontent.com/Refaat1942/Fratelanza-Lab-Manager/main/deploy/hostinger/deploy.sh | bash
+```
+
+Uses isolated ports `13000`/`18000` — your other projects on `80`/`443`/`3000` stay untouched.
+
+Full guide: [docs/DEPLOYMENT_HOSTINGER.md](docs/DEPLOYMENT_HOSTINGER.md)
+
+## Quick Start (Local)
 
 ### Docker (Recommended)
 
