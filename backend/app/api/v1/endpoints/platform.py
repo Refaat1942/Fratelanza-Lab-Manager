@@ -133,7 +133,7 @@ async def get_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
     if admin_user:
         detail.admin = TenantAdminResponse.model_validate(admin_user)
     limits = await TenantLimitsService(db).get_limits(tenant_id)
-    detail.limits = TenantLimitsResponse.model_validate(limits)
+    detail.limits = limits.to_response()
     return detail
 
 

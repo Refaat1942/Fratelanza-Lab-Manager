@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.auth import User
 from app.models.platform import SubscriptionPlan, Tenant, TenantSubscription
 from app.models.tenant_config import Branch
+from app.schemas.platform import TenantLimitsResponse
 
 
 @dataclass
@@ -19,6 +20,18 @@ class TenantLimits:
     plan_max_branches: int | None
     max_users_override: int | None
     max_branches_override: int | None
+
+    def to_response(self) -> TenantLimitsResponse:
+        return TenantLimitsResponse(
+            max_users=self.max_users,
+            max_branches=self.max_branches,
+            current_users=self.current_users,
+            current_branches=self.current_branches,
+            plan_max_users=self.plan_max_users,
+            plan_max_branches=self.plan_max_branches,
+            max_users_override=self.max_users_override,
+            max_branches_override=self.max_branches_override,
+        )
 
 
 class TenantLimitsService:
