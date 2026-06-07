@@ -86,6 +86,16 @@ if [ -d /etc/nginx/sites-enabled ]; then
     done
 fi
 
+# Warn about wildcard configs (common cause of routing to wrong project)
+for f in /etc/nginx/sites-enabled/*; do
+    [ -f "$f" ] || continue
+    [ "$(basename "$f")" = "$NGINX_SITE" ] && continue
+    if grep -qE 'server_name.*\*\.|server_name.*\.fratelanza' "$f" 2>/dev/null; then
+        warn "Found wildcard in $(basename "$f") — may steal $DOMAIN on HTTPS!"
+        warn "After setup, run: sudo bash deploy/hostinger/fix-nginx-routing.sh $DOMAIN"
+    fi
+done
+
 info "Existing nginx sites (we will NOT modify these):"
 ls -1 /etc/nginx/sites-enabled/ 2>/dev/null | grep -v "^${NGINX_SITE}$" || echo "  (none)"
 echo ""
@@ -150,11 +160,15 @@ echo "  HTTP:  http://${DOMAIN}"
 echo "  API:   http://${DOMAIN}/api/v1"
 echo "  Docs:  http://${DOMAIN}/docs"
 echo ""
-echo "DNS checklist (Hostinger hPanel):"
-echo "  Type: A"
-echo "  Name: $(echo "$DOMAIN" | cut -d. -f1)    (the subdomain part)"
-echo "  Value: $(curl -s ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')"
+echo "DNS checklist (Cloudflare or Hostinger):"
+echo "  Type: A  (NOT AAAA)"
+echo "  Name: $(echo "$DOMAIN" | cut -d. -f1)"
+echo "  Value: 187.124.15.14   (IPv4 — your VPS IP)"
+echo "  Proxy: DNS only (grey cloud in Cloudflare)"
 echo "  TTL: 300"
+echo ""
+echo "If wrong project shows (Fratelanza instead of LabMaster), run:"
+echo "  sudo bash deploy/hostinger/fix-nginx-routing.sh $DOMAIN"
 echo ""
 echo "Next — enable HTTPS (only affects LabMaster site):"
 echo "  sudo certbot --nginx -d ${DOMAIN}"
