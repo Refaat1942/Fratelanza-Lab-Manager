@@ -93,7 +93,7 @@ class PlatformService:
             raise ValueError("Plan not found")
 
         tenant = Tenant(
-            code=data.code,
+            code=data.code.strip().lower(),
             name=data.name,
             name_ar=data.name_ar,
             email=data.email,

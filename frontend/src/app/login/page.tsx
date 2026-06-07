@@ -63,17 +63,18 @@ function LoginPageContent() {
     setLoading(true);
     localStorage.removeItem("is_platform_admin");
     localStorage.removeItem("tenant_id");
+    const normalizedTenantCode = tenantCode.trim().toLowerCase();
     try {
       const { data: tokens } = await api.post("/auth/login", {
-        username,
+        username: username.trim(),
         password,
-        tenant_code: tenantCode,
+        tenant_code: normalizedTenantCode,
       });
       localStorage.setItem("access_token", tokens.access_token);
       localStorage.setItem("refresh_token", tokens.refresh_token);
       const { data: user } = await api.get("/auth/me");
       setUser(user);
-      setStoreTenant(tenantCode);
+      setStoreTenant(normalizedTenantCode);
       persistBranding(branding);
       if (user.tenant_id) localStorage.setItem("tenant_id", user.tenant_id);
       toast.success(locale === "ar" ? "مرحباً بعودتك!" : "Welcome back!");
@@ -117,7 +118,7 @@ function LoginPageContent() {
               ? "نظام إدارة المختبرات الطبية — ERP و LIMS متكامل"
               : "Medical Laboratory ERP & LIMS — patients, tests, billing & more"}
           </p>
-          <p className="mt-10 text-sm text-white/50">Powered by LabMaster Egypt</p>
+          <p className="mt-10 text-sm text-white/50">powered by fratelanza2026</p>
         </motion.div>
       </div>
 
@@ -160,8 +161,8 @@ function LoginPageContent() {
                   />
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     {locale === "ar"
-                      ? "المعرّف الفريد لمختبرك عند التسجيل (أحرف إنجليزية صغيرة، بدون مسافات). للتجربة استخدم: demo-lab"
-                      : "Your lab's unique ID from registration (lowercase, no spaces). For demo use: demo-lab"}
+                      ? "المعرّف الفريد لمختبرك (أحرف صغيرة، بدون مسافات). للتجربة: demo-lab — المستخدم labadmin — كلمة المرور Demo@123"
+                      : "Your lab ID (lowercase, no spaces). Demo: demo-lab · user labadmin · password Demo@123"}
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -173,6 +174,7 @@ function LoginPageContent() {
                     required
                     className="h-11 bg-background"
                     autoComplete="username"
+                    placeholder="labadmin"
                   />
                 </div>
                 <div className="space-y-2">
@@ -203,6 +205,9 @@ function LoginPageContent() {
               </form>
             </CardContent>
           </Card>
+          <p className="mt-6 text-center text-xs text-muted-foreground lg:hidden">
+            powered by fratelanza2026
+          </p>
         </motion.div>
       </div>
     </div>

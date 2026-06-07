@@ -130,7 +130,8 @@ async def get_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
 
 @router.post("/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(data: TenantCreate, db: DbSession, admin: PlatformAdmin):
-    existing = await db.execute(select(Tenant).where(Tenant.code == data.code))
+    code = data.code.strip().lower()
+    existing = await db.execute(select(Tenant).where(Tenant.code == code))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Tenant code already exists")
     try:

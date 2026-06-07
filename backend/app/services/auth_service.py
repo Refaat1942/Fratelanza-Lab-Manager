@@ -31,6 +31,7 @@ class AuthService:
 
     async def login(self, data: LoginRequest) -> TokenResponse:
         username = data.username.strip().lower()
+        tenant_code = data.tenant_code.strip().lower() if data.tenant_code else None
         query = select(User).options(
             selectinload(User.roles)
             .selectinload(UserRole.role)
@@ -38,9 +39,9 @@ class AuthService:
             .selectinload(RolePermission.permission)
         ).where(User.username == username, User.deleted_at.is_(None))
 
-        if data.tenant_code:
+        if tenant_code:
             tenant_result = await self.db.execute(
-                select(Tenant).where(Tenant.code == data.tenant_code, Tenant.deleted_at.is_(None))
+                select(Tenant).where(Tenant.code == tenant_code, Tenant.deleted_at.is_(None))
             )
             tenant = tenant_result.scalar_one_or_none()
             if not tenant:
