@@ -57,8 +57,8 @@ docker compose up -d
 
 | Portal | Email | Password | Tenant Code |
 |--------|-------|----------|-------------|
-| Laboratory | admin@demo-lab.eg | Demo@123 | demo-lab |
-| SaaS Platform | admin@labmaster.eg | Admin@123 | — |
+| Laboratory | labadmin | *(set on first deploy)* | demo-lab |
+| SaaS Platform | superadmin | *(set on first deploy)* | — |
 
 ### Local Development
 

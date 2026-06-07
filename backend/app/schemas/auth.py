@@ -6,13 +6,13 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    username: str = Field(min_length=2, max_length=64)
     password: str = Field(min_length=6)
     tenant_code: Optional[str] = None
 
 
 class PlatformLoginRequest(BaseModel):
-    email: EmailStr
+    username: str = Field(min_length=2, max_length=64)
     password: str = Field(min_length=6)
 
 
@@ -28,7 +28,8 @@ class RefreshTokenRequest(BaseModel):
 
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    username: str = Field(min_length=2, max_length=64)
+    email: Optional[EmailStr] = None
     password: str = Field(min_length=8)
     full_name: str
     full_name_ar: Optional[str] = None
@@ -52,7 +53,8 @@ class UserUpdate(BaseModel):
 
 class UserResponse(BaseModel):
     id: UUID
-    email: str
+    username: str
+    email: Optional[str] = None
     full_name: str
     full_name_ar: Optional[str] = None
     phone: Optional[str] = None
@@ -81,17 +83,5 @@ class RoleResponse(BaseModel):
     name_ar: Optional[str] = None
     description: Optional[str] = None
     is_system: bool
-    permissions: list[str] = []
-
-    model_config = {"from_attributes": True}
-
-
-class PermissionResponse(BaseModel):
-    id: UUID
-    code: str
-    module: str
-    action: str
-    description: Optional[str] = None
-    description_ar: Optional[str] = None
 
     model_config = {"from_attributes": True}

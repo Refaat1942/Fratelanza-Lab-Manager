@@ -106,7 +106,8 @@ async def seed() -> None:
 
         db.add(
             PlatformUser(
-                email="admin@labmaster.eg",
+                username="superadmin",
+                email=None,
                 password_hash=get_password_hash("Admin@123"),
                 full_name="Platform Administrator",
                 is_superadmin=True,
@@ -191,7 +192,8 @@ async def seed() -> None:
 
         admin = User(
             tenant_id=tenant.id,
-            email="admin@demo-lab.eg",
+            username="labadmin",
+            email=None,
             password_hash=get_password_hash("Demo@123"),
             full_name="Lab Administrator",
             full_name_ar="مدير المختبر",
@@ -241,8 +243,8 @@ async def seed() -> None:
 
         await db.commit()
         print("Seed completed successfully!")
-        print("Platform admin: admin@labmaster.eg / Admin@123")
-        print("Demo lab admin: admin@demo-lab.eg / Demo@123 (tenant: demo-lab)")
+        print("Platform admin username: superadmin")
+        print("Demo lab admin username: labadmin (tenant code: demo-lab)")
 
 
 if __name__ == "__main__":

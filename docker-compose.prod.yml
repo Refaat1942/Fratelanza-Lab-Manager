@@ -20,8 +20,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-labmaster}
     volumes:
       - labmaster_postgres_data:/var/lib/postgresql/data
-    ports:
-      - "${LABMASTER_DB_PORT:-15432}:5432"
+    # No host port — database is isolated inside labmaster_net only
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-labmaster}"]
       interval: 10s
@@ -34,8 +33,7 @@ services:
     image: redis:7-alpine
     container_name: labmaster-redis
     restart: unless-stopped
-    ports:
-      - "${LABMASTER_REDIS_PORT:-16379}:6379"
+    # No host port — Redis is internal to labmaster_net only
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

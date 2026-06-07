@@ -1,14 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
-import { api } from "@/lib/api";
+import { api, getApiError } from "@/lib/api";
 import { toast } from "sonner";
 
 interface Doctor {
@@ -22,18 +30,57 @@ interface Doctor {
   is_active: boolean;
 }
 
+const emptyDoctor = {
+  full_name: "", full_name_ar: "", specialty: "", phone: "", commission_rate: "0",
+};
+
 export default function DoctorsPage() {
   const locale = useAuthStore((s) => s.locale);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(emptyDoctor);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    api
-      .get("/doctors")
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get("/doctors")
       .then((res) => setDoctors(res.data.items || []))
-      .catch(() => toast.error("Failed to load doctors"))
+      .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const createDoctor = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.post("/doctors", {
+        ...form,
+        commission_rate: parseFloat(form.commission_rate) || 0,
+      });
+      toast.success(locale === "ar" ? "تم إضافة الطبيب" : "Doctor created");
+      setOpen(false);
+      setForm(emptyDoctor);
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteDoctor = async (id: string) => {
+    if (!confirm(locale === "ar" ? "حذف الطبيب؟" : "Delete doctor?")) return;
+    try {
+      await api.delete(`/doctors/${id}`);
+      toast.success("Deleted");
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
 
   const columns: ColumnDef<Doctor>[] = [
     { accessorKey: "code", header: locale === "ar" ? "الكود" : "Code" },
@@ -58,24 +105,77 @@ export default function DoctorsPage() {
         </Badge>
       ),
     },
+    {
+      id: "actions",
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="text-destructive" onClick={() => deleteDoctor(row.original.id)}>
+              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">{t(locale, "doctors")}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t(locale, "doctors")}</h1>
           <p className="text-muted-foreground">
             {locale === "ar" ? "قاعدة بيانات الأطباء والعمولات" : "Doctor database, commissions, and referrals"}
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          {t(locale, "create")}
-        </Button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger render={<Button className="shadow-md" />}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t(locale, "create")}
+          </DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{locale === "ar" ? "طبيب جديد" : "New Doctor"}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={createDoctor} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>
+                  <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "الاسم (عربي)" : "Name (AR)"}</Label>
+                  <Input value={form.full_name_ar} onChange={(e) => setForm({ ...form, full_name_ar: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "التخصص" : "Specialty"}</Label>
+                  <Input value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "الهاتف" : "Phone"}</Label>
+                  <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>{locale === "ar" ? "نسبة العمولة %" : "Commission %"}</Label>
+                <Input type="number" min="0" max="100" value={form.commission_rate} onChange={(e) => setForm({ ...form, commission_rate: e.target.value })} />
+              </div>
+              <Button type="submit" className="w-full" disabled={saving}>
+                {saving ? "Saving..." : t(locale, "save")}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
       {loading ? (
-        <p className="text-muted-foreground">Loading...</p>
+        <div className="flex h-40 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
       ) : (
         <DataTable columns={columns} data={doctors} searchPlaceholder={t(locale, "search")} onExport={() => toast.info("Export")} />
       )}

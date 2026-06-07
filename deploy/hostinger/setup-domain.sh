@@ -180,4 +180,4 @@ echo "  docker compose -f docker-compose.prod.yml --env-file .env.production up 
 echo ""
 echo "Or run: sudo bash deploy/hostinger/enable-ssl.sh ${DOMAIN}"
 echo ""
-echo "Demo login: admin@demo-lab.eg / Demo@123  (tenant: demo-lab)"
+echo "Demo login: username labadmin (tenant code: demo-lab)"

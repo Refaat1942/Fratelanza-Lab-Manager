@@ -55,6 +55,7 @@ async def get_me(user: CurrentUser):
                 permissions.append(rp.permission.code)
     return UserResponse(
         id=user.id,
+        username=user.username,
         email=user.email,
         full_name=user.full_name,
         full_name_ar=user.full_name_ar,

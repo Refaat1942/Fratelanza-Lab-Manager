@@ -41,7 +41,7 @@ class TenantCreate(BaseModel):
     phone: Optional[str] = None
     tax_number: Optional[str] = None
     plan_id: UUID
-    admin_email: EmailStr
+    admin_username: str = Field(min_length=2, max_length=64)
     admin_password: str = Field(min_length=8)
     admin_name: str
 
@@ -160,7 +160,8 @@ class PlatformAuditLogResponse(BaseModel):
 
 class PlatformAdminResponse(BaseModel):
     id: UUID
-    email: str
+    username: str
+    email: Optional[str] = None
     full_name: str
     is_superadmin: bool
 

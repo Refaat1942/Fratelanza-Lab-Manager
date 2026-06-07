@@ -40,7 +40,7 @@ interface Plan {
 
 const emptyForm = {
   code: "", name: "", name_ar: "", email: "", phone: "",
-  plan_id: "", admin_email: "", admin_password: "", admin_name: "",
+  plan_id: "", admin_username: "", admin_password: "", admin_name: "",
 };
 
 export default function TenantsPage() {
@@ -202,8 +202,8 @@ export default function TenantsPage() {
                 <Input value={form.admin_name} onChange={(e) => setForm({ ...form, admin_name: e.target.value })} required />
               </div>
               <div className="space-y-2">
-                <Label>Admin Email *</Label>
-                <Input type="email" value={form.admin_email} onChange={(e) => setForm({ ...form, admin_email: e.target.value })} required />
+                <Label>Admin Username *</Label>
+                <Input value={form.admin_username} onChange={(e) => setForm({ ...form, admin_username: e.target.value })} required minLength={2} />
               </div>
               <div className="space-y-2">
                 <Label>Admin Password *</Label>

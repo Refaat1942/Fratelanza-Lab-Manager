@@ -15,7 +15,7 @@ async def client():
 @pytest.fixture
 def sample_login():
     return {
-        "email": "admin@demo-lab.eg",
+        "username": "labadmin",
         "password": "Demo@123",
         "tenant_code": "demo-lab",
     }

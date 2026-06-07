@@ -11,7 +11,8 @@ from app.db.base import Base, SoftDeleteMixin, TenantMixin, TimestampMixin, UUID
 class User(Base, UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "users"
 
-    email: Mapped[str] = mapped_column(String(255), index=True)
+    username: Mapped[str] = mapped_column(String(100), index=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), index=True, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(255))
     full_name_ar: Mapped[Optional[str]] = mapped_column(String(255))
@@ -25,7 +26,7 @@ class User(Base, UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDeleteMix
     roles: Mapped[list["UserRole"]] = relationship(back_populates="user")
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(back_populates="user")
 
-    __table_args__ = (UniqueConstraint("tenant_id", "email", name="uq_users_tenant_email"),)
+    __table_args__ = (UniqueConstraint("tenant_id", "username", name="uq_users_tenant_username"),)
 
 
 class Role(Base, UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDeleteMixin):

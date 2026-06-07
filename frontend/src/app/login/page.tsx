@@ -14,9 +14,9 @@ import { useAuthStore } from "@/stores/auth-store";
 import { toast } from "sonner";
 
 function LoginForm() {
-  const [email, setEmail] = useState("admin@demo-lab.eg");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [tenantCode, setTenantCode] = useState("demo-lab");
+  const [tenantCode, setTenantCode] = useState("");
   const [loading, setLoading] = useState(false);
   const { setUser, setTenantCode: setStoreTenant } = useAuthStore();
   const router = useRouter();
@@ -28,7 +28,11 @@ function LoginForm() {
     setLoading(true);
     localStorage.removeItem("is_platform_admin");
     try {
-      const { data: tokens } = await api.post("/auth/login", { email, password, tenant_code: tenantCode });
+      const { data: tokens } = await api.post("/auth/login", {
+        username,
+        password,
+        tenant_code: tenantCode,
+      });
       localStorage.setItem("access_token", tokens.access_token);
       localStorage.setItem("refresh_token", tokens.refresh_token);
       const { data: user } = await api.get("/auth/me");
@@ -45,35 +49,58 @@ function LoginForm() {
   };
 
   return (
-    <Card className="glass border-white/20 shadow-2xl">
+    <Card className="glass border-white/10 shadow-2xl">
       <CardHeader className="text-center pb-2">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10">
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-primary/15 ring-1 ring-primary/20">
           <Microscope className="h-7 w-7 text-primary" />
         </div>
-        <CardTitle className="text-2xl">LabMaster Egypt</CardTitle>
+        <CardTitle className="text-2xl font-semibold tracking-tight">LabMaster Egypt</CardTitle>
         <CardDescription>Laboratory Login / تسجيل دخول المختبر</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="tenant">Laboratory Code</Label>
-            <Input id="tenant" value={tenantCode} onChange={(e) => setTenantCode(e.target.value)} required className="h-11" />
+            <Input
+              id="tenant"
+              value={tenantCode}
+              onChange={(e) => setTenantCode(e.target.value)}
+              required
+              className="h-11"
+              autoComplete="organization"
+            />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-11" />
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              className="h-11"
+              autoComplete="username"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="h-11" placeholder="Demo@123" />
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="h-11"
+              autoComplete="current-password"
+            />
           </div>
           <Button type="submit" className="h-11 w-full text-base" disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign In"}
           </Button>
         </form>
-        <p className="mt-4 text-center text-xs text-muted-foreground">Demo: admin@demo-lab.eg / Demo@123</p>
-        <p className="mt-2 text-center text-sm">
-          <Link href="/" className="text-primary hover:underline">← Back to home</Link>
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          <Link href="/platform/login" className="text-primary hover:underline">
+            Platform admin portal →
+          </Link>
         </p>
       </CardContent>
     </Card>

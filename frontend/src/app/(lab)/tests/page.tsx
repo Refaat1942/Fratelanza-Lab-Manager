@@ -1,14 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus } from "lucide-react";
+import { Plus, MoreHorizontal, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
-import { api } from "@/lib/api";
+import { api, getApiError } from "@/lib/api";
 import { toast } from "sonner";
 
 interface Test {
@@ -20,20 +31,75 @@ interface Test {
   cost: number;
   turnaround_hours: number;
   is_active: boolean;
+  category_id: string;
 }
+
+interface Category {
+  id: string;
+  code: string;
+  name: string;
+  name_ar: string;
+}
+
+const emptyTest = {
+  category_id: "", name: "", name_ar: "", price: "", cost: "", turnaround_hours: "24",
+};
 
 export default function TestsPage() {
   const locale = useAuthStore((s) => s.locale);
   const [tests, setTests] = useState<Test[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(emptyTest);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    api
-      .get("/tests")
-      .then((res) => setTests(res.data.items || []))
-      .catch(() => toast.error("Failed to load tests"))
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([api.get("/tests"), api.get("/tests/categories")])
+      .then(([testsRes, catRes]) => {
+        setTests(testsRes.data.items || []);
+        setCategories(catRes.data || []);
+      })
+      .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const createTest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api.post("/tests", {
+        category_id: form.category_id,
+        name: form.name,
+        name_ar: form.name_ar,
+        price: parseFloat(form.price) || 0,
+        cost: parseFloat(form.cost) || 0,
+        turnaround_hours: parseInt(form.turnaround_hours, 10) || 24,
+      });
+      toast.success(locale === "ar" ? "تم إضافة التحليل" : "Test created");
+      setOpen(false);
+      setForm(emptyTest);
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteTest = async (id: string) => {
+    if (!confirm(locale === "ar" ? "حذف التحليل؟" : "Delete test?")) return;
+    try {
+      await api.delete(`/tests/${id}`);
+      toast.success("Deleted");
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
 
   const columns: ColumnDef<Test>[] = [
     { accessorKey: "code", header: "Code" },
@@ -62,24 +128,90 @@ export default function TestsPage() {
         </Badge>
       ),
     },
+    {
+      id: "actions",
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem className="text-destructive" onClick={() => deleteTest(row.original.id)}>
+              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">{t(locale, "tests")}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t(locale, "tests")}</h1>
           <p className="text-muted-foreground">
             {locale === "ar" ? "كتالوج التحاليل بالعربية والإنجليزية" : "Test catalog with Arabic/English names and prices"}
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          {t(locale, "create")}
-        </Button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger render={<Button className="shadow-md" />}>
+            <Plus className="mr-2 h-4 w-4" />
+            {t(locale, "create")}
+          </DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{locale === "ar" ? "تحليل جديد" : "New Test"}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={createTest} className="space-y-4">
+              <div className="space-y-2">
+                <Label>{locale === "ar" ? "الفئة" : "Category"} *</Label>
+                <Select value={form.category_id} onValueChange={(v) => v && setForm({ ...form, category_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {locale === "ar" ? c.name_ar : c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "الاسم (عربي)" : "Name (AR)"} *</Label>
+                  <Input value={form.name_ar} onChange={(e) => setForm({ ...form, name_ar: e.target.value })} required />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "السعر" : "Price"}</Label>
+                  <Input type="number" min="0" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "التكلفة" : "Cost"}</Label>
+                  <Input type="number" min="0" value={form.cost} onChange={(e) => setForm({ ...form, cost: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>TAT (hrs)</Label>
+                  <Input type="number" min="1" value={form.turnaround_hours} onChange={(e) => setForm({ ...form, turnaround_hours: e.target.value })} />
+                </div>
+              </div>
+              <Button type="submit" className="w-full" disabled={saving || !form.category_id}>
+                {saving ? "Saving..." : t(locale, "save")}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
       {loading ? (
-        <p className="text-muted-foreground">Loading...</p>
+        <div className="flex h-40 items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
       ) : (
         <DataTable columns={columns} data={tests} searchPlaceholder={t(locale, "search")} onExport={() => toast.info("Export")} />
       )}

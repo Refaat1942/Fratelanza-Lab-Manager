@@ -1,6 +1,5 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -31,9 +30,14 @@ class AuthService:
         self.db = db
 
     async def login(self, data: LoginRequest) -> TokenResponse:
+        username = data.username.strip().lower()
         query = select(User).options(
-            selectinload(User.roles).selectinload(UserRole.role).selectinload(Role.permissions).selectinload(RolePermission.permission)
-        ).where(User.email == data.email, User.deleted_at.is_(None))
+            selectinload(User.roles)
+            .selectinload(UserRole.role)
+            .selectinload(Role.permissions)
+            .selectinload(RolePermission.permission)
+        ).where(User.username == username, User.deleted_at.is_(None))
+
         if data.tenant_code:
             tenant_result = await self.db.execute(
                 select(Tenant).where(Tenant.code == data.tenant_code, Tenant.deleted_at.is_(None))
@@ -42,6 +46,7 @@ class AuthService:
             if not tenant:
                 raise ValueError("Invalid tenant code")
             query = query.where(User.tenant_id == tenant.id)
+
         result = await self.db.execute(query)
         user = result.scalar_one_or_none()
         if not user or not verify_password(data.password, user.password_hash):
@@ -68,8 +73,9 @@ class AuthService:
         )
 
     async def platform_login(self, data: PlatformLoginRequest) -> TokenResponse:
+        username = data.username.strip().lower()
         result = await self.db.execute(
-            select(PlatformUser).where(PlatformUser.email == data.email, PlatformUser.is_active.is_(True))
+            select(PlatformUser).where(PlatformUser.username == username, PlatformUser.is_active.is_(True))
         )
         user = result.scalar_one_or_none()
         if not user or not verify_password(data.password, user.password_hash):
@@ -119,8 +125,10 @@ class AuthService:
         )
 
     async def create_user(self, tenant_id: UUID, data: UserCreate) -> User:
+        username = data.username.strip().lower()
         user = User(
             tenant_id=tenant_id,
+            username=username,
             email=data.email,
             password_hash=get_password_hash(data.password),
             full_name=data.full_name,
@@ -160,7 +168,10 @@ class AuthService:
         result = await self.db.execute(
             select(User)
             .options(
-                selectinload(User.roles).selectinload(UserRole.role).selectinload(Role.permissions).selectinload(RolePermission.permission)
+                selectinload(User.roles)
+                .selectinload(UserRole.role)
+                .selectinload(Role.permissions)
+                .selectinload(RolePermission.permission)
             )
             .where(User.id == user_id)
         )

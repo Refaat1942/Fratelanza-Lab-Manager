@@ -48,7 +48,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "اللون الأساسي" : "Primary Color"}</Label>
-                  <Input type="color" defaultValue="#0F766E" className="h-10" />
+                  <Input type="color" defaultValue="#1e3a5f" className="h-10" />
                 </div>
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "النطاق المخصص" : "Custom Domain"}</Label>

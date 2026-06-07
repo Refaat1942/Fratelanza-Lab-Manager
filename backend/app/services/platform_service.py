@@ -119,7 +119,12 @@ class PlatformService:
 
         await AuthService(self.db).create_user(
             tenant.id,
-            UserCreate(email=data.admin_email, password=data.admin_password, full_name=data.admin_name, is_tenant_admin=True),
+            UserCreate(
+                username=data.admin_username,
+                password=data.admin_password,
+                full_name=data.admin_name,
+                is_tenant_admin=True,
+            ),
         )
         await self.log_action(admin_id, "tenant_created", "tenant", tenant.id, str(tenant.id), {"code": data.code})
         return tenant

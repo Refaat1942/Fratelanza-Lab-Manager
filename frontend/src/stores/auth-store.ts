@@ -4,7 +4,8 @@ import type { Locale } from "@/lib/i18n";
 
 interface User {
   id: string;
-  email: string;
+  username: string;
+  email?: string;
   full_name: string;
   full_name_ar?: string;
   is_tenant_admin: boolean;

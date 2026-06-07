@@ -12,8 +12,8 @@ POST /auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@demo-lab.eg",
-  "password": "Demo@123",
+  "username": "labadmin",
+  "password": "<your-password>",
   "tenant_code": "demo-lab"
 }
 ```
@@ -24,8 +24,8 @@ POST /auth/platform/login
 Content-Type: application/json
 
 {
-  "email": "admin@labmaster.eg",
-  "password": "Admin@123"
+  "username": "superadmin",
+  "password": "<your-password>"
 }
 ```
 

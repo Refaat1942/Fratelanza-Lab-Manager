@@ -38,7 +38,8 @@ class PlanTier(str, enum.Enum):
 class PlatformUser(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __tablename__ = "platform_users"
 
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), unique=True, index=True, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

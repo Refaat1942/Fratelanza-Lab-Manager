@@ -71,7 +71,7 @@ export function PlatformAuthGuard({ children }: { children: React.ReactNode }) {
   if (!ready) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-950">
-        <Loader2 className="h-8 w-8 animate-spin text-teal-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
