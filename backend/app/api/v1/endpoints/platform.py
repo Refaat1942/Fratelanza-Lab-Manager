@@ -23,6 +23,8 @@ from app.schemas.platform import (
     SubscriptionPlanResponse,
     SubscriptionPlanUpdate,
     SubscriptionRenewRequest,
+    TenantAdminResponse,
+    TenantAdminUpdate,
     TenantChangePlanRequest,
     TenantCreate,
     TenantDetailResponse,
@@ -125,6 +127,9 @@ async def get_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
         if plan:
             detail.plan_name = plan.name
             detail.plan_tier = plan.tier
+    admin_user = await svc.get_tenant_admin(tenant_id)
+    if admin_user:
+        detail.admin = TenantAdminResponse.model_validate(admin_user)
     return detail
 
 
@@ -147,6 +152,27 @@ async def update_tenant(tenant_id: UUID, data: TenantUpdate, db: DbSession, admi
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return TenantResponse.model_validate(tenant)
+
+
+@router.get("/tenants/{tenant_id}/admin", response_model=TenantAdminResponse)
+async def get_tenant_admin(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
+    user = await PlatformService(db).get_tenant_admin(tenant_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Tenant admin not found")
+    return TenantAdminResponse.model_validate(user)
+
+
+@router.patch("/tenants/{tenant_id}/admin", response_model=TenantAdminResponse)
+async def update_tenant_admin(
+    tenant_id: UUID, data: TenantAdminUpdate, db: DbSession, admin: PlatformAdmin
+):
+    try:
+        user = await PlatformService(db).update_tenant_admin(tenant_id, data, admin.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not user:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return TenantAdminResponse.model_validate(user)
 
 
 @router.delete("/tenants/{tenant_id}", response_model=MessageResponse)

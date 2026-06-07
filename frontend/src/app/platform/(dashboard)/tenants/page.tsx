@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, MoreHorizontal, Lock, Unlock, Ban, CheckCircle, Trash2, RefreshCw } from "lucide-react";
+import { Plus, MoreHorizontal, Lock, Unlock, Ban, CheckCircle, Trash2, RefreshCw, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -38,9 +38,34 @@ interface Plan {
   price_egp: number;
 }
 
+interface TenantAdmin {
+  id: string;
+  username: string;
+  full_name: string;
+  full_name_ar?: string;
+  is_active: boolean;
+}
+
+interface TenantDetail {
+  id: string;
+  code: string;
+  name: string;
+  name_ar?: string;
+  email?: string;
+  phone?: string;
+  tax_number?: string;
+  status: string;
+  admin?: TenantAdmin;
+}
+
 const emptyForm = {
   code: "", name: "", name_ar: "", email: "", phone: "",
   plan_id: "", admin_username: "", admin_password: "", admin_name: "",
+};
+
+const emptyEditForm = {
+  name: "", name_ar: "", email: "", phone: "", tax_number: "", status: "active",
+  admin_username: "", admin_password: "", admin_name: "", admin_name_ar: "",
 };
 
 export default function TenantsPage() {
@@ -48,8 +73,13 @@ export default function TenantsPage() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState(emptyEditForm);
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editCode, setEditCode] = useState("");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -79,7 +109,7 @@ export default function TenantsPage() {
     e.preventDefault();
     try {
       await api.post("/platform/tenants", form);
-      toast.success("Laboratory created");
+      toast.success(locale === "ar" ? "تم إنشاء المختبر" : "Laboratory created");
       setOpen(false);
       setForm(emptyForm);
       load();
@@ -88,13 +118,71 @@ export default function TenantsPage() {
     }
   };
 
+  const openEdit = async (tenant: Tenant) => {
+    try {
+      const { data } = await api.get<TenantDetail>(`/platform/tenants/${tenant.id}`);
+      setEditId(tenant.id);
+      setEditCode(data.code);
+      setEditForm({
+        name: data.name || "",
+        name_ar: data.name_ar || "",
+        email: data.email || "",
+        phone: data.phone || "",
+        tax_number: data.tax_number || "",
+        status: data.status || "active",
+        admin_username: data.admin?.username || "",
+        admin_password: "",
+        admin_name: data.admin?.full_name || "",
+        admin_name_ar: data.admin?.full_name_ar || "",
+      });
+      setEditOpen(true);
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
+
+  const saveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editId) return;
+    setSaving(true);
+    try {
+      await api.patch(`/platform/tenants/${editId}`, {
+        name: editForm.name,
+        name_ar: editForm.name_ar || null,
+        email: editForm.email || null,
+        phone: editForm.phone || null,
+        tax_number: editForm.tax_number || null,
+        status: editForm.status,
+      });
+
+      const adminPayload: Record<string, string> = {};
+      if (editForm.admin_username.trim()) adminPayload.username = editForm.admin_username.trim();
+      if (editForm.admin_password) adminPayload.password = editForm.admin_password;
+      if (editForm.admin_name.trim()) adminPayload.full_name = editForm.admin_name.trim();
+      if (editForm.admin_name_ar.trim()) adminPayload.full_name_ar = editForm.admin_name_ar.trim();
+
+      if (Object.keys(adminPayload).length > 0) {
+        await api.patch(`/platform/tenants/${editId}/admin`, adminPayload);
+      }
+
+      toast.success(locale === "ar" ? "تم تحديث المختبر" : "Laboratory updated");
+      setEditOpen(false);
+      setEditId(null);
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const columns: ColumnDef<Tenant>[] = [
-    { accessorKey: "code", header: "Code" },
+    { accessorKey: "code", header: locale === "ar" ? "الكود" : "Code" },
     { accessorKey: "name", header: locale === "ar" ? "الاسم" : "Name" },
     { accessorKey: "email", header: "Email" },
     {
       accessorKey: "status",
-      header: "Status",
+      header: locale === "ar" ? "الحالة" : "Status",
       cell: ({ row }) => {
         const s = row.original.status;
         const variant = s === "active" ? "default" : s === "trial" ? "secondary" : "destructive";
@@ -103,48 +191,53 @@ export default function TenantsPage() {
     },
     {
       accessorKey: "created_at",
-      header: "Created",
+      header: locale === "ar" ? "تاريخ الإنشاء" : "Created",
       cell: ({ row }) => new Date(row.original.created_at).toLocaleDateString(),
     },
     {
       id: "actions",
       cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
-            <MoreHorizontal className="h-4 w-4" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => action(row.original.id, "activate", "Activated")}>
-              <CheckCircle className="mr-2 h-4 w-4" /> {t(locale, "activate")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => action(row.original.id, "suspend", "Suspended")}>
-              <Ban className="mr-2 h-4 w-4" /> {t(locale, "suspend")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => action(row.original.id, "renew", "Renewed")}>
-              <RefreshCw className="mr-2 h-4 w-4" /> {t(locale, "renew")}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => action(row.original.id, "lock", "Locked")}>
-              <Lock className="mr-2 h-4 w-4" /> {t(locale, "lock")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => action(row.original.id, "unlock", "Unlocked")}>
-              <Unlock className="mr-2 h-4 w-4" /> {t(locale, "unlock")}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={async () => {
-                if (confirm("Delete this laboratory?")) {
-                  await api.delete(`/platform/tenants/${row.original.id}`);
-                  toast.success("Deleted");
-                  load();
-                }
-              }}
-            >
-              <Trash2 className="mr-2 h-4 w-4" /> {t(locale, "delete")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => openEdit(row.original)} title={locale === "ar" ? "تعديل" : "Edit"}>
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+              <MoreHorizontal className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => action(row.original.id, "activate", "Activated")}>
+                <CheckCircle className="mr-2 h-4 w-4" /> {t(locale, "activate")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => action(row.original.id, "suspend", "Suspended")}>
+                <Ban className="mr-2 h-4 w-4" /> {t(locale, "suspend")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => action(row.original.id, "renew", "Renewed")}>
+                <RefreshCw className="mr-2 h-4 w-4" /> {t(locale, "renew")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => action(row.original.id, "lock", "Locked")}>
+                <Lock className="mr-2 h-4 w-4" /> {t(locale, "lock")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => action(row.original.id, "unlock", "Unlocked")}>
+                <Unlock className="mr-2 h-4 w-4" /> {t(locale, "unlock")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive"
+                onClick={async () => {
+                  if (confirm(locale === "ar" ? "حذف هذا المختبر؟" : "Delete this laboratory?")) {
+                    await api.delete(`/platform/tenants/${row.original.id}`);
+                    toast.success(locale === "ar" ? "تم الحذف" : "Deleted");
+                    load();
+                  }
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> {t(locale, "delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       ),
     },
   ];
@@ -155,7 +248,9 @@ export default function TenantsPage() {
         <div>
           <h1 className="text-3xl font-bold">{t(locale, "tenants")}</h1>
           <p className="text-muted-foreground">
-            {locale === "ar" ? "إنشاء وإدارة المختبرات والاشتراكات" : "Create, lock, suspend, renew laboratories"}
+            {locale === "ar"
+              ? "إنشاء وتعديل المختبرات وبيانات دخول المدير"
+              : "Create, edit laboratories and manage admin login credentials"}
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -214,6 +309,102 @@ export default function TenantsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {locale === "ar" ? "تعديل المختبر" : "Edit Laboratory"}
+              {editCode ? ` — ${editCode}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={saveEdit} className="space-y-4">
+            <div className="rounded-lg border border-border/60 bg-muted/30 p-3 text-sm text-muted-foreground">
+              {locale === "ar"
+                ? `كود المختبر: ${editCode} (لا يمكن تغييره)`
+                : `Lab code: ${editCode} (cannot be changed)`}
+            </div>
+
+            <div className="space-y-2">
+              <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>
+              <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
+            </div>
+            <div className="space-y-2">
+              <Label>{locale === "ar" ? "الاسم (عربي)" : "Name (AR)"}</Label>
+              <Input value={editForm.name_ar} onChange={(e) => setEditForm({ ...editForm, name_ar: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>{locale === "ar" ? "الهاتف" : "Phone"}</Label>
+                <Input value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{locale === "ar" ? "الرقم الضريبي" : "Tax Number"}</Label>
+                <Input value={editForm.tax_number} onChange={(e) => setEditForm({ ...editForm, tax_number: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>{locale === "ar" ? "الحالة" : "Status"}</Label>
+                <Select value={editForm.status} onValueChange={(v) => v && setEditForm({ ...editForm, status: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {["active", "trial", "suspended", "locked", "expired"].map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="border-t border-border/60 pt-4">
+              <p className="mb-3 text-sm font-semibold">
+                {locale === "ar" ? "بيانات دخول مدير المختبر" : "Laboratory Admin Login"}
+              </p>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "اسم المدير" : "Admin Name"}</Label>
+                  <Input value={editForm.admin_name} onChange={(e) => setEditForm({ ...editForm, admin_name: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "اسم المستخدم" : "Username"} *</Label>
+                  <Input
+                    value={editForm.admin_username}
+                    onChange={(e) => setEditForm({ ...editForm, admin_username: e.target.value })}
+                    required
+                    minLength={2}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "كلمة المرور الجديدة" : "New Password"}</Label>
+                  <Input
+                    type="password"
+                    value={editForm.admin_password}
+                    onChange={(e) => setEditForm({ ...editForm, admin_password: e.target.value })}
+                    minLength={8}
+                    placeholder={locale === "ar" ? "اتركه فارغاً للإبقاء على الحالية" : "Leave blank to keep current"}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Button type="submit" className="w-full" disabled={saving}>
+              {saving
+                ? locale === "ar"
+                  ? "جاري الحفظ..."
+                  : "Saving..."
+                : locale === "ar"
+                  ? "حفظ التغييرات"
+                  : "Save Changes"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {loading ? (
         <p className="text-muted-foreground">Loading...</p>
       ) : (

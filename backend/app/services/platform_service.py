@@ -17,10 +17,13 @@ from app.models.platform import (
     TenantStatus,
     TenantSubscription,
 )
+from app.core.security import get_password_hash
+from app.models.auth import User
 from app.models.tenant_config import Branch, TenantBranding
 from app.schemas.auth import UserCreate
 from app.schemas.platform import (
     SubscriptionRenewRequest,
+    TenantAdminUpdate,
     TenantChangePlanRequest,
     TenantCreate,
     TenantUpdate,
@@ -129,6 +132,19 @@ class PlatformService:
         await self.log_action(admin_id, "tenant_created", "tenant", tenant.id, str(tenant.id), {"code": data.code})
         return tenant
 
+    async def get_tenant_admin(self, tenant_id: UUID) -> Optional[User]:
+        result = await self.db.execute(
+            select(User)
+            .where(
+                User.tenant_id == tenant_id,
+                User.is_tenant_admin.is_(True),
+                User.deleted_at.is_(None),
+            )
+            .order_by(User.created_at.asc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def update_tenant(self, tenant_id: UUID, data: TenantUpdate, admin_id: UUID) -> Optional[Tenant]:
         tenant = await self.get_tenant(tenant_id)
         if not tenant:
@@ -137,6 +153,52 @@ class PlatformService:
             setattr(tenant, key, value)
         await self.log_action(admin_id, "tenant_updated", "tenant", tenant.id, str(tenant.id))
         return tenant
+
+    async def update_tenant_admin(
+        self, tenant_id: UUID, data: TenantAdminUpdate, admin_id: UUID
+    ) -> Optional[User]:
+        tenant = await self.get_tenant(tenant_id)
+        if not tenant:
+            return None
+
+        user = await self.get_tenant_admin(tenant_id)
+        if not user:
+            raise ValueError("Tenant admin user not found")
+
+        updates = data.model_dump(exclude_unset=True)
+        if "username" in updates:
+            username = updates["username"].strip().lower()
+            conflict = await self.db.execute(
+                select(User).where(
+                    User.tenant_id == tenant_id,
+                    User.username == username,
+                    User.id != user.id,
+                    User.deleted_at.is_(None),
+                )
+            )
+            if conflict.scalar_one_or_none():
+                raise ValueError("Username already taken in this laboratory")
+            user.username = username
+
+        if "password" in updates:
+            user.password_hash = get_password_hash(updates["password"])
+
+        if "full_name" in updates:
+            user.full_name = updates["full_name"]
+        if "full_name_ar" in updates:
+            user.full_name_ar = updates["full_name_ar"]
+        if "is_active" in updates:
+            user.is_active = updates["is_active"]
+
+        await self.log_action(
+            admin_id,
+            "tenant_admin_updated",
+            "user",
+            tenant.id,
+            str(user.id),
+            {"username": user.username},
+        )
+        return user
 
     async def delete_tenant(self, tenant_id: UUID, admin_id: UUID) -> bool:
         tenant = await self.get_tenant(tenant_id)

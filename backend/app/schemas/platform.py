@@ -64,6 +64,7 @@ class TenantResponse(BaseModel):
     name_ar: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    tax_number: Optional[str] = None
     status: TenantStatus
     locale: str
     custom_domain: Optional[str] = None
@@ -124,10 +125,30 @@ class TenantChangePlanRequest(BaseModel):
     auto_renew: Optional[bool] = None
 
 
+class TenantAdminResponse(BaseModel):
+    id: UUID
+    username: str
+    full_name: str
+    full_name_ar: Optional[str] = None
+    is_active: bool
+    is_tenant_admin: bool
+
+    model_config = {"from_attributes": True}
+
+
+class TenantAdminUpdate(BaseModel):
+    username: Optional[str] = Field(None, min_length=2, max_length=64)
+    password: Optional[str] = Field(None, min_length=8)
+    full_name: Optional[str] = None
+    full_name_ar: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
 class TenantDetailResponse(TenantResponse):
     subscription: Optional[TenantSubscriptionResponse] = None
     plan_name: Optional[str] = None
     plan_tier: Optional[PlanTier] = None
+    admin: Optional[TenantAdminResponse] = None
 
 
 class SubscriptionListItem(BaseModel):
