@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -47,6 +49,15 @@ app.add_middleware(
 )
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+_uploads = Path("uploads")
+_uploads.mkdir(exist_ok=True)
+(_uploads / "logos").mkdir(parents=True, exist_ok=True)
+app.mount(
+    f"{settings.API_V1_PREFIX}/uploads",
+    StaticFiles(directory=str(_uploads)),
+    name="uploads",
+)
 
 
 @app.get("/health")

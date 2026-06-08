@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class BrandingResponse(BaseModel):
+    tenant_code: Optional[str] = None
     company_name: str
     company_name_ar: Optional[str] = None
     logo_url: Optional[str] = None

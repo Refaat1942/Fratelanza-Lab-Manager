@@ -123,6 +123,7 @@ function LoginPageContent() {
               size="xl"
               className="mb-8 bg-white/10 ring-white/20"
               accentColor="#ffffff"
+              tenantCode={branding.tenant_code || tenantCode}
             />
           )}
           <h1 className="text-4xl font-bold tracking-tight">{name}</h1>
@@ -144,7 +145,7 @@ function LoginPageContent() {
           <Card className="border-border/60 shadow-card-lg">
             <CardHeader className="text-center pb-2 lg:hidden">
               <div className="mx-auto mb-3">
-                <BrandingLogo logoUrl={branding.logo_url} alt={name} size="md" accentColor={accent} />
+                <BrandingLogo logoUrl={branding.logo_url} alt={name} size="md" accentColor={accent} tenantCode={branding.tenant_code || tenantCode} />
               </div>
               <CardTitle className="text-2xl font-bold tracking-tight">{name}</CardTitle>
               <CardDescription>

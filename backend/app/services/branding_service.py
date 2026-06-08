@@ -13,6 +13,15 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
 
+MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+    ".gif": "image/gif",
+}
+
 
 class BrandingService:
     def __init__(self, db: AsyncSession):
@@ -91,3 +100,19 @@ class BrandingService:
             )
         await self.db.flush()
         return logo_path
+
+    @staticmethod
+    def resolve_logo_path(logo_url: str | None) -> Path | None:
+        if not logo_url:
+            return None
+        if logo_url.startswith("/uploads/"):
+            path = Path("." + logo_url)
+        elif logo_url.startswith("uploads/"):
+            path = Path(logo_url)
+        else:
+            return None
+        return path if path.is_file() else None
+
+    @staticmethod
+    def logo_media_type(path: Path) -> str:
+        return MEDIA_TYPES.get(path.suffix.lower(), "application/octet-stream")

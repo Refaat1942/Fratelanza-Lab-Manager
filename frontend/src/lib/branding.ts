@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from "./api-base";
+
 export interface TenantBranding {
   tenant_code?: string;
   company_name: string;
@@ -15,8 +17,6 @@ export interface TenantBranding {
   subscription_end_date?: string | null;
 }
 
-import { getApiBaseUrl } from "./api-base";
-
 export const DEFAULT_BRANDING: TenantBranding = {
   company_name: "LabMaster Egypt",
   company_name_ar: "لاب ماستر مصر",
@@ -26,26 +26,49 @@ export const DEFAULT_BRANDING: TenantBranding = {
   logo_url: "/labmaster-logo.svg",
 };
 
-/** Resolve logo/upload URLs — uses same-origin API path in browser so images work in production */
-export function resolveAssetUrl(path: string | null | undefined): string | null {
-  if (!path) return null;
-  if (path.startsWith("http://") || path.startsWith("https://")) return path;
-  // Static assets in /public (e.g. /labmaster-logo.svg)
-  if (path.startsWith("/") && !path.startsWith("/uploads")) return path;
-
-  const uploadPath = path.startsWith("/uploads") ? path : `/uploads/${path}`;
-
-  return `${getApiBaseUrl()}${uploadPath}`;
+export interface LogoResolveOptions {
+  tenantCode?: string | null;
+  tenantId?: string | null;
 }
 
-/** Append cache-buster so replaced logos reload immediately after upload */
-export function logoUrlWithCache(url: string | null | undefined): string | null {
-  const resolved = resolveAssetUrl(url);
-  if (!resolved) return null;
-  if (url?.includes("/uploads/")) {
-    return `${resolved}?t=${Date.now()}`;
+function isUploadedLogo(path: string | null | undefined): boolean {
+  return !!path && (path.includes("/uploads/") || path.includes("uploads/logos"));
+}
+
+/**
+ * Resolve logo image URL for <img> tags (no auth headers).
+ * Uploaded logos use the public API endpoint so they work on login + sidebar.
+ */
+export function resolveLogoUrl(
+  logoUrl: string | null | undefined,
+  opts?: LogoResolveOptions
+): string | null {
+  if (!logoUrl) return null;
+  if (logoUrl.startsWith("http://") || logoUrl.startsWith("https://")) return logoUrl;
+
+  const base = getApiBaseUrl();
+
+  if (isUploadedLogo(logoUrl)) {
+    const code = opts?.tenantCode?.trim().toLowerCase();
+    if (code) {
+      const filename = logoUrl.split("/").pop() || "logo";
+      return `${base}/public/branding/${encodeURIComponent(code)}/logo?v=${encodeURIComponent(filename)}`;
+    }
+    if (opts?.tenantId) {
+      const filename = logoUrl.split("/").pop() || "logo";
+      return `${base}/public/logo/${opts.tenantId}?v=${encodeURIComponent(filename)}`;
+    }
+    const uploadPath = logoUrl.startsWith("/uploads") ? logoUrl : `/uploads/${logoUrl}`;
+    return `${base}${uploadPath}`;
   }
-  return resolved;
+
+  if (logoUrl.startsWith("/")) return logoUrl;
+  return logoUrl;
+}
+
+/** @deprecated Use resolveLogoUrl — kept for non-logo assets */
+export function resolveAssetUrl(path: string | null | undefined): string | null {
+  return resolveLogoUrl(path);
 }
 
 export function displayName(branding: TenantBranding, locale: "ar" | "en"): string {

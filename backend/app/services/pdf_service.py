@@ -133,8 +133,5 @@ class PdfService:
         return buf.getvalue()
 
     def _resolve_logo_path(self, logo_url: str) -> Path | None:
-        if logo_url.startswith("/uploads/"):
-            return Path("." + logo_url)
-        if logo_url.startswith("uploads/"):
-            return Path(logo_url)
-        return None
+        from app.services.branding_service import BrandingService
+        return BrandingService.resolve_logo_path(logo_url)

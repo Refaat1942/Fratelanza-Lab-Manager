@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
@@ -7,6 +9,25 @@ from app.services.branding_service import BrandingService
 from app.services.tenant_limits_service import TenantLimitsService
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
+
+
+def _branding_response(tenant, branding) -> BrandingResponse:
+    return BrandingResponse(
+        tenant_code=tenant.code,
+        company_name=branding.company_name,
+        company_name_ar=branding.company_name_ar,
+        logo_url=branding.logo_url,
+        favicon_url=branding.favicon_url,
+        primary_color=branding.primary_color,
+        secondary_color=branding.secondary_color,
+        accent_color=branding.accent_color,
+        custom_domain=tenant.custom_domain,
+        report_header_html=branding.report_header_html,
+        report_footer_html=branding.report_footer_html,
+        renewal_reminder_days=branding.renewal_reminder_days or 14,
+        renewal_reminder_enabled=branding.renewal_reminder_enabled if branding.renewal_reminder_enabled is not None else True,
+        subscription_end_date=branding.subscription_end_date,
+    )
 
 
 @router.get("/limits", response_model=TenantLimitsResponse)
@@ -26,21 +47,7 @@ async def get_branding(
     if not branding:
         branding = await svc.update(tenant.id, BrandingUpdate())
         await db.commit()
-    return BrandingResponse(
-        company_name=branding.company_name,
-        company_name_ar=branding.company_name_ar,
-        logo_url=branding.logo_url,
-        favicon_url=branding.favicon_url,
-        primary_color=branding.primary_color,
-        secondary_color=branding.secondary_color,
-        accent_color=branding.accent_color,
-        custom_domain=tenant.custom_domain,
-        report_header_html=branding.report_header_html,
-        report_footer_html=branding.report_footer_html,
-        renewal_reminder_days=branding.renewal_reminder_days or 14,
-        renewal_reminder_enabled=branding.renewal_reminder_enabled if branding.renewal_reminder_enabled is not None else True,
-        subscription_end_date=branding.subscription_end_date,
-    )
+    return _branding_response(tenant, branding)
 
 
 @router.put("/branding", response_model=BrandingResponse)
@@ -52,21 +59,7 @@ async def update_branding(
 ):
     branding = await BrandingService(db).update(tenant.id, data)
     await db.commit()
-    return BrandingResponse(
-        company_name=branding.company_name,
-        company_name_ar=branding.company_name_ar,
-        logo_url=branding.logo_url,
-        favicon_url=branding.favicon_url,
-        primary_color=branding.primary_color,
-        secondary_color=branding.secondary_color,
-        accent_color=branding.accent_color,
-        custom_domain=tenant.custom_domain,
-        report_header_html=branding.report_header_html,
-        report_footer_html=branding.report_footer_html,
-        renewal_reminder_days=branding.renewal_reminder_days or 14,
-        renewal_reminder_enabled=branding.renewal_reminder_enabled if branding.renewal_reminder_enabled is not None else True,
-        subscription_end_date=branding.subscription_end_date,
-    )
+    return _branding_response(tenant, branding)
 
 
 @router.post("/branding/logo", response_model=BrandingResponse)
@@ -76,7 +69,10 @@ async def upload_logo(
     user: CurrentUser = require_permission("settings.manage"),
     file: UploadFile = File(...),
 ):
-    if not file.content_type or not file.content_type.startswith("image/"):
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}:
+        raise HTTPException(status_code=400, detail="File must be PNG, JPG, WEBP, SVG, or GIF")
+    if file.content_type and not file.content_type.startswith("image/") and file.content_type != "application/octet-stream":
         raise HTTPException(status_code=400, detail="File must be an image")
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
@@ -88,18 +84,4 @@ async def upload_logo(
         raise HTTPException(status_code=400, detail=str(e))
 
     branding = await BrandingService(db).get_by_tenant_id(tenant.id)
-    return BrandingResponse(
-        company_name=branding.company_name,
-        company_name_ar=branding.company_name_ar,
-        logo_url=branding.logo_url,
-        favicon_url=branding.favicon_url,
-        primary_color=branding.primary_color,
-        secondary_color=branding.secondary_color,
-        accent_color=branding.accent_color,
-        custom_domain=tenant.custom_domain,
-        report_header_html=branding.report_header_html,
-        report_footer_html=branding.report_footer_html,
-        renewal_reminder_days=branding.renewal_reminder_days or 14,
-        renewal_reminder_enabled=branding.renewal_reminder_enabled if branding.renewal_reminder_enabled is not None else True,
-        subscription_end_date=branding.subscription_end_date,
-    )
+    return _branding_response(tenant, branding)

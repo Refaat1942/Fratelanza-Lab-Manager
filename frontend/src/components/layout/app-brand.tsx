@@ -24,8 +24,11 @@ export function AppBrand({
 }: AppBrandProps) {
   const branding = useBrandingStore((s) => s.branding);
   const locale = useAuthStore((s) => s.locale);
+  const tenantCode = useAuthStore((s) => s.tenantCode);
+  const tenantId = useAuthStore((s) => s.user?.tenant_id);
   const title = displayName(branding, locale);
   const logoSrc = branding.logo_url || "/labmaster-logo.svg";
+  const code = branding.tenant_code || tenantCode;
 
   const content = (
     <>
@@ -35,6 +38,8 @@ export function AppBrand({
         size={size === "sm" ? "sm" : "md"}
         className="logo-ring shrink-0 rounded-xl bg-white"
         accentColor="#3b82f6"
+        tenantCode={code}
+        tenantId={tenantId}
       />
       {showName && (
         <div className={cn("brand-name min-w-0 leading-tight", nameClassName)}>

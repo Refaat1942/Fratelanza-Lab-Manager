@@ -20,6 +20,8 @@ import { Calendar, Loader2, Upload } from "lucide-react";
 
 export default function SettingsPage() {
   const locale = useAuthStore((s) => s.locale);
+  const tenantCode = useAuthStore((s) => s.tenantCode);
+  const tenantId = useAuthStore((s) => s.user?.tenant_id);
   const { setBranding: persistBranding } = useBrandingStore();
   const [form, setForm] = useState<TenantBranding>({
     company_name: "",
@@ -112,6 +114,7 @@ export default function SettingsPage() {
   }
 
   const activeLogo = logoPreview || form.logo_url;
+  const logoTenantCode = form.tenant_code || tenantCode;
 
   return (
     <div className="space-y-6">
@@ -166,6 +169,8 @@ export default function SettingsPage() {
                       alt={displayName(form, locale)}
                       size="lg"
                       className="bg-white ring-border"
+                      tenantCode={logoTenantCode}
+                      tenantId={tenantId}
                     />
                     <div className="space-y-2">
                       <input
@@ -212,7 +217,7 @@ export default function SettingsPage() {
               <CardContent>
                 <div className="rounded-xl p-6 text-center text-white" style={{ background: `linear-gradient(145deg, ${form.primary_color} 0%, #134e4a 100%)` }}>
                   <div className="mx-auto mb-4 flex justify-center">
-                    <BrandingLogo logoUrl={activeLogo} alt={displayName(form, locale)} size="lg" className="bg-white/10 ring-white/30" accentColor="#fff" />
+                    <BrandingLogo logoUrl={activeLogo} alt={displayName(form, locale)} size="lg" className="bg-white/10 ring-white/30" accentColor="#fff" tenantCode={logoTenantCode} tenantId={tenantId} />
                   </div>
                   <p className="text-lg font-bold">{displayName(form, locale)}</p>
                 </div>
@@ -250,7 +255,7 @@ export default function SettingsPage() {
                 <CardTitle className="text-base">{locale === "ar" ? "معاينة الإيصال" : "Receipt Preview"}</CardTitle>
               </CardHeader>
               <CardContent className="flex justify-center bg-muted/20 py-6">
-                <ReceiptPreview branding={{ ...form, logo_url: activeLogo }} />
+                <ReceiptPreview branding={{ ...form, logo_url: activeLogo }} tenantCode={logoTenantCode} tenantId={tenantId} />
               </CardContent>
             </Card>
           </div>

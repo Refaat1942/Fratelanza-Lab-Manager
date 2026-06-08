@@ -6,9 +6,11 @@ import { useAuthStore } from "@/stores/auth-store";
 
 interface ReceiptPreviewProps {
   branding: TenantBranding;
+  tenantCode?: string | null;
+  tenantId?: string | null;
 }
 
-export function ReceiptPreview({ branding }: ReceiptPreviewProps) {
+export function ReceiptPreview({ branding, tenantCode, tenantId }: ReceiptPreviewProps) {
   const locale = useAuthStore((s) => s.locale);
   const title = displayName(branding, locale);
   const header = branding.report_header_html || title;
@@ -23,7 +25,7 @@ export function ReceiptPreview({ branding }: ReceiptPreviewProps) {
   return (
     <div className="mx-auto w-full max-w-xs rounded-lg border-2 border-dashed border-border bg-white p-4 font-mono text-[11px] leading-relaxed text-black shadow-inner">
       <div className="mb-3 flex justify-center">
-        <BrandingLogo logoUrl={branding.logo_url} alt={title} size="sm" className="bg-white ring-border" />
+        <BrandingLogo logoUrl={branding.logo_url} alt={title} size="sm" className="bg-white ring-border" tenantCode={tenantCode || branding.tenant_code} tenantId={tenantId} />
       </div>
       <div className="whitespace-pre-wrap text-center text-xs font-bold">{header}</div>
       <div className="my-3 border-t border-dashed border-gray-400 pt-2 text-center text-[10px] text-gray-600">
