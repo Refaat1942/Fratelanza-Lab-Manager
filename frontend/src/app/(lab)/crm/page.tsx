@@ -117,10 +117,10 @@ export default function CrmPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => openEdit(row.original)}>
-              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+              <Pencil className="me-2 h-4 w-4" />{t(locale, "edit")}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deleteContact(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+              <Trash2 className="me-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -139,7 +139,7 @@ export default function CrmPage() {
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyForm); } }}>
           <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+            <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
@@ -193,7 +193,15 @@ export default function CrmPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={contacts} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={contacts}
+          searchPlaceholder={t(locale, "search")}
+          locale={locale}
+          exportFileName="crm-contacts.xlsx"
+          exportSheetName={locale === "ar" ? "جهات الاتصال" : "Contacts"}
+          dateFilterKeys={["created_at"]}
+        />
       )}
     </div>
   );

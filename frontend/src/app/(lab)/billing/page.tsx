@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, Trash2, MoreHorizontal } from "lucide-react";
+import { Plus, Eye, Trash2, MoreHorizontal, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
+import { useBrandingStore } from "@/stores/branding-store";
 import { t } from "@/lib/i18n";
 import { api, getApiError } from "@/lib/api";
+import { buildBrandingTemplate, openPrintDocument } from "@/lib/print";
+import { resolveAssetUrl } from "@/lib/branding";
 import { toast } from "sonner";
 
 interface Invoice {
@@ -49,6 +52,7 @@ interface TestItem { id: string; name: string; price: number; }
 
 export default function BillingPage() {
   const locale = useAuthStore((s) => s.locale);
+  const branding = useBrandingStore((s) => s.branding);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -139,6 +143,136 @@ export default function BillingPage() {
     }
   };
 
+  const printReceipt = (invoice: InvoiceDetail) => {
+    const logoUrl = resolveAssetUrl(branding.logo_url);
+    const tokens = {
+      company_name: locale === "ar" ? branding.company_name_ar || branding.company_name : branding.company_name,
+      company_name_ar: branding.company_name_ar || "",
+      report_title: locale === "ar" ? "إيصال عميل" : "Customer Receipt",
+      patient_name: invoice.patient_name,
+      invoice_number: invoice.invoice_number,
+      date: new Date(invoice.issued_at || new Date().toISOString()).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-US"),
+      printed_at: new Date().toLocaleString(locale === "ar" ? "ar-EG" : "en-US"),
+    };
+
+    const body = `
+      <div class="print-header">
+        <div class="brand-block">
+          ${logoUrl ? `<img class="brand-logo" src="${logoUrl}" alt="${tokens.company_name}" />` : ""}
+          <div>
+            <div style="font-size: 22px; font-weight: 700;">${tokens.company_name}</div>
+            <div class="muted">${tokens.report_title}</div>
+          </div>
+        </div>
+        ${buildBrandingTemplate(branding.report_header_html, tokens)}
+      </div>
+
+      <div class="print-card">
+        <div class="print-grid">
+          <div class="print-kpi">
+            <span class="print-kpi-label">${locale === "ar" ? "رقم الفاتورة" : "Invoice #"}</span>
+            <div class="print-kpi-value">${invoice.invoice_number}</div>
+          </div>
+          <div class="print-kpi">
+            <span class="print-kpi-label">${locale === "ar" ? "اسم العميل" : "Customer"}</span>
+            <div class="print-kpi-value" style="font-size: 18px;">${invoice.patient_name}</div>
+          </div>
+          <div class="print-kpi">
+            <span class="print-kpi-label">${locale === "ar" ? "التاريخ" : "Date"}</span>
+            <div class="print-kpi-value" style="font-size: 18px;">${tokens.date}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="print-card">
+        <table>
+          <thead>
+            <tr>
+              <th>${locale === "ar" ? "الخدمة" : "Service"}</th>
+              <th>${locale === "ar" ? "الكمية" : "Qty"}</th>
+              <th>${locale === "ar" ? "السعر" : "Price"}</th>
+              <th>${locale === "ar" ? "الإجمالي" : "Total"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${invoice.items
+              .map(
+                (item) => `
+                  <tr>
+                    <td>${item.description}</td>
+                    <td>${item.quantity}</td>
+                    <td>EGP ${item.unit_price.toLocaleString()}</td>
+                    <td>EGP ${(item.total ?? item.unit_price * item.quantity).toLocaleString()}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </tbody>
+        </table>
+
+        <div class="totals">
+          <div class="totals-row"><span>${locale === "ar" ? "الإجمالي الفرعي" : "Subtotal"}</span><strong>EGP ${(invoice.subtotal || 0).toLocaleString()}</strong></div>
+          <div class="totals-row"><span>${locale === "ar" ? "الخصم" : "Discount"}</span><strong>EGP ${(invoice.discount || 0).toLocaleString()}</strong></div>
+          <div class="totals-row"><span>${locale === "ar" ? "المدفوع" : "Paid"}</span><strong>EGP ${invoice.paid_amount.toLocaleString()}</strong></div>
+          <div class="totals-row"><span>${locale === "ar" ? "المتبقي" : "Balance"}</span><strong>EGP ${invoice.balance.toLocaleString()}</strong></div>
+          <div class="totals-row" style="font-size: 18px;"><span>${locale === "ar" ? "الإجمالي" : "Grand Total"}</span><strong>EGP ${invoice.total.toLocaleString()}</strong></div>
+        </div>
+      </div>
+
+      ${
+        invoice.payments.length
+          ? `
+            <div class="print-card">
+              <h3 style="margin-top: 0;">${locale === "ar" ? "سجل المدفوعات" : "Payment History"}</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>${locale === "ar" ? "التاريخ" : "Date"}</th>
+                    <th>${locale === "ar" ? "الطريقة" : "Method"}</th>
+                    <th>${locale === "ar" ? "المبلغ" : "Amount"}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${invoice.payments
+                    .map(
+                      (payment) => `
+                        <tr>
+                          <td>${new Date(payment.paid_at).toLocaleString(locale === "ar" ? "ar-EG" : "en-US")}</td>
+                          <td>${payment.method || "—"}</td>
+                          <td>EGP ${payment.amount.toLocaleString()}</td>
+                        </tr>
+                      `
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+          `
+          : ""
+      }
+
+      <div class="print-footer">
+        ${buildBrandingTemplate(branding.report_footer_html, tokens)}
+      </div>
+    `;
+
+    openPrintDocument({
+      title: `${invoice.invoice_number} receipt`,
+      body,
+      branding,
+      locale,
+    });
+  };
+
+  const printReceiptById = async (invoiceId: string) => {
+    try {
+      const { data } = await api.get(`/billing/invoices/${invoiceId}`);
+      printReceipt(data);
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
+
   const columns: ColumnDef<Invoice>[] = [
     { accessorKey: "invoice_number", header: locale === "ar" ? "رقم الفاتورة" : "Invoice #" },
     { accessorKey: "patient_name", header: locale === "ar" ? "المريض" : "Patient" },
@@ -158,7 +292,10 @@ export default function BillingPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => viewDetail(row.original.id)}>
-              <Eye className="mr-2 h-4 w-4" />{locale === "ar" ? "عرض" : "View"}
+              <Eye className="me-2 h-4 w-4" />{locale === "ar" ? "عرض" : "View"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => printReceiptById(row.original.id)}>
+              <Printer className="me-2 h-4 w-4" />{locale === "ar" ? "طباعة إيصال" : "Print receipt"}
             </DropdownMenuItem>
             {row.original.status !== "paid" && (
               <DropdownMenuItem onClick={async () => {
@@ -173,7 +310,7 @@ export default function BillingPage() {
               </DropdownMenuItem>
             )}
             <DropdownMenuItem className="text-destructive" onClick={() => deleteInvoice(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+              <Trash2 className="me-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -192,7 +329,7 @@ export default function BillingPage() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+            <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{locale === "ar" ? "فاتورة جديدة" : "New Invoice"}</DialogTitle></DialogHeader>
@@ -251,7 +388,15 @@ export default function BillingPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={invoices} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={invoices}
+          searchPlaceholder={t(locale, "search")}
+          locale={locale}
+          exportFileName="billing-invoices.xlsx"
+          exportSheetName={locale === "ar" ? "الفواتير" : "Invoices"}
+          dateFilterKeys={["issued_at", "created_at"]}
+        />
       )}
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
@@ -262,6 +407,12 @@ export default function BillingPage() {
                 <DialogTitle>{detail.invoice_number} — {detail.patient_name}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
+                <div className="flex flex-wrap justify-end gap-2">
+                  <Button variant="outline" onClick={() => printReceipt(detail)}>
+                    <Printer className="me-2 h-4 w-4" />
+                    {locale === "ar" ? "طباعة الإيصال" : "Print receipt"}
+                  </Button>
+                </div>
                 <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
                   <div><span className="text-muted-foreground">Subtotal</span><p className="font-medium">EGP {detail.subtotal?.toLocaleString()}</p></div>
                   <div><span className="text-muted-foreground">Discount</span><p className="font-medium">EGP {detail.discount?.toLocaleString()}</p></div>

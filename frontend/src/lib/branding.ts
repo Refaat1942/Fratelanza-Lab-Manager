@@ -8,6 +8,9 @@ export interface TenantBranding {
   secondary_color?: string;
   accent_color?: string;
   custom_domain?: string | null;
+  custom_css?: string | null;
+  report_header_html?: string | null;
+  report_footer_html?: string | null;
 }
 
 export const DEFAULT_BRANDING: TenantBranding = {
@@ -17,6 +20,10 @@ export const DEFAULT_BRANDING: TenantBranding = {
   secondary_color: "#10B981",
   accent_color: "#8B5CF6",
   logo_url: "/labmaster-logo.svg",
+  report_header_html:
+    "<div><strong>{{company_name}}</strong><div class='muted'>{{report_title}}</div></div>",
+  report_footer_html:
+    "<div class='muted'>{{printed_at}}</div>",
 };
 
 /** Resolve logo/upload URLs — uses same-origin API path in browser so images work in production */
@@ -27,11 +34,6 @@ export function resolveAssetUrl(path: string | null | undefined): string | null 
   if (path.startsWith("/") && !path.startsWith("/uploads")) return path;
 
   const uploadPath = path.startsWith("/uploads") ? path : `/uploads/${path}`;
-
-  if (typeof window !== "undefined") {
-    return `${window.location.origin}/api/v1${uploadPath}`;
-  }
-
   const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
   return `${base}${uploadPath}`;
 }

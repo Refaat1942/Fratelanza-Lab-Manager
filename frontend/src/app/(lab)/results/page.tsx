@@ -140,7 +140,7 @@ export default function ResultsPage() {
         <div className="flex gap-1">
           {row.original.status === "pending" && (
             <Button size="sm" variant="outline" onClick={() => openEnterForm(row.original.id)}>
-              <CheckCircle className="mr-1 h-3 w-3" />{locale === "ar" ? "إدخال" : "Enter"}
+              <CheckCircle className="me-1 h-3 w-3" />{locale === "ar" ? "إدخال" : "Enter"}
             </Button>
           )}
         </div>
@@ -167,7 +167,7 @@ export default function ResultsPage() {
             }}
           >
             <DialogTrigger render={<Button variant="outline" />}>
-              <Settings2 className="mr-2 h-4 w-4" />
+              <Settings2 className="me-2 h-4 w-4" />
               {locale === "ar" ? "تصميم النموذج" : "Design Form"}
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -195,7 +195,7 @@ export default function ResultsPage() {
           </Dialog>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger render={<Button />}>
-              <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+              <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>{locale === "ar" ? "طلب تحليل جديد" : "New Test Order"}</DialogTitle></DialogHeader>
@@ -241,7 +241,15 @@ export default function ResultsPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={results} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={results}
+          searchPlaceholder={t(locale, "search")}
+          locale={locale}
+          exportFileName="results.xlsx"
+          exportSheetName={locale === "ar" ? "النتائج" : "Results"}
+          dateFilterKeys={["ordered_at"]}
+        />
       )}
     </div>
   );

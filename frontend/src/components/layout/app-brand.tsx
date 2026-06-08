@@ -34,7 +34,7 @@ export function AppBrand({
         alt={title}
         size={size === "sm" ? "sm" : "md"}
         className="logo-ring shrink-0 rounded-xl bg-white"
-        accentColor="#3b82f6"
+        accentColor={branding.primary_color || "#3b82f6"}
       />
       {showName && (
         <div className={cn("brand-name min-w-0 leading-tight", nameClassName)}>

@@ -104,7 +104,7 @@ export default function MarketingPage() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+            <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{locale === "ar" ? "حملة جديدة" : "New Campaign"}</DialogTitle></DialogHeader>
@@ -141,7 +141,15 @@ export default function MarketingPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={campaigns} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={campaigns}
+          searchPlaceholder={t(locale, "search")}
+          locale={locale}
+          exportFileName="marketing-campaigns.xlsx"
+          exportSheetName={locale === "ar" ? "الحملات" : "Campaigns"}
+          dateFilterKeys={["created_at"]}
+        />
       )}
     </div>
   );

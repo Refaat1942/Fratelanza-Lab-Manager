@@ -50,7 +50,7 @@ export function ResultFormBuilder({ fields, onChange, locale, mode = "entry" }: 
             <GripVertical className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm font-medium text-muted-foreground">#{index + 1}</span>
             {mode === "design" && (
-              <Button type="button" variant="ghost" size="sm" className="ml-auto text-destructive" onClick={() => removeField(index)}>
+              <Button type="button" variant="ghost" size="sm" className="ms-auto text-destructive" onClick={() => removeField(index)}>
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
@@ -100,7 +100,7 @@ export function ResultFormBuilder({ fields, onChange, locale, mode = "entry" }: 
 
       {mode === "design" && (
         <Button type="button" variant="outline" className="w-full" onClick={addField}>
-          <Plus className="mr-2 h-4 w-4" />
+          <Plus className="me-2 h-4 w-4" />
           {locale === "ar" ? "إضافة حقل" : "Add Field"}
         </Button>
       )}

@@ -124,10 +124,10 @@ export default function ExpensesPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => openEdit(row.original)}>
-              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+              <Pencil className="me-2 h-4 w-4" />{t(locale, "edit")}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deleteExpense(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+              <Trash2 className="me-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -146,7 +146,7 @@ export default function ExpensesPage() {
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyForm); } }}>
           <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+            <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
@@ -199,7 +199,15 @@ export default function ExpensesPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={expenses} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={expenses}
+          searchPlaceholder={t(locale, "search")}
+          locale={locale}
+          exportFileName="expenses.xlsx"
+          exportSheetName={locale === "ar" ? "المصروفات" : "Expenses"}
+          dateFilterKeys={["expense_date"]}
+        />
       )}
     </div>
   );

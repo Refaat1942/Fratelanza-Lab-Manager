@@ -92,7 +92,7 @@ export default function SuppliersPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => openEdit(row.original)}>
-              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+              <Pencil className="me-2 h-4 w-4" />{t(locale, "edit")}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={async () => {
               if (!confirm(locale === "ar" ? "حذف المورد؟" : "Delete supplier?")) return;
@@ -102,7 +102,7 @@ export default function SuppliersPage() {
                 load();
               } catch (err) { toast.error(getApiError(err)); }
             }}>
-              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+              <Trash2 className="me-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -118,7 +118,7 @@ export default function SuppliersPage() {
           <p className="text-muted-foreground">{suppliers.length} suppliers</p>
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyForm); } }}>
-          <DialogTrigger render={<Button />}><Plus className="mr-2 h-4 w-4" />{t(locale, "create")}</DialogTrigger>
+          <DialogTrigger render={<Button />}><Plus className="me-2 h-4 w-4" />{t(locale, "create")}</DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{editId ? "Edit Supplier" : "New Supplier"}</DialogTitle></DialogHeader>
             <form onSubmit={save} className="space-y-4">
@@ -133,7 +133,15 @@ export default function SuppliersPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={suppliers} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={suppliers}
+          searchPlaceholder={t(locale, "search")}
+          locale={locale}
+          exportFileName="suppliers.xlsx"
+          exportSheetName={locale === "ar" ? "الموردين" : "Suppliers"}
+          dateFilterKeys={["created_at"]}
+        />
       )}
     </div>
   );

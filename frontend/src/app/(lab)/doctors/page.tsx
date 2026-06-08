@@ -136,10 +136,10 @@ export default function DoctorsPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => openEdit(row.original)}>
-              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+              <Pencil className="me-2 h-4 w-4" />{t(locale, "edit")}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deleteDoctor(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+              <Trash2 className="me-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -158,7 +158,7 @@ export default function DoctorsPage() {
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyDoctor); } }}>
           <DialogTrigger render={<Button className="shadow-md" />}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="me-2 h-4 w-4" />
             {t(locale, "create")}
           </DialogTrigger>
           <DialogContent className="max-w-lg">
@@ -202,7 +202,15 @@ export default function DoctorsPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : (
-        <DataTable columns={columns} data={doctors} searchPlaceholder={t(locale, "search")} onExport={() => toast.info("Export")} />
+        <DataTable
+          columns={columns}
+          data={doctors}
+          searchPlaceholder={t(locale, "search")}
+          locale={locale}
+          exportFileName="doctors.xlsx"
+          exportSheetName={locale === "ar" ? "الأطباء" : "Doctors"}
+          dateFilterKeys={["created_at"]}
+        />
       )}
     </div>
   );

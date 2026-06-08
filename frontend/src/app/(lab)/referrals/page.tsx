@@ -104,7 +104,7 @@ export default function ReferralsPage() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+            <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{locale === "ar" ? "إحالة جديدة" : "New Referral"}</DialogTitle></DialogHeader>
@@ -139,7 +139,15 @@ export default function ReferralsPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={referrals} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={referrals}
+          searchPlaceholder={t(locale, "search")}
+          locale={locale}
+          exportFileName="referrals.xlsx"
+          exportSheetName={locale === "ar" ? "الإحالات" : "Referrals"}
+          dateFilterKeys={["referral_date"]}
+        />
       )}
     </div>
   );

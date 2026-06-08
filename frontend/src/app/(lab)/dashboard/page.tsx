@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -9,13 +9,17 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Users, FlaskConical, Stethoscope, Package, TrendingUp, TrendingDown,
-  Receipt, AlertTriangle, Clock, ArrowRight, Wallet,
+  Receipt, AlertTriangle, Clock, ArrowLeft, ArrowRight, Wallet, Printer,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
+import { useBrandingStore } from "@/stores/branding-store";
 import { t } from "@/lib/i18n";
 import { api } from "@/lib/api";
+import { buildBrandingTemplate, openPrintDocument } from "@/lib/print";
+import { resolveAssetUrl } from "@/lib/branding";
 import { PageHeader } from "@/components/layout/page-header";
 import { AnimatedStagger, AnimatedItem } from "@/components/layout/animated-page";
 
@@ -46,15 +50,28 @@ const PIE_COLORS = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b"];
 export default function DashboardPage() {
   const locale = useAuthStore((s) => s.locale);
   const user = useAuthStore((s) => s.user);
+  const branding = useBrandingStore((s) => s.branding);
   const [data, setData] = useState<Insights | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
-  useEffect(() => {
-    api.get("/dashboard/insights")
+  const loadInsights = useCallback(() => {
+    setLoading(true);
+    api.get("/dashboard/insights", {
+      params: {
+        start_date: fromDate || undefined,
+        end_date: toDate || undefined,
+      },
+    })
       .then((res) => setData(res.data))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [fromDate, toDate]);
+
+  useEffect(() => {
+    loadInsights();
+  }, [loadInsights]);
 
   if (loading) {
     return (
@@ -89,6 +106,107 @@ export default function DashboardPage() {
         { name: locale === "ar" ? "مصروفات" : "Expenses", amount: data?.expenses.total_expenses ?? 0 },
       ]
     : [];
+  const ForwardIcon = locale === "ar" ? ArrowLeft : ArrowRight;
+
+  const printOperationsReport = () => {
+    if (!data) return;
+
+    const tokens = {
+      company_name: locale === "ar" ? branding.company_name_ar || branding.company_name : branding.company_name,
+      company_name_ar: branding.company_name_ar || "",
+      report_title: locale === "ar" ? "تقرير العمليات" : "Operations Report",
+      patient_name: "",
+      invoice_number: "",
+      date: fromDate && toDate ? `${fromDate} - ${toDate}` : new Date().toLocaleDateString(locale === "ar" ? "ar-EG" : "en-US"),
+      printed_at: new Date().toLocaleString(locale === "ar" ? "ar-EG" : "en-US"),
+    };
+    const logoUrl = resolveAssetUrl(branding.logo_url);
+
+    const body = `
+      <div class="print-header">
+        <div class="brand-block">
+          ${logoUrl ? `<img class="brand-logo" src="${logoUrl}" alt="${tokens.company_name}" />` : ""}
+          <div>
+            <div style="font-size: 22px; font-weight: 700;">${tokens.company_name}</div>
+            <div class="muted">${tokens.report_title}</div>
+          </div>
+        </div>
+        ${buildBrandingTemplate(branding.report_header_html, tokens)}
+      </div>
+
+      <div class="print-card">
+        <div class="print-grid">
+          <div class="print-kpi"><span class="print-kpi-label">${locale === "ar" ? "الفواتير" : "Invoices"}</span><div class="print-kpi-value">${data.financial.invoice_count}</div></div>
+          <div class="print-kpi"><span class="print-kpi-label">${locale === "ar" ? "المحصّل" : "Collected"}</span><div class="print-kpi-value">EGP ${data.financial.total_collected.toLocaleString()}</div></div>
+          <div class="print-kpi"><span class="print-kpi-label">${locale === "ar" ? "المصروفات" : "Expenses"}</span><div class="print-kpi-value">EGP ${data.expenses.total_expenses.toLocaleString()}</div></div>
+          <div class="print-kpi"><span class="print-kpi-label">${locale === "ar" ? "صافي الربح" : "Net Profit"}</span><div class="print-kpi-value">EGP ${data.net_profit.toLocaleString()}</div></div>
+        </div>
+      </div>
+
+      <div class="print-card">
+        <h3 style="margin-top: 0;">${locale === "ar" ? "أحدث المرضى" : "Recent Patients"}</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>${locale === "ar" ? "الكود" : "Code"}</th>
+              <th>${locale === "ar" ? "الاسم" : "Name"}</th>
+              <th>${locale === "ar" ? "التاريخ" : "Date"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.recent_patients
+              .map(
+                (patient) => `
+                  <tr>
+                    <td>${patient.patient_code}</td>
+                    <td>${patient.full_name}</td>
+                    <td>${new Date(patient.created_at).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-US")}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="print-card">
+        <h3 style="margin-top: 0;">${locale === "ar" ? "أحدث الفواتير" : "Recent Invoices"}</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>${locale === "ar" ? "رقم الفاتورة" : "Invoice #"}</th>
+              <th>${locale === "ar" ? "المريض" : "Patient"}</th>
+              <th>${locale === "ar" ? "الإجمالي" : "Total"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.recent_invoices
+              .map(
+                (invoice) => `
+                  <tr>
+                    <td>${invoice.invoice_number}</td>
+                    <td>${invoice.patient_name}</td>
+                    <td>EGP ${invoice.total.toLocaleString()}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="print-footer">
+        ${buildBrandingTemplate(branding.report_footer_html, tokens)}
+      </div>
+    `;
+
+    openPrintDocument({
+      title: "operations-report",
+      body,
+      branding,
+      locale,
+    });
+  };
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -100,6 +218,24 @@ export default function DashboardPage() {
             : `Welcome ${user?.full_name} — laboratory insights & analytics`
         }
       />
+
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="w-full sm:w-40" />
+          <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="w-full sm:w-40" />
+          {(fromDate || toDate) && (
+            <Button variant="ghost" onClick={() => { setFromDate(""); setToDate(""); }}>
+              {locale === "ar" ? "مسح التاريخ" : "Clear dates"}
+            </Button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={printOperationsReport}>
+            <Printer className="me-2 h-4 w-4" />
+            {locale === "ar" ? "طباعة تقرير العمليات PDF" : "Print operations PDF"}
+          </Button>
+        </div>
+      </div>
 
       {/* Financial KPIs */}
       <AnimatedStagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -249,7 +385,7 @@ export default function DashboardPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">{locale === "ar" ? "أحدث المرضى" : "Recent Patients"}</CardTitle>
               <Button variant="ghost" size="sm" render={<Link href="/patients" />}>
-                <ArrowRight className="h-4 w-4" />
+                <ForwardIcon className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -277,7 +413,7 @@ export default function DashboardPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">{locale === "ar" ? "أحدث الفواتير" : "Recent Invoices"}</CardTitle>
               <Button variant="ghost" size="sm" render={<Link href="/billing" />}>
-                <ArrowRight className="h-4 w-4" />
+                <ForwardIcon className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -305,7 +441,7 @@ export default function DashboardPage() {
                 {locale === "ar" ? "تنبيه مخزون" : "Low Stock Alerts"}
               </CardTitle>
               <Button variant="ghost" size="sm" render={<Link href="/inventory" />}>
-                <ArrowRight className="h-4 w-4" />
+                <ForwardIcon className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent className="space-y-3">

@@ -171,10 +171,10 @@ export default function InventoryPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => openEdit(row.original)}>
-              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+              <Pencil className="me-2 h-4 w-4" />{t(locale, "edit")}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deleteItem(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+              <Trash2 className="me-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -193,7 +193,7 @@ export default function InventoryPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => downloadApiFile("/inventory/import/template", "inventory_import_template.xlsx")}>
-            <Download className="mr-2 h-4 w-4" />
+            <Download className="me-2 h-4 w-4" />
             {locale === "ar" ? "تحميل القالب" : "Download Template"}
           </Button>
           <input
@@ -208,11 +208,11 @@ export default function InventoryPage() {
             }}
           />
           <Button variant="outline" disabled={importing} onClick={() => fileRef.current?.click()}>
-            {importing ? "..." : <><Upload className="mr-2 h-4 w-4" />{locale === "ar" ? "استيراد Excel" : "Import Excel"}</>}
+            {importing ? "..." : <><Upload className="me-2 h-4 w-4" />{locale === "ar" ? "استيراد Excel" : "Import Excel"}</>}
           </Button>
           <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyItem); } }}>
             <DialogTrigger render={<Button className="shadow-md" />}>
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="me-2 h-4 w-4" />
               {t(locale, "create")}
             </DialogTrigger>
             <DialogContent className="max-w-lg">
@@ -272,7 +272,15 @@ export default function InventoryPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : (
-        <DataTable columns={columns} data={items} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={items}
+          searchPlaceholder={t(locale, "search")}
+          locale={locale}
+          exportFileName="inventory.xlsx"
+          exportSheetName={locale === "ar" ? "المخزون" : "Inventory"}
+          dateFilterKeys={["created_at"]}
+        />
       )}
     </div>
   );
