@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, Trash2, MoreHorizontal } from "lucide-react";
+import { Plus, Eye, Trash2, MoreHorizontal, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -14,7 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
+import { DateRangeFilter } from "@/components/filters/date-range-filter";
+import { useDateRange } from "@/hooks/use-date-range";
 import { api, getApiError } from "@/lib/api";
+import { downloadInvoiceReceipt, exportModuleExcel } from "@/lib/export";
 import { toast } from "sonner";
 
 interface Invoice {
@@ -61,12 +64,14 @@ export default function BillingPage() {
   const [discount, setDiscount] = useState("0");
   const [payAmount, setPayAmount] = useState("");
   const [saving, setSaving] = useState(false);
+  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
     setLoading(true);
+    const qp = queryParams.replace(/^&/, "?");
     Promise.all([
-      api.get("/billing/invoices?page_size=100"),
-      api.get("/billing/summary"),
+      api.get(`/billing/invoices?page_size=100${queryParams}`),
+      api.get(`/billing/summary${qp}`),
       api.get("/patients?page_size=100"),
       api.get("/tests?page_size=100"),
     ])
@@ -78,7 +83,7 @@ export default function BillingPage() {
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -251,7 +256,21 @@ export default function BillingPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={invoices} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={invoices}
+          searchPlaceholder={t(locale, "search")}
+          filterSlot={
+            <DateRangeFilter
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onDateFromChange={setDateFrom}
+              onDateToChange={setDateTo}
+              onReset={reset}
+            />
+          }
+          onExport={() => exportModuleExcel("billing", dateFrom, dateTo).catch((e) => toast.error(String(e)))}
+        />
       )}
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
@@ -298,6 +317,19 @@ export default function BillingPage() {
                     <Button onClick={recordPayment}>{locale === "ar" ? "تسجيل دفع" : "Record Payment"}</Button>
                   </div>
                 )}
+                <div className="flex justify-end border-t pt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      downloadInvoiceReceipt(detail.id)
+                        .then(() => toast.success(locale === "ar" ? "تم تحميل الإيصال" : "Receipt downloaded"))
+                        .catch(() => toast.error(locale === "ar" ? "فشل الطباعة" : "Print failed"))
+                    }
+                  >
+                    <Printer className="me-2 h-4 w-4" />
+                    {locale === "ar" ? "طباعة إيصال العميل" : "Print Customer Receipt"}
+                  </Button>
+                </div>
               </div>
             </>
           )}

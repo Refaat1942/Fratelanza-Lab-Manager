@@ -6,6 +6,7 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.expenses import ExpenseCreate, ExpenseResponse, ExpenseUpdate
 from app.services.expense_service import ExpenseService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/expenses", tags=["Expenses"])
 
@@ -14,8 +15,12 @@ router = APIRouter(prefix="/expenses", tags=["Expenses"])
 async def expense_summary(
     db: DbSession, tenant: CurrentTenant,
     user: CurrentUser = require_permission("billing.read"),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
-    return await ExpenseService(db).get_summary(tenant.id)
+    return await ExpenseService(db).get_summary(
+        tenant.id, parse_date_param(date_from), parse_date_param(date_to)
+    )
 
 
 @router.get("")
@@ -23,8 +28,15 @@ async def list_expenses(
     db: DbSession, tenant: CurrentTenant,
     user: CurrentUser = require_permission("billing.read"),
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
-    result = await ExpenseService(db).list_expenses(tenant.id, PaginationParams(page=page, page_size=page_size))
+    result = await ExpenseService(db).list_expenses(
+        tenant.id,
+        PaginationParams(page=page, page_size=page_size),
+        parse_date_param(date_from),
+        parse_date_param(date_to),
+    )
     return {"items": [ExpenseResponse.model_validate(i) for i in result.items], "total": result.total, "page": result.page, "page_size": result.page_size, "pages": result.pages}
 
 

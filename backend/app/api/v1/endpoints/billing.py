@@ -1,11 +1,14 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import Response
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.billing import InvoiceCreate, InvoiceListItem, PaymentCreate
 from app.schemas.common import MessageResponse, PaginationParams
 from app.services.billing_service import BillingService
+from app.services.pdf_service import PdfService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
@@ -17,9 +20,13 @@ async def list_invoices(
     user: CurrentUser = require_permission("billing.read"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
     params = PaginationParams(page=page, page_size=page_size)
-    result = await BillingService(db).list_invoices(tenant.id, params)
+    result = await BillingService(db).list_invoices(
+        tenant.id, params, parse_date_param(date_from), parse_date_param(date_to)
+    )
     return {
         "items": [InvoiceListItem.model_validate(i) for i in result.items],
         "total": result.total,
@@ -63,8 +70,30 @@ async def financial_summary(
     db: DbSession,
     tenant: CurrentTenant,
     user: CurrentUser = require_permission("billing.read"),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
-    return await BillingService(db).get_financial_summary(tenant.id)
+    return await BillingService(db).get_financial_summary(
+        tenant.id, parse_date_param(date_from), parse_date_param(date_to)
+    )
+
+
+@router.get("/invoices/{invoice_id}/receipt")
+async def download_receipt(
+    invoice_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("billing.read"),
+):
+    try:
+        content = await PdfService(db).invoice_receipt_pdf(tenant.id, invoice_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="receipt_{invoice_id}.pdf"'},
+    )
 
 
 @router.get("/invoices/{invoice_id}")

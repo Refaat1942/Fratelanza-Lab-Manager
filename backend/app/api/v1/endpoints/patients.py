@@ -12,6 +12,7 @@ from app.schemas.patients import (
     PatientVisitResponse,
 )
 from app.services.patient_service import PatientService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/patients", tags=["Patients"])
 
@@ -27,9 +28,13 @@ async def list_patients(
     sort_by: str | None = None,
     sort_order: str = "desc",
     branch_id: UUID | None = None,
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
-    result = await PatientService(db).list_patients(tenant.id, params, branch_id)
+    result = await PatientService(db).list_patients(
+        tenant.id, params, branch_id, parse_date_param(date_from), parse_date_param(date_to)
+    )
     return {
         "items": [PatientResponse.model_validate(p) for p in result.items],
         "total": result.total,

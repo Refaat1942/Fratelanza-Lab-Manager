@@ -12,7 +12,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
+import { DateRangeFilter } from "@/components/filters/date-range-filter";
+import { useDateRange } from "@/hooks/use-date-range";
 import { api, getApiError } from "@/lib/api";
+import { exportModuleExcel } from "@/lib/export";
 import { toast } from "sonner";
 
 interface Expense {
@@ -39,14 +42,15 @@ export default function ExpensesPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get("/expenses?page_size=100")
+    api.get(`/expenses?page_size=100${queryParams}`)
       .then((res) => setExpenses(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -199,7 +203,21 @@ export default function ExpensesPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={expenses} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={expenses}
+          searchPlaceholder={t(locale, "search")}
+          filterSlot={
+            <DateRangeFilter
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onDateFromChange={setDateFrom}
+              onDateToChange={setDateTo}
+              onReset={reset}
+            />
+          }
+          onExport={() => exportModuleExcel("expenses", dateFrom, dateTo).catch((e) => toast.error(String(e)))}
+        />
       )}
     </div>
   );

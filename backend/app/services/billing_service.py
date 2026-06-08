@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -10,19 +10,29 @@ from app.models.patients import Patient
 from app.models.tenant_config import Branch
 from app.schemas.billing import InvoiceCreate, PaymentCreate
 from app.schemas.common import PaginatedResponse, PaginationParams
+from app.utils.date_filter import apply_date_range
 
 
 class BillingService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_invoices(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_invoices(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = (
             select(Invoice, Patient)
             .join(Patient, Invoice.patient_id == Patient.id)
             .where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
-            .order_by(Invoice.created_at.desc())
         )
+        date_col = func.coalesce(Invoice.issued_at, Invoice.created_at)
+        for clause in apply_date_range(date_col, date_from, date_to):
+            query = query.where(clause)
+        query = query.order_by(Invoice.created_at.desc())
         count_result = await self.db.execute(select(func.count()).select_from(query.subquery()))
         total = count_result.scalar() or 0
         query = query.offset((params.page - 1) * params.page_size).limit(params.page_size)
@@ -185,14 +195,21 @@ class BillingService:
             ],
         }
 
-    async def get_financial_summary(self, tenant_id: UUID) -> dict:
-        inv_result = await self.db.execute(
-            select(
-                func.coalesce(func.sum(Invoice.total), 0),
-                func.coalesce(func.sum(Invoice.paid_amount), 0),
-                func.count(Invoice.id),
-            ).where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
-        )
+    async def get_financial_summary(
+        self,
+        tenant_id: UUID,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> dict:
+        inv_q = select(
+            func.coalesce(func.sum(Invoice.total), 0),
+            func.coalesce(func.sum(Invoice.paid_amount), 0),
+            func.count(Invoice.id),
+        ).where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
+        date_col = func.coalesce(Invoice.issued_at, Invoice.created_at)
+        for clause in apply_date_range(date_col, date_from, date_to):
+            inv_q = inv_q.where(clause)
+        inv_result = await self.db.execute(inv_q)
         total, paid, count = inv_result.one()
         return {
             "total_invoiced": float(total),

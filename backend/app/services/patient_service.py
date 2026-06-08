@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -8,6 +9,7 @@ from app.models.patients import Patient, PatientVisit, VisitStatus
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.patients import PatientCreate, PatientUpdate, PatientVisitCreate
 from app.services.audit_service import AuditService
+from app.utils.date_filter import apply_date_range
 
 
 class PatientService:
@@ -16,9 +18,16 @@ class PatientService:
         self.audit = AuditService(db)
 
     async def list_patients(
-        self, tenant_id: UUID, params: PaginationParams, branch_id: Optional[UUID] = None
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        branch_id: Optional[UUID] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> PaginatedResponse:
         query = select(Patient).where(Patient.tenant_id == tenant_id, Patient.deleted_at.is_(None))
+        for clause in apply_date_range(Patient.created_at, date_from, date_to):
+            query = query.where(clause)
         if branch_id:
             query = query.where(Patient.branch_id == branch_id)
         if params.search:

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuthStore } from "@/stores/auth-store";
@@ -26,6 +27,8 @@ export default function SettingsPage() {
     primary_color: "#3B82F6",
     secondary_color: "#10B981",
     accent_color: "#8B5CF6",
+    report_header_html: "",
+    report_footer_html: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,6 +52,8 @@ export default function SettingsPage() {
         primary_color: form.primary_color,
         secondary_color: form.secondary_color,
         accent_color: form.accent_color,
+        report_header_html: form.report_header_html || null,
+        report_footer_html: form.report_footer_html || null,
       });
       setForm(data);
       persistBranding(data);
@@ -100,6 +105,7 @@ export default function SettingsPage() {
       <Tabs defaultValue="branding">
         <TabsList>
           <TabsTrigger value="branding">{locale === "ar" ? "العلامة التجارية" : "Branding"}</TabsTrigger>
+          <TabsTrigger value="receipt">{locale === "ar" ? "تصميم الإيصال" : "Receipt Design"}</TabsTrigger>
           <TabsTrigger value="general">{locale === "ar" ? "عام" : "General"}</TabsTrigger>
           <TabsTrigger value="notifications">{locale === "ar" ? "الإشعارات" : "Notifications"}</TabsTrigger>
         </TabsList>
@@ -162,9 +168,9 @@ export default function SettingsPage() {
                     disabled={uploading}
                   >
                     {uploading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <Upload className="mr-2 h-4 w-4" />
+                      <Upload className="me-2 h-4 w-4" />
                     )}
                     {locale === "ar" ? "اختر صورة الشعار" : "Choose logo image"}
                   </Button>
@@ -202,7 +208,7 @@ export default function SettingsPage() {
                 </div>
 
                 <Button onClick={saveBranding} disabled={saving}>
-                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {saving ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
                   {t(locale, "save")}
                 </Button>
               </CardContent>
@@ -240,19 +246,79 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
+        <TabsContent value="receipt">
+          <Card>
+            <CardHeader>
+              <CardTitle>{locale === "ar" ? "تصميم إيصال العميل" : "Customer Receipt Design"}</CardTitle>
+              <CardDescription>
+                {locale === "ar"
+                  ? "يظهر الرأس والتذييل على إيصال PDF عند الطباعة من الفواتير"
+                  : "Header and footer appear on the customer receipt PDF from billing"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>{locale === "ar" ? "رأس الإيصال" : "Receipt Header"}</Label>
+                <Textarea
+                  rows={4}
+                  value={form.report_header_html || ""}
+                  onChange={(e) => setForm({ ...form, report_header_html: e.target.value })}
+                  placeholder={locale === "ar" ? "اسم المختبر، العنوان، الهاتف..." : "Lab name, address, phone..."}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{locale === "ar" ? "تذييل الإيصال" : "Receipt Footer"}</Label>
+                <Textarea
+                  rows={3}
+                  value={form.report_footer_html || ""}
+                  onChange={(e) => setForm({ ...form, report_footer_html: e.target.value })}
+                  placeholder={locale === "ar" ? "شكراً لزيارتكم..." : "Thank you for your visit..."}
+                />
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-4 text-center text-sm">
+                <p className="font-bold">{form.report_header_html || displayName(form, locale)}</p>
+                <p className="mt-4 text-muted-foreground">— {locale === "ar" ? "بنود الفاتورة" : "Invoice items"} —</p>
+                <p className="mt-4 text-xs text-muted-foreground">{form.report_footer_html || "Thank you"}</p>
+              </div>
+              <Button onClick={saveBranding} disabled={saving}>
+                {saving ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
+                {t(locale, "save")}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="general">
           <Card>
             <CardHeader>
               <CardTitle>{locale === "ar" ? "الإعدادات العامة" : "General Settings"}</CardTitle>
+              <CardDescription>
+                {locale === "ar" ? "إعدادات المختبر الأساسية" : "Core laboratory preferences"}
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>{locale === "ar" ? "اللغة الافتراضية: العربية" : "Default Language: Arabic"}</Label>
-                <Switch defaultChecked />
+            <CardContent className="space-y-3">
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1 text-start">
+                  <Label className="text-base">{locale === "ar" ? "اللغة الافتراضية" : "Default Language"}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {locale === "ar" ? "العربية — واجهة RTL" : "Arabic — RTL interface"}
+                  </p>
+                </div>
+                <Switch defaultChecked className="shrink-0" />
               </div>
-              <div className="flex items-center justify-between">
-                <Label>{locale === "ar" ? "المنطقة الزمنية: Africa/Cairo" : "Timezone: Africa/Cairo"}</Label>
-                <Switch defaultChecked />
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1 text-start">
+                  <Label className="text-base">{locale === "ar" ? "المنطقة الزمنية" : "Timezone"}</Label>
+                  <p className="text-sm text-muted-foreground">Africa/Cairo (UTC+2)</p>
+                </div>
+                <Switch defaultChecked className="shrink-0" />
+              </div>
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1 text-start">
+                  <Label className="text-base">{locale === "ar" ? "تنسيق التاريخ" : "Date Format"}</Label>
+                  <p className="text-sm text-muted-foreground">YYYY-MM-DD</p>
+                </div>
+                <Switch defaultChecked className="shrink-0" />
               </div>
             </CardContent>
           </Card>
@@ -263,10 +329,15 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>{locale === "ar" ? "تذكيرات الاشتراك" : "Subscription Reminders"}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>{locale === "ar" ? "تذكير التجديد (14 يوم)" : "Renewal Reminder (14 days)"}</Label>
-                <Switch defaultChecked />
+            <CardContent className="space-y-3">
+              <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1 text-start">
+                  <Label className="text-base">{locale === "ar" ? "تذكير التجديد" : "Renewal Reminder"}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {locale === "ar" ? "قبل 14 يوماً من انتهاء الاشتراك" : "14 days before subscription ends"}
+                  </p>
+                </div>
+                <Switch defaultChecked className="shrink-0" />
               </div>
             </CardContent>
           </Card>

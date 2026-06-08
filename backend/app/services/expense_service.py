@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -8,14 +8,23 @@ from app.models.expenses import Expense, ExpenseCategory
 from app.models.tenant_config import Branch
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.expenses import ExpenseCreate, ExpenseUpdate
+from app.utils.date_filter import apply_date_range
 
 
 class ExpenseService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_expenses(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_expenses(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = select(Expense).where(Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None))
+        for clause in apply_date_range(Expense.expense_date, date_from, date_to):
+            query = query.where(clause)
         count = await self.db.scalar(select(func.count()).select_from(query.subquery()))
         query = query.order_by(Expense.expense_date.desc()).offset((params.page - 1) * params.page_size).limit(params.page_size)
         items = list((await self.db.execute(query)).scalars().all())
@@ -69,13 +78,19 @@ class ExpenseService:
         await self.db.flush()
         return expense
 
-    async def get_summary(self, tenant_id: UUID) -> dict:
-        result = await self.db.execute(
-            select(
-                func.coalesce(func.sum(Expense.amount), 0),
-                func.count(Expense.id),
-            ).where(Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None))
-        )
+    async def get_summary(
+        self,
+        tenant_id: UUID,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> dict:
+        exp_q = select(
+            func.coalesce(func.sum(Expense.amount), 0),
+            func.count(Expense.id),
+        ).where(Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None))
+        for clause in apply_date_range(Expense.expense_date, date_from, date_to):
+            exp_q = exp_q.where(clause)
+        result = await self.db.execute(exp_q)
         total, count = result.one()
         return {"total_expenses": float(total), "expense_count": count}
 

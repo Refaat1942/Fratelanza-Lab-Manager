@@ -8,7 +8,11 @@ export interface TenantBranding {
   secondary_color?: string;
   accent_color?: string;
   custom_domain?: string | null;
+  report_header_html?: string | null;
+  report_footer_html?: string | null;
 }
+
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
 
 export const DEFAULT_BRANDING: TenantBranding = {
   company_name: "LabMaster Egypt",
@@ -29,11 +33,23 @@ export function resolveAssetUrl(path: string | null | undefined): string | null 
   const uploadPath = path.startsWith("/uploads") ? path : `/uploads/${path}`;
 
   if (typeof window !== "undefined") {
-    return `${window.location.origin}/api/v1${uploadPath}`;
+    const originApi = `${window.location.origin}/api/v1`;
+    if (API_BASE === originApi || API_BASE.startsWith(window.location.origin)) {
+      return `${originApi}${uploadPath}`;
+    }
   }
 
-  const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
-  return `${base}${uploadPath}`;
+  return `${API_BASE}${uploadPath}`;
+}
+
+/** Append cache-buster so replaced logos reload immediately after upload */
+export function logoUrlWithCache(url: string | null | undefined): string | null {
+  const resolved = resolveAssetUrl(url);
+  if (!resolved) return null;
+  if (url?.includes("/uploads/")) {
+    return `${resolved}?t=${Date.now()}`;
+  }
+  return resolved;
 }
 
 export function displayName(branding: TenantBranding, locale: "ar" | "en"): string {

@@ -15,7 +15,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
+import { DateRangeFilter } from "@/components/filters/date-range-filter";
+import { useDateRange } from "@/hooks/use-date-range";
 import { api, getApiError } from "@/lib/api";
+import { exportModuleExcel } from "@/lib/export";
 import { toast } from "sonner";
 
 interface Patient {
@@ -55,14 +58,15 @@ export default function PatientsPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyPatient);
   const [saving, setSaving] = useState(false);
+  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get("/patients?page_size=100")
+    api.get(`/patients?page_size=100${queryParams}`)
       .then((res) => setPatients(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -173,8 +177,8 @@ export default function PatientsPage() {
     },
   ];
 
-  const PatientForm = () => (
-    <form onSubmit={savePatient} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+  const patientForm = (
+    <form onSubmit={savePatient} className="space-y-4 max-h-[70vh] overflow-y-auto pe-1">
       <Tabs defaultValue="personal">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="personal">{locale === "ar" ? "شخصي" : "Personal"}</TabsTrigger>
@@ -285,7 +289,7 @@ export default function PatientsPage() {
             <DialogHeader>
               <DialogTitle>{editId ? (locale === "ar" ? "تعديل مريض" : "Edit Patient") : (locale === "ar" ? "مريض جديد" : "New Patient")}</DialogTitle>
             </DialogHeader>
-            <PatientForm />
+            {patientForm}
           </DialogContent>
         </Dialog>
       </div>
@@ -314,7 +318,21 @@ export default function PatientsPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : (
-        <DataTable columns={columns} data={patients} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={patients}
+          searchPlaceholder={t(locale, "search")}
+          filterSlot={
+            <DateRangeFilter
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onDateFromChange={setDateFrom}
+              onDateToChange={setDateTo}
+              onReset={reset}
+            />
+          }
+          onExport={() => exportModuleExcel("patients", dateFrom, dateTo).catch((e) => toast.error(String(e)))}
+        />
       )}
     </div>
   );

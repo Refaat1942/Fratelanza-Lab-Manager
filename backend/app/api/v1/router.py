@@ -5,8 +5,8 @@ from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.endpoints import (
-    assistant, auth, billing, branches, crm, dashboard, doctors, expenses, inventory, patients,
-    platform, public, purchasing, referrals, results, settings, suppliers, tests, users,
+    assistant, auth, billing, branches, crm, dashboard, doctors, expenses, export, inventory, patients,
+    platform, public, purchasing, referrals, reports, results, settings, suppliers, tests, users,
 )
 
 api_router = APIRouter()
@@ -29,6 +29,8 @@ api_router.include_router(expenses.router)
 api_router.include_router(referrals.router)
 api_router.include_router(crm.router)
 api_router.include_router(purchasing.router)
+api_router.include_router(export.router)
+api_router.include_router(reports.router)
 
 _uploads = Path("uploads")
 _uploads.mkdir(exist_ok=True)

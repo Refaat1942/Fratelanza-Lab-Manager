@@ -35,6 +35,8 @@ async def get_branding(
         secondary_color=branding.secondary_color,
         accent_color=branding.accent_color,
         custom_domain=tenant.custom_domain,
+        report_header_html=branding.report_header_html,
+        report_footer_html=branding.report_footer_html,
     )
 
 
@@ -56,6 +58,8 @@ async def update_branding(
         secondary_color=branding.secondary_color,
         accent_color=branding.accent_color,
         custom_domain=tenant.custom_domain,
+        report_header_html=branding.report_header_html,
+        report_footer_html=branding.report_footer_html,
     )
 
 
@@ -87,4 +91,6 @@ async def upload_logo(
         secondary_color=branding.secondary_color,
         accent_color=branding.accent_color,
         custom_domain=tenant.custom_domain,
+        report_header_html=branding.report_header_html,
+        report_footer_html=branding.report_footer_html,
     )

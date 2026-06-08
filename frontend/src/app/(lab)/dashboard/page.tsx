@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -15,8 +15,12 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
+import { DateRangeFilter } from "@/components/filters/date-range-filter";
+import { useDateRange } from "@/hooks/use-date-range";
 import { api } from "@/lib/api";
+import { downloadDailyOperationsPdf } from "@/lib/export";
 import { PageHeader } from "@/components/layout/page-header";
+import { toast } from "sonner";
 import { AnimatedStagger, AnimatedItem } from "@/components/layout/animated-page";
 
 interface Insights {
@@ -48,13 +52,30 @@ export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
   const [data, setData] = useState<Insights | null>(null);
   const [loading, setLoading] = useState(true);
+  const [printing, setPrinting] = useState(false);
+  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
-  useEffect(() => {
-    api.get("/dashboard/insights")
+  const load = useCallback(() => {
+    setLoading(true);
+    api.get(`/dashboard/insights?${queryParams.replace(/^&/, "")}`)
       .then((res) => setData(res.data))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const printDailyPdf = async () => {
+    setPrinting(true);
+    try {
+      await downloadDailyOperationsPdf(dateFrom, dateTo);
+      toast.success(locale === "ar" ? "تم تحميل PDF" : "PDF downloaded");
+    } catch {
+      toast.error(locale === "ar" ? "فشل الطباعة" : "Print failed");
+    } finally {
+      setPrinting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -92,14 +113,30 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      <PageHeader
-        title={t(locale, "dashboard")}
-        description={
-          locale === "ar"
-            ? `مرحباً ${user?.full_name_ar || user?.full_name} — رؤى وتحليلات المختبر`
-            : `Welcome ${user?.full_name} — laboratory insights & analytics`
-        }
-      />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <PageHeader
+          title={t(locale, "dashboard")}
+          description={
+            locale === "ar"
+              ? `مرحباً ${user?.full_name_ar || user?.full_name} — رؤى وتحليلات المختبر`
+              : `Welcome ${user?.full_name} — laboratory insights & analytics`
+          }
+        />
+        <div className="flex flex-col gap-3 sm:items-end">
+          <DateRangeFilter
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateFromChange={setDateFrom}
+            onDateToChange={setDateTo}
+            onReset={reset}
+          />
+          <Button variant="outline" size="sm" onClick={printDailyPdf} disabled={printing}>
+            {printing
+              ? locale === "ar" ? "جاري الطباعة..." : "Printing..."
+              : locale === "ar" ? "طباعة العمليات اليومية PDF" : "Print Daily Operations PDF"}
+          </Button>
+        </div>
+      </div>
 
       {/* Financial KPIs */}
       <AnimatedStagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

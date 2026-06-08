@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Microscope } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { resolveAssetUrl } from "@/lib/branding";
+import { logoUrlWithCache, resolveAssetUrl } from "@/lib/branding";
 
 interface BrandingLogoProps {
   logoUrl?: string | null;
@@ -21,7 +21,7 @@ const sizes = {
 };
 
 export function BrandingLogo({ logoUrl, alt, size = "md", className, accentColor }: BrandingLogoProps) {
-  const resolved = resolveAssetUrl(logoUrl || "/labmaster-logo.svg");
+  const resolved = logoUrlWithCache(logoUrl) || resolveAssetUrl("/labmaster-logo.svg");
   const [failed, setFailed] = useState(false);
   const s = sizes[size];
 

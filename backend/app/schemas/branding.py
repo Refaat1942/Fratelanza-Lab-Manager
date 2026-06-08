@@ -12,6 +12,8 @@ class BrandingResponse(BaseModel):
     secondary_color: str = "#2d5a87"
     accent_color: str = "#c9a227"
     custom_domain: Optional[str] = None
+    report_header_html: Optional[str] = None
+    report_footer_html: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -24,6 +26,8 @@ class BrandingUpdate(BaseModel):
     primary_color: Optional[str] = Field(None, max_length=20)
     secondary_color: Optional[str] = Field(None, max_length=20)
     accent_color: Optional[str] = Field(None, max_length=20)
+    report_header_html: Optional[str] = None
+    report_footer_html: Optional[str] = None
 
 
 class PublicBrandingResponse(BaseModel):

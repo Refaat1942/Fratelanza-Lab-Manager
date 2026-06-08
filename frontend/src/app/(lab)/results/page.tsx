@@ -12,7 +12,10 @@ import { DataTable } from "@/components/data-table/data-table";
 import { ResultFormBuilder, type ResultField } from "@/components/results/result-form-builder";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
+import { DateRangeFilter } from "@/components/filters/date-range-filter";
+import { useDateRange } from "@/hooks/use-date-range";
 import { api, getApiError } from "@/lib/api";
+import { exportModuleExcel } from "@/lib/export";
 import { toast } from "sonner";
 
 interface Result {
@@ -42,6 +45,7 @@ export default function ResultsPage() {
   const [designOpen, setDesignOpen] = useState(false);
   const [designTestId, setDesignTestId] = useState<string | null>(null);
   const [designFields, setDesignFields] = useState<ResultField[]>([]);
+  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -241,7 +245,21 @@ export default function ResultsPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={results} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={results}
+          searchPlaceholder={t(locale, "search")}
+          filterSlot={
+            <DateRangeFilter
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onDateFromChange={setDateFrom}
+              onDateToChange={setDateTo}
+              onReset={reset}
+            />
+          }
+          onExport={() => exportModuleExcel("results", dateFrom, dateTo).catch((e) => toast.error(String(e)))}
+        />
       )}
     </div>
   );

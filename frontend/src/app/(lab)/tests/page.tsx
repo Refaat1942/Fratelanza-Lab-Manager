@@ -19,7 +19,10 @@ import {
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
+import { DateRangeFilter } from "@/components/filters/date-range-filter";
+import { useDateRange } from "@/hooks/use-date-range";
 import { api, getApiError } from "@/lib/api";
+import { exportModuleExcel } from "@/lib/export";
 import { toast } from "sonner";
 
 interface Test {
@@ -54,6 +57,7 @@ export default function TestsPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyTest);
   const [saving, setSaving] = useState(false);
+  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -237,7 +241,21 @@ export default function TestsPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : (
-        <DataTable columns={columns} data={tests} searchPlaceholder={t(locale, "search")} onExport={() => toast.info("Export")} />
+        <DataTable
+          columns={columns}
+          data={tests}
+          searchPlaceholder={t(locale, "search")}
+          filterSlot={
+            <DateRangeFilter
+              dateFrom={dateFrom}
+              dateTo={dateTo}
+              onDateFromChange={setDateFrom}
+              onDateToChange={setDateTo}
+              onReset={reset}
+            />
+          }
+          onExport={() => exportModuleExcel("tests", dateFrom, dateTo).catch((e) => toast.error(String(e)))}
+        />
       )}
     </div>
   );

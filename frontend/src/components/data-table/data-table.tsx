@@ -11,7 +11,7 @@ import {
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -30,7 +30,9 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   searchPlaceholder?: string;
   onExport?: (format: "excel" | "pdf" | "csv") => void;
+  exportFormats?: ("excel" | "pdf" | "csv")[];
   onPrint?: () => void;
+  filterSlot?: ReactNode;
 }
 
 export function DataTable<TData, TValue>({
@@ -38,7 +40,9 @@ export function DataTable<TData, TValue>({
   data,
   searchPlaceholder = "Search...",
   onExport,
+  exportFormats = ["excel"],
   onPrint,
+  filterSlot,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
@@ -63,6 +67,8 @@ export function DataTable<TData, TValue>({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
     >
+      {filterSlot && <div className="rounded-lg border border-border/60 bg-card p-3 shadow-card">{filterSlot}</div>}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative max-w-sm flex-1">
           <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -74,21 +80,23 @@ export function DataTable<TData, TValue>({
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          {onExport && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => onExport("excel")}>
-                <Download className="h-4 w-4" />
-                Excel
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => onExport("pdf")}>
-                <Download className="h-4 w-4" />
-                PDF
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => onExport("csv")}>
-                <Download className="h-4 w-4" />
-                CSV
-              </Button>
-            </>
+          {onExport && exportFormats.includes("excel") && (
+            <Button variant="outline" size="sm" onClick={() => onExport("excel")}>
+              <Download className="h-4 w-4" />
+              Excel
+            </Button>
+          )}
+          {onExport && exportFormats.includes("pdf") && (
+            <Button variant="outline" size="sm" onClick={() => onExport("pdf")}>
+              <Download className="h-4 w-4" />
+              PDF
+            </Button>
+          )}
+          {onExport && exportFormats.includes("csv") && (
+            <Button variant="outline" size="sm" onClick={() => onExport("csv")}>
+              <Download className="h-4 w-4" />
+              CSV
+            </Button>
           )}
           {onPrint && (
             <Button variant="outline" size="sm" onClick={onPrint}>
