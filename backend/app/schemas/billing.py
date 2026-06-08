@@ -32,6 +32,7 @@ class PaymentCreate(BaseModel):
 class InvoiceListItem(BaseModel):
     id: UUID
     invoice_number: str
+    branch_id: UUID
     patient_id: UUID
     patient_name: str
     status: InvoiceStatus
@@ -46,6 +47,7 @@ class InvoiceListItem(BaseModel):
 class InvoiceResponse(BaseModel):
     id: UUID
     invoice_number: str
+    branch_id: UUID
     patient_id: UUID
     patient_name: str
     status: InvoiceStatus

@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -14,8 +15,10 @@ router = APIRouter(prefix="/expenses", tags=["Expenses"])
 async def expense_summary(
     db: DbSession, tenant: CurrentTenant,
     user: CurrentUser = require_permission("billing.read"),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
 ):
-    return await ExpenseService(db).get_summary(tenant.id)
+    return await ExpenseService(db).get_summary(tenant.id, start_date, end_date)
 
 
 @router.get("")

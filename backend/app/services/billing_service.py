@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -16,6 +16,15 @@ class BillingService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @staticmethod
+    def _date_filters(column, start_date: date | None = None, end_date: date | None = None):
+        filters = []
+        if start_date:
+            filters.append(column >= datetime.combine(start_date, time.min, tzinfo=timezone.utc))
+        if end_date:
+            filters.append(column <= datetime.combine(end_date, time.max, tzinfo=timezone.utc))
+        return filters
+
     async def list_invoices(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
         query = (
             select(Invoice, Patient)
@@ -32,6 +41,7 @@ class BillingService:
             items.append({
                 "id": inv.id,
                 "invoice_number": inv.invoice_number,
+                "branch_id": inv.branch_id,
                 "patient_id": inv.patient_id,
                 "patient_name": patient.full_name,
                 "status": inv.status,
@@ -164,6 +174,7 @@ class BillingService:
         return {
             "id": inv.id,
             "invoice_number": inv.invoice_number,
+            "branch_id": inv.branch_id,
             "patient_id": inv.patient_id,
             "patient_name": patient.full_name,
             "status": inv.status.value,
@@ -185,13 +196,19 @@ class BillingService:
             ],
         }
 
-    async def get_financial_summary(self, tenant_id: UUID) -> dict:
+    async def get_financial_summary(
+        self,
+        tenant_id: UUID,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> dict:
+        filters = [Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None), *self._date_filters(Invoice.issued_at, start_date, end_date)]
         inv_result = await self.db.execute(
             select(
                 func.coalesce(func.sum(Invoice.total), 0),
                 func.coalesce(func.sum(Invoice.paid_amount), 0),
                 func.count(Invoice.id),
-            ).where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
+            ).where(*filters)
         )
         total, paid, count = inv_result.one()
         return {

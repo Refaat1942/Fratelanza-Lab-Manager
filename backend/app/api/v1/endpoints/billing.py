@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -63,8 +64,10 @@ async def financial_summary(
     db: DbSession,
     tenant: CurrentTenant,
     user: CurrentUser = require_permission("billing.read"),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
 ):
-    return await BillingService(db).get_financial_summary(tenant.id)
+    return await BillingService(db).get_financial_summary(tenant.id, start_date, end_date)
 
 
 @router.get("/invoices/{invoice_id}")

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, time, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -13,6 +13,15 @@ from app.schemas.expenses import ExpenseCreate, ExpenseUpdate
 class ExpenseService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    @staticmethod
+    def _date_filters(column, start_date: date | None = None, end_date: date | None = None):
+        filters = []
+        if start_date:
+            filters.append(column >= datetime.combine(start_date, time.min, tzinfo=timezone.utc))
+        if end_date:
+            filters.append(column <= datetime.combine(end_date, time.max, tzinfo=timezone.utc))
+        return filters
 
     async def list_expenses(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
         query = select(Expense).where(Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None))
@@ -69,12 +78,18 @@ class ExpenseService:
         await self.db.flush()
         return expense
 
-    async def get_summary(self, tenant_id: UUID) -> dict:
+    async def get_summary(
+        self,
+        tenant_id: UUID,
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> dict:
+        filters = [Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None), *self._date_filters(Expense.expense_date, start_date, end_date)]
         result = await self.db.execute(
             select(
                 func.coalesce(func.sum(Expense.amount), 0),
                 func.count(Expense.id),
-            ).where(Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None))
+            ).where(*filters)
         )
         total, count = result.one()
         return {"total_expenses": float(total), "expense_count": count}

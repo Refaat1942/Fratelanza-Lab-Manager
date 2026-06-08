@@ -29,6 +29,7 @@ class ExpenseUpdate(BaseModel):
 
 class ExpenseResponse(BaseModel):
     id: UUID
+    branch_id: UUID
     expense_number: str
     description: str
     amount: float
