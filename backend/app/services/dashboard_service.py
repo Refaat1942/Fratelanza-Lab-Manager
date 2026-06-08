@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -18,11 +19,16 @@ class DashboardService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_stats(self, tenant_id: UUID) -> dict:
-        patients = await self._count(Patient, tenant_id)
-        doctors = await self._count(Doctor, tenant_id)
-        tests = await self._count(Test, tenant_id)
-        inventory_items = await self._count(InventoryItem, tenant_id)
+    async def get_stats(
+        self,
+        tenant_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> dict:
+        patients = await self._count(Patient, tenant_id, date_from, date_to)
+        doctors = await self._count(Doctor, tenant_id, date_from, date_to)
+        tests = await self._count(Test, tenant_id, date_from, date_to)
+        inventory_items = await self._count(InventoryItem, tenant_id, date_from, date_to)
         low_stock = await self._count_low_stock(tenant_id)
         return {
             "patients": patients,
@@ -32,17 +38,22 @@ class DashboardService:
             "low_stock_items": low_stock,
         }
 
-    async def get_insights(self, tenant_id: UUID) -> dict:
-        stats = await self.get_stats(tenant_id)
-        financial = await BillingService(self.db).get_financial_summary(tenant_id)
-        expenses = await ExpenseService(self.db).get_summary(tenant_id)
+    async def get_insights(
+        self,
+        tenant_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> dict:
+        stats = await self.get_stats(tenant_id, date_from, date_to)
+        financial = await BillingService(self.db).get_financial_summary(tenant_id, date_from, date_to)
+        expenses = await ExpenseService(self.db).get_summary(tenant_id, date_from, date_to)
 
-        pending = await self._order_count(tenant_id, OrderStatus.PENDING)
-        in_lab = await self._order_count(tenant_id, OrderStatus.IN_LAB)
-        completed = await self._order_count(tenant_id, OrderStatus.COMPLETED)
+        pending = await self._order_count(tenant_id, OrderStatus.PENDING, date_from, date_to)
+        in_lab = await self._order_count(tenant_id, OrderStatus.IN_LAB, date_from, date_to)
+        completed = await self._order_count(tenant_id, OrderStatus.COMPLETED, date_from, date_to)
 
-        recent_patients = await self._recent_patients(tenant_id)
-        recent_invoices = await self._recent_invoices(tenant_id)
+        recent_patients = await self._recent_patients(tenant_id, date_from=date_from, date_to=date_to)
+        recent_invoices = await self._recent_invoices(tenant_id, date_from=date_from, date_to=date_to)
         low_stock = await self._low_stock_items(tenant_id)
 
         net_profit = float(financial["total_collected"]) - float(expenses["total_expenses"])
@@ -62,11 +73,22 @@ class DashboardService:
             "net_profit": net_profit,
         }
 
-    async def _count(self, model, tenant_id: UUID) -> int:
+    async def _count(
+        self,
+        model,
+        tenant_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> int:
+        query = select(func.count()).select_from(model).where(
+            model.tenant_id == tenant_id, model.deleted_at.is_(None)
+        )
+        if date_from and hasattr(model, "created_at"):
+            query = query.where(model.created_at >= date_from)
+        if date_to and hasattr(model, "created_at"):
+            query = query.where(model.created_at <= date_to)
         return await self.db.scalar(
-            select(func.count()).select_from(model).where(
-                model.tenant_id == tenant_id, model.deleted_at.is_(None)
-            )
+            query
         ) or 0
 
     async def _count_low_stock(self, tenant_id: UUID) -> int:
@@ -86,21 +108,40 @@ class DashboardService:
                 count += 1
         return count
 
-    async def _order_count(self, tenant_id: UUID, status: OrderStatus) -> int:
+    async def _order_count(
+        self,
+        tenant_id: UUID,
+        status: OrderStatus,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> int:
+        query = select(func.count()).select_from(LabOrder).where(
+            LabOrder.tenant_id == tenant_id,
+            LabOrder.deleted_at.is_(None),
+            LabOrder.status == status,
+        )
+        if date_from:
+            query = query.where(LabOrder.created_at >= date_from)
+        if date_to:
+            query = query.where(LabOrder.created_at <= date_to)
         return await self.db.scalar(
-            select(func.count()).select_from(LabOrder).where(
-                LabOrder.tenant_id == tenant_id,
-                LabOrder.deleted_at.is_(None),
-                LabOrder.status == status,
-            )
+            query
         ) or 0
 
-    async def _recent_patients(self, tenant_id: UUID, limit: int = 5) -> list[dict]:
+    async def _recent_patients(
+        self,
+        tenant_id: UUID,
+        limit: int = 5,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[dict]:
+        query = select(Patient).where(Patient.tenant_id == tenant_id, Patient.deleted_at.is_(None))
+        if date_from:
+            query = query.where(Patient.created_at >= date_from)
+        if date_to:
+            query = query.where(Patient.created_at <= date_to)
         result = await self.db.execute(
-            select(Patient)
-            .where(Patient.tenant_id == tenant_id, Patient.deleted_at.is_(None))
-            .order_by(Patient.created_at.desc())
-            .limit(limit)
+            query.order_by(Patient.created_at.desc()).limit(limit)
         )
         return [
             {
@@ -112,13 +153,24 @@ class DashboardService:
             for p in result.scalars().all()
         ]
 
-    async def _recent_invoices(self, tenant_id: UUID, limit: int = 5) -> list[dict]:
-        result = await self.db.execute(
+    async def _recent_invoices(
+        self,
+        tenant_id: UUID,
+        limit: int = 5,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> list[dict]:
+        query = (
             select(Invoice, Patient)
             .join(Patient, Invoice.patient_id == Patient.id)
             .where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
-            .order_by(Invoice.created_at.desc())
-            .limit(limit)
+        )
+        if date_from:
+            query = query.where(Invoice.issued_at >= date_from)
+        if date_to:
+            query = query.where(Invoice.issued_at <= date_to)
+        result = await self.db.execute(
+            query.order_by(Invoice.created_at.desc()).limit(limit)
         )
         return [
             {

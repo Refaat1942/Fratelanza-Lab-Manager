@@ -16,13 +16,23 @@ class BillingService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_invoices(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_invoices(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> PaginatedResponse:
         query = (
             select(Invoice, Patient)
             .join(Patient, Invoice.patient_id == Patient.id)
             .where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
             .order_by(Invoice.created_at.desc())
         )
+        if date_from:
+            query = query.where(Invoice.issued_at >= date_from)
+        if date_to:
+            query = query.where(Invoice.issued_at <= date_to)
         count_result = await self.db.execute(select(func.count()).select_from(query.subquery()))
         total = count_result.scalar() or 0
         query = query.offset((params.page - 1) * params.page_size).limit(params.page_size)
@@ -185,13 +195,23 @@ class BillingService:
             ],
         }
 
-    async def get_financial_summary(self, tenant_id: UUID) -> dict:
+    async def get_financial_summary(
+        self,
+        tenant_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> dict:
+        query = select(
+            func.coalesce(func.sum(Invoice.total), 0),
+            func.coalesce(func.sum(Invoice.paid_amount), 0),
+            func.count(Invoice.id),
+        ).where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
+        if date_from:
+            query = query.where(Invoice.issued_at >= date_from)
+        if date_to:
+            query = query.where(Invoice.issued_at <= date_to)
         inv_result = await self.db.execute(
-            select(
-                func.coalesce(func.sum(Invoice.total), 0),
-                func.coalesce(func.sum(Invoice.paid_amount), 0),
-                func.count(Invoice.id),
-            ).where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
+            query
         )
         total, paid, count = inv_result.one()
         return {

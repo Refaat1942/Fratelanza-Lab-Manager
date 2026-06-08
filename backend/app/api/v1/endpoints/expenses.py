@@ -1,7 +1,9 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from app.api.v1.endpoints._date_filters import date_range_bounds
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.expenses import ExpenseCreate, ExpenseResponse, ExpenseUpdate
@@ -14,8 +16,11 @@ router = APIRouter(prefix="/expenses", tags=["Expenses"])
 async def expense_summary(
     db: DbSession, tenant: CurrentTenant,
     user: CurrentUser = require_permission("billing.read"),
+    date_from: date | None = None,
+    date_to: date | None = None,
 ):
-    return await ExpenseService(db).get_summary(tenant.id)
+    start, end = date_range_bounds(date_from, date_to)
+    return await ExpenseService(db).get_summary(tenant.id, start, end)
 
 
 @router.get("")
@@ -23,8 +28,11 @@ async def list_expenses(
     db: DbSession, tenant: CurrentTenant,
     user: CurrentUser = require_permission("billing.read"),
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    date_from: date | None = None,
+    date_to: date | None = None,
 ):
-    result = await ExpenseService(db).list_expenses(tenant.id, PaginationParams(page=page, page_size=page_size))
+    start, end = date_range_bounds(date_from, date_to)
+    result = await ExpenseService(db).list_expenses(tenant.id, PaginationParams(page=page, page_size=page_size), start, end)
     return {"items": [ExpenseResponse.model_validate(i) for i in result.items], "total": result.total, "page": result.page, "page_size": result.page_size, "pages": result.pages}
 
 

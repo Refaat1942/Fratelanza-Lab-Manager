@@ -14,8 +14,18 @@ class ExpenseService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_expenses(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_expenses(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> PaginatedResponse:
         query = select(Expense).where(Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None))
+        if date_from:
+            query = query.where(Expense.expense_date >= date_from)
+        if date_to:
+            query = query.where(Expense.expense_date <= date_to)
         count = await self.db.scalar(select(func.count()).select_from(query.subquery()))
         query = query.order_by(Expense.expense_date.desc()).offset((params.page - 1) * params.page_size).limit(params.page_size)
         items = list((await self.db.execute(query)).scalars().all())
@@ -69,13 +79,21 @@ class ExpenseService:
         await self.db.flush()
         return expense
 
-    async def get_summary(self, tenant_id: UUID) -> dict:
-        result = await self.db.execute(
-            select(
-                func.coalesce(func.sum(Expense.amount), 0),
-                func.count(Expense.id),
-            ).where(Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None))
-        )
+    async def get_summary(
+        self,
+        tenant_id: UUID,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> dict:
+        query = select(
+            func.coalesce(func.sum(Expense.amount), 0),
+            func.count(Expense.id),
+        ).where(Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None))
+        if date_from:
+            query = query.where(Expense.expense_date >= date_from)
+        if date_to:
+            query = query.where(Expense.expense_date <= date_to)
+        result = await self.db.execute(query)
         total, count = result.one()
         return {"total_expenses": float(total), "expense_count": count}
 

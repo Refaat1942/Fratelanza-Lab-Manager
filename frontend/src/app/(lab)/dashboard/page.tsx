@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -9,15 +9,17 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Users, FlaskConical, Stethoscope, Package, TrendingUp, TrendingDown,
-  Receipt, AlertTriangle, Clock, ArrowRight, Wallet,
+  Receipt, AlertTriangle, Clock, ArrowRight, Wallet, Download, Printer,
 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/layout/page-header";
 import { AnimatedStagger, AnimatedItem } from "@/components/layout/animated-page";
+import { downloadExcelFile, printTableDocument } from "@/lib/export";
 
 interface Insights {
   stats: {
@@ -48,13 +50,21 @@ export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
   const [data, setData] = useState<Insights | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
-  useEffect(() => {
-    api.get("/dashboard/insights")
+  const load = useCallback(() => {
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (dateFrom) params.set("date_from", dateFrom);
+    if (dateTo) params.set("date_to", dateTo);
+    api.get(`/dashboard/insights${params.toString() ? `?${params}` : ""}`)
       .then((res) => setData(res.data))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [dateFrom, dateTo]);
+
+  useEffect(() => { load(); }, [load]);
 
   if (loading) {
     return (
@@ -90,6 +100,21 @@ export default function DashboardPage() {
       ]
     : [];
 
+  const dashboardRows = [
+    { metric: locale === "ar" ? "إجمالي الفواتير" : "Total Invoiced", value: fin?.total_invoiced ?? 0 },
+    { metric: locale === "ar" ? "المحصّل" : "Collected", value: fin?.total_collected ?? 0 },
+    { metric: locale === "ar" ? "المستحق" : "Outstanding", value: fin?.outstanding ?? 0 },
+    { metric: locale === "ar" ? "صافي الربح" : "Net Profit", value: data?.net_profit ?? 0 },
+    { metric: locale === "ar" ? "المرضى" : "Patients", value: stats?.patients ?? 0 },
+    { metric: locale === "ar" ? "الأطباء" : "Doctors", value: stats?.doctors ?? 0 },
+    { metric: locale === "ar" ? "التحاليل" : "Tests", value: stats?.tests ?? 0 },
+    { metric: locale === "ar" ? "المخزون" : "Inventory", value: stats?.inventory_items ?? 0 },
+  ];
+
+  const period = dateFrom || dateTo
+    ? `${locale === "ar" ? "الفترة" : "Period"}: ${dateFrom || "..."} - ${dateTo || "..."}`
+    : locale === "ar" ? "كل الفترات" : "All dates";
+
   return (
     <div className="space-y-6 sm:space-y-8">
       <PageHeader
@@ -100,6 +125,43 @@ export default function DashboardPage() {
             : `Welcome ${user?.full_name} — laboratory insights & analytics`
         }
       />
+
+      <Card className="shadow-card">
+        <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">{locale === "ar" ? "من تاريخ" : "From date"}</p>
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">{locale === "ar" ? "إلى تاريخ" : "To date"}</p>
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => downloadExcelFile("dashboard-summary.xls", t(locale, "dashboard"), [
+                { key: "metric", header: locale === "ar" ? "المؤشر" : "Metric" },
+                { key: "value", header: locale === "ar" ? "القيمة" : "Value" },
+              ], dashboardRows)}
+            >
+              <Download className="h-4 w-4" />
+              Excel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => printTableDocument(t(locale, "dashboard"), [
+                { key: "metric", header: locale === "ar" ? "المؤشر" : "Metric" },
+                { key: "value", header: locale === "ar" ? "القيمة" : "Value" },
+              ], dashboardRows, { dir: locale === "ar" ? "rtl" : "ltr", subtitle: period })}
+            >
+              <Printer className="h-4 w-4" />
+              {locale === "ar" ? "طباعة" : "Print"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Financial KPIs */}
       <AnimatedStagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

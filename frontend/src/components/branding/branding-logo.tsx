@@ -21,7 +21,11 @@ const sizes = {
 };
 
 export function BrandingLogo({ logoUrl, alt, size = "md", className, accentColor }: BrandingLogoProps) {
-  const resolved = resolveAssetUrl(logoUrl || "/labmaster-logo.svg");
+  const resolvedBase = resolveAssetUrl(logoUrl || "/labmaster-logo.svg");
+  const uploadVersion = typeof window !== "undefined" ? localStorage.getItem("logo_upload_version") : null;
+  const resolved = resolvedBase && uploadVersion && resolvedBase.includes("/uploads/")
+    ? `${resolvedBase}${resolvedBase.includes("?") ? "&" : "?"}v=${uploadVersion}`
+    : resolvedBase;
   const [failed, setFailed] = useState(false);
   const s = sizes[size];
 

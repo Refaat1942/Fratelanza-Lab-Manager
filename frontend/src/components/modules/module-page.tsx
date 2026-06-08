@@ -51,6 +51,9 @@ export function ModulePage({
           columns={columns}
           data={data}
           searchPlaceholder={t(locale, "search")}
+          exportFilename={`${titleKey}-export.xls`}
+          exportTitle={t(locale, titleKey)}
+          locale={locale}
         />
       )}
     </div>

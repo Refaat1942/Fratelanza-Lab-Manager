@@ -202,7 +202,14 @@ export default function DoctorsPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : (
-        <DataTable columns={columns} data={doctors} searchPlaceholder={t(locale, "search")} onExport={() => toast.info("Export")} />
+        <DataTable
+          columns={columns}
+          data={doctors}
+          searchPlaceholder={t(locale, "search")}
+          exportFilename="doctors-export.xls"
+          exportTitle={locale === "ar" ? "الأطباء" : "Doctors"}
+          locale={locale}
+        />
       )}
     </div>
   );

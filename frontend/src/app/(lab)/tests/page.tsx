@@ -237,7 +237,14 @@ export default function TestsPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : (
-        <DataTable columns={columns} data={tests} searchPlaceholder={t(locale, "search")} onExport={() => toast.info("Export")} />
+        <DataTable
+          columns={columns}
+          data={tests}
+          searchPlaceholder={t(locale, "search")}
+          exportFilename="tests-export.xls"
+          exportTitle={locale === "ar" ? "التحاليل" : "Tests"}
+          locale={locale}
+        />
       )}
     </div>
   );

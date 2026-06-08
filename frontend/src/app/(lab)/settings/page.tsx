@@ -68,6 +68,7 @@ export default function SettingsPage() {
       const { data } = await api.post("/settings/branding/logo", body, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+      localStorage.setItem("logo_upload_version", String(Date.now()));
       setForm(data);
       persistBranding(data);
       toast.success(locale === "ar" ? "تم رفع الشعار" : "Logo uploaded");
@@ -245,14 +246,30 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>{locale === "ar" ? "الإعدادات العامة" : "General Settings"}</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <Label>{locale === "ar" ? "اللغة الافتراضية: العربية" : "Default Language: Arabic"}</Label>
-                <Switch defaultChecked />
+            <CardContent className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-border/70 bg-card/60 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1 text-start">
+                    <Label className="text-sm font-semibold">
+                      {locale === "ar" ? "اللغة الافتراضية" : "Default Language"}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {locale === "ar" ? "استخدام العربية كشاشة رئيسية للنظام" : "Use Arabic as the main system language"}
+                    </p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <Label>{locale === "ar" ? "المنطقة الزمنية: Africa/Cairo" : "Timezone: Africa/Cairo"}</Label>
-                <Switch defaultChecked />
+              <div className="rounded-xl border border-border/70 bg-card/60 p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-1 text-start">
+                    <Label className="text-sm font-semibold">
+                      {locale === "ar" ? "المنطقة الزمنية" : "Timezone"}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">Africa/Cairo</p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
               </div>
             </CardContent>
           </Card>

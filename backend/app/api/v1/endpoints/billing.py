@@ -1,7 +1,9 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from app.api.v1.endpoints._date_filters import date_range_bounds
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.billing import InvoiceCreate, InvoiceListItem, PaymentCreate
 from app.schemas.common import MessageResponse, PaginationParams
@@ -17,9 +19,12 @@ async def list_invoices(
     user: CurrentUser = require_permission("billing.read"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    date_from: date | None = None,
+    date_to: date | None = None,
 ):
     params = PaginationParams(page=page, page_size=page_size)
-    result = await BillingService(db).list_invoices(tenant.id, params)
+    start, end = date_range_bounds(date_from, date_to)
+    result = await BillingService(db).list_invoices(tenant.id, params, start, end)
     return {
         "items": [InvoiceListItem.model_validate(i) for i in result.items],
         "total": result.total,
@@ -63,8 +68,11 @@ async def financial_summary(
     db: DbSession,
     tenant: CurrentTenant,
     user: CurrentUser = require_permission("billing.read"),
+    date_from: date | None = None,
+    date_to: date | None = None,
 ):
-    return await BillingService(db).get_financial_summary(tenant.id)
+    start, end = date_range_bounds(date_from, date_to)
+    return await BillingService(db).get_financial_summary(tenant.id, start, end)
 
 
 @router.get("/invoices/{invoice_id}")

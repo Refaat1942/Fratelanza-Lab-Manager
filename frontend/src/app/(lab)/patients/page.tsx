@@ -173,7 +173,7 @@ export default function PatientsPage() {
     },
   ];
 
-  const PatientForm = () => (
+  const renderPatientForm = () => (
     <form onSubmit={savePatient} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
       <Tabs defaultValue="personal">
         <TabsList className="grid w-full grid-cols-3">
@@ -285,7 +285,7 @@ export default function PatientsPage() {
             <DialogHeader>
               <DialogTitle>{editId ? (locale === "ar" ? "تعديل مريض" : "Edit Patient") : (locale === "ar" ? "مريض جديد" : "New Patient")}</DialogTitle>
             </DialogHeader>
-            <PatientForm />
+            {renderPatientForm()}
           </DialogContent>
         </Dialog>
       </div>

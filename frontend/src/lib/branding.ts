@@ -27,12 +27,17 @@ export function resolveAssetUrl(path: string | null | undefined): string | null 
   if (path.startsWith("/") && !path.startsWith("/uploads")) return path;
 
   const uploadPath = path.startsWith("/uploads") ? path : `/uploads/${path}`;
+  const configuredBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+
+  if (configuredBase && !configuredBase.includes("localhost")) {
+    return `${configuredBase}${uploadPath}`;
+  }
 
   if (typeof window !== "undefined") {
     return `${window.location.origin}/api/v1${uploadPath}`;
   }
 
-  const base = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
+  const base = (configuredBase || "http://localhost:8000/api/v1").replace(/\/$/, "");
   return `${base}${uploadPath}`;
 }
 
