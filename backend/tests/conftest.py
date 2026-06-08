@@ -16,6 +16,6 @@ async def client():
 def sample_login():
     return {
         "username": "labadmin",
-        "password": "Demo@123",
+        "password": "test-password",
         "tenant_code": "demo-lab",
     }

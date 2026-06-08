@@ -1,9 +1,11 @@
 """Seed database with initial platform data, permissions, plans, and demo tenant."""
 
 import asyncio
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from secrets import token_urlsafe
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -105,9 +107,21 @@ EGYPTIAN_TESTS = [
 ]
 
 
+def _development_password(env_name: str, label: str) -> str:
+    value = os.getenv(env_name)
+    if value:
+        return value
+    generated = token_urlsafe(18)
+    print(f"{env_name} is not set; generated temporary {label} password: {generated}")
+    return generated
+
+
 async def seed() -> None:
     if settings.is_production:
         raise RuntimeError("Refusing to seed demo data when ENVIRONMENT=production")
+
+    platform_password = _development_password("PLATFORM_ADMIN_PASSWORD", "platform admin")
+    demo_password = _development_password("DEMO_ADMIN_PASSWORD", "demo lab admin")
 
     async with async_session_factory() as db:
         existing = await db.execute(select(PlatformUser).limit(1))
@@ -119,7 +133,7 @@ async def seed() -> None:
             PlatformUser(
                 username="superadmin",
                 email=None,
-                password_hash=get_password_hash("Admin@123"),
+                password_hash=get_password_hash(platform_password),
                 full_name="Platform Administrator",
                 is_superadmin=True,
             )
@@ -205,7 +219,7 @@ async def seed() -> None:
             tenant_id=tenant.id,
             username="labadmin",
             email=None,
-            password_hash=get_password_hash("Demo@123"),
+            password_hash=get_password_hash(demo_password),
             full_name="Lab Administrator",
             full_name_ar="مدير المختبر",
             is_tenant_admin=True,

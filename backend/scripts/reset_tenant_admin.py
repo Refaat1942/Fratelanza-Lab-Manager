@@ -1,7 +1,7 @@
 """Reset a tenant admin password by lab code and username.
 
 Usage:
-  python scripts/reset_tenant_admin.py --tenant-code demo-lab --username labadmin --password 'Demo@123'
+  python scripts/reset_tenant_admin.py --tenant-code demo-lab --username labadmin --password '<new-strong-password>'
 """
 
 import argparse

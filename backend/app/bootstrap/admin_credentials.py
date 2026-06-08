@@ -1,4 +1,5 @@
 import os
+from secrets import token_urlsafe
 
 from sqlalchemy import func, select
 
@@ -13,18 +14,18 @@ settings = get_settings()
 
 DEMO_TENANT_CODE = "demo-lab"
 DEMO_USERNAME = "labadmin"
-DEMO_PASSWORD = "Demo@123"
 PLATFORM_USERNAME = "superadmin"
-PLATFORM_PASSWORD = "Admin@123"
 
 
-def _bootstrap_secret(env_name: str, development_default: str) -> str | None:
+def _bootstrap_secret(env_name: str) -> str | None:
     value = os.getenv(env_name)
     if value:
         return value
     if settings.is_production:
         return None
-    return development_default
+    generated = token_urlsafe(18)
+    print(f"{env_name} is not set; generated temporary development password: {generated}")
+    return generated
 
 
 def _require_strong_production_password(password: str, label: str) -> None:
@@ -34,7 +35,7 @@ def _require_strong_production_password(password: str, label: str) -> None:
 
 async def ensure_platform_admin() -> None:
     username = os.getenv("PLATFORM_ADMIN_USERNAME", PLATFORM_USERNAME).strip().lower()
-    password = _bootstrap_secret("PLATFORM_ADMIN_PASSWORD", PLATFORM_PASSWORD)
+    password = _bootstrap_secret("PLATFORM_ADMIN_PASSWORD")
     if not password:
         print("Platform admin bootstrap skipped: PLATFORM_ADMIN_PASSWORD is not set.")
         return
@@ -78,7 +79,7 @@ async def ensure_demo_admin() -> None:
     if settings.is_production:
         print("Demo admin bootstrap skipped in production.")
         return
-    password = _bootstrap_secret("DEMO_ADMIN_PASSWORD", DEMO_PASSWORD)
+    password = _bootstrap_secret("DEMO_ADMIN_PASSWORD")
     if not password:
         print("Demo admin bootstrap skipped: DEMO_ADMIN_PASSWORD is not set.")
         return
