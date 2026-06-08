@@ -88,12 +88,12 @@ Open in browser: `http://187.124.15.14:13000`
    docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build frontend
    ```
 
-## Demo Credentials
+## Production Admin Credentials
 
-| Portal | Email | Password | Tenant |
-|--------|-------|----------|--------|
-| Laboratory | admin@demo-lab.eg | Demo@123 | demo-lab |
-| SaaS Platform | admin@labmaster.eg | Admin@123 | — |
+Do not use demo/default passwords in production. To create the first platform
+administrator on a fresh production database, set `PLATFORM_ADMIN_USERNAME` and
+a strong `PLATFORM_ADMIN_PASSWORD` in `.env.production` before starting the
+backend. Existing admin passwords are never reset automatically.
 
 ## Update / Redeploy
 

@@ -11,7 +11,7 @@ from app.schemas.branding import BrandingUpdate
 UPLOAD_DIR = Path("uploads/logos")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 
 
 class BrandingService:
@@ -68,7 +68,7 @@ class BrandingService:
     async def save_logo(self, tenant_id: UUID, filename: str, content: bytes) -> str:
         ext = Path(filename).suffix.lower()
         if ext not in ALLOWED_EXTENSIONS:
-            raise ValueError(f"Unsupported image type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
+            raise ValueError(f"Unsupported image type. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}")
 
         dest = UPLOAD_DIR / f"{tenant_id}{ext}"
         for old in UPLOAD_DIR.glob(f"{tenant_id}.*"):

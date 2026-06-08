@@ -174,8 +174,8 @@ function LoginPageContent() {
                   />
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     {locale === "ar"
-                      ? "المعرّف الفريد لمختبرك (أحرف صغيرة، بدون مسافات). للتجربة: demo-lab — المستخدم labadmin — كلمة المرور Demo@123"
-                      : "Your lab ID (lowercase, no spaces). Demo: demo-lab · user labadmin · password Demo@123"}
+                      ? "المعرّف الفريد لمختبرك (أحرف صغيرة، بدون مسافات). اطلبه من مدير النظام."
+                      : "Your lab ID (lowercase, no spaces). Ask your system administrator if you do not know it."}
                   </p>
                 </div>
                 <div className="space-y-2">

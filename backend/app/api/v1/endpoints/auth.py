@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.api.deps import CurrentUser, DbSession, PlatformAdmin
+from app.core.config import get_settings
+from app.core.rate_limit import limiter
 from app.schemas.auth import (
     LoginRequest,
     PlatformLoginRequest,
@@ -13,29 +15,33 @@ from app.services.auth_service import AuthService
 from app.services.tenant_access_service import TenantAccessService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+settings = get_settings()
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest, db: DbSession):
+@limiter.limit(settings.AUTH_LOGIN_RATE_LIMIT)
+async def login(request: Request, data: LoginRequest, db: DbSession):
     try:
         return await AuthService(db).login(data)
     except ValueError as e:
         msg = str(e)
         if msg.startswith("Tenant account is"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=msg)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
 
 @router.post("/platform/login", response_model=TokenResponse)
-async def platform_login(data: PlatformLoginRequest, db: DbSession):
+@limiter.limit(settings.AUTH_LOGIN_RATE_LIMIT)
+async def platform_login(request: Request, data: PlatformLoginRequest, db: DbSession):
     try:
         return await AuthService(db).platform_login(data)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(data: RefreshTokenRequest, db: DbSession):
+@limiter.limit(settings.AUTH_REFRESH_RATE_LIMIT)
+async def refresh_token(request: Request, data: RefreshTokenRequest, db: DbSession):
     try:
         return await AuthService(db).refresh(data.refresh_token)
     except ValueError as e:
@@ -43,6 +49,13 @@ async def refresh_token(data: RefreshTokenRequest, db: DbSession):
         if msg.startswith("Tenant account is"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=msg)
+
+
+@router.post("/logout")
+@limiter.limit(settings.AUTH_REFRESH_RATE_LIMIT)
+async def logout(request: Request, data: RefreshTokenRequest, db: DbSession):
+    await AuthService(db).logout(data.refresh_token)
+    return {"detail": "Logged out"}
 
 
 @router.get("/platform/me", response_model=PlatformAdminResponse)

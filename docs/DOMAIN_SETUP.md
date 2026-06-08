@@ -81,9 +81,9 @@ Certbot adds SSL **only** to the LabMaster nginx site.
 
 - **App:** https://labmaster.yourdomain.com
 - **API:** https://labmaster.yourdomain.com/api/v1
-- **Docs:** https://labmaster.yourdomain.com/docs
+- **Docs:** disabled in production
 
-**Login:** `admin@demo-lab.eg` / `Demo@123` (tenant: `demo-lab`)
+Use the platform administrator credentials provisioned in `.env.production`.
 
 ---
 

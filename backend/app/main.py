@@ -3,19 +3,23 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.rate_limit import limiter
 
 settings = get_settings()
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIMIT])
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_production_safety()
+    if settings.is_production:
+        yield
+        return
+
     from app.bootstrap.admin_credentials import ensure_demo_admin, ensure_platform_admin
 
     try:
@@ -31,8 +35,9 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="LabMaster Egypt - Multi-tenant SaaS ERP/LIMS API",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
+    openapi_url=None if settings.is_production else "/openapi.json",
 )
 
 app.state.limiter = limiter

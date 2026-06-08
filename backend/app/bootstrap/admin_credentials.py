@@ -1,10 +1,15 @@
+import os
+
 from sqlalchemy import func, select
 
+from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.db.session import async_session_factory
 from app.models.auth import Permission, Role, RolePermission, User, UserRole
 from app.models.platform import PlatformUser, Tenant
 from app.models.tenant_config import Branch
+
+settings = get_settings()
 
 DEMO_TENANT_CODE = "demo-lab"
 DEMO_USERNAME = "labadmin"
@@ -13,10 +18,31 @@ PLATFORM_USERNAME = "superadmin"
 PLATFORM_PASSWORD = "Admin@123"
 
 
+def _bootstrap_secret(env_name: str, development_default: str) -> str | None:
+    value = os.getenv(env_name)
+    if value:
+        return value
+    if settings.is_production:
+        return None
+    return development_default
+
+
+def _require_strong_production_password(password: str, label: str) -> None:
+    if settings.is_production and len(password) < 12:
+        raise RuntimeError(f"{label} must be at least 12 characters in production")
+
+
 async def ensure_platform_admin() -> None:
+    username = os.getenv("PLATFORM_ADMIN_USERNAME", PLATFORM_USERNAME).strip().lower()
+    password = _bootstrap_secret("PLATFORM_ADMIN_PASSWORD", PLATFORM_PASSWORD)
+    if not password:
+        print("Platform admin bootstrap skipped: PLATFORM_ADMIN_PASSWORD is not set.")
+        return
+    _require_strong_production_password(password, "PLATFORM_ADMIN_PASSWORD")
+
     async with async_session_factory() as db:
         result = await db.execute(
-            select(PlatformUser).where(func.lower(PlatformUser.username) == PLATFORM_USERNAME)
+            select(PlatformUser).where(func.lower(PlatformUser.username) == username)
         )
         user = result.scalar_one_or_none()
 
@@ -26,29 +52,37 @@ async def ensure_platform_admin() -> None:
             )
             user = super_result.scalar_one_or_none()
 
-        password_hash = get_password_hash(PLATFORM_PASSWORD)
-
         if user:
-            user.username = PLATFORM_USERNAME
-            user.password_hash = password_hash
-            user.is_active = True
-            user.is_superadmin = True
-            print(f"Reset platform admin credentials: {PLATFORM_USERNAME}")
+            if not settings.is_production:
+                user.username = username
+                user.is_active = True
+                user.is_superadmin = True
+                await db.commit()
+            print("Platform admin already exists; password unchanged.")
+            return
         else:
             db.add(
                 PlatformUser(
-                    username=PLATFORM_USERNAME,
-                    password_hash=password_hash,
+                    username=username,
+                    password_hash=get_password_hash(password),
                     full_name="Platform Administrator",
                     is_superadmin=True,
                 )
             )
-            print(f"Created platform admin: {PLATFORM_USERNAME}")
+            print(f"Created platform admin: {username}")
 
         await db.commit()
 
 
 async def ensure_demo_admin() -> None:
+    if settings.is_production:
+        print("Demo admin bootstrap skipped in production.")
+        return
+    password = _bootstrap_secret("DEMO_ADMIN_PASSWORD", DEMO_PASSWORD)
+    if not password:
+        print("Demo admin bootstrap skipped: DEMO_ADMIN_PASSWORD is not set.")
+        return
+
     async with async_session_factory() as db:
         tenant_result = await db.execute(
             select(Tenant).where(Tenant.code == DEMO_TENANT_CODE, Tenant.deleted_at.is_(None))
@@ -102,20 +136,18 @@ async def ensure_demo_admin() -> None:
             )
         )
         user = user_result.scalar_one_or_none()
-        password_hash = get_password_hash(DEMO_PASSWORD)
 
         if user:
-            user.password_hash = password_hash
             user.is_active = True
             user.is_tenant_admin = True
             if not user.default_branch_id:
                 user.default_branch_id = branch.id
-            print(f"Reset password for {DEMO_USERNAME} @ {DEMO_TENANT_CODE}")
+            print(f"Demo admin already exists; password unchanged for {DEMO_USERNAME} @ {DEMO_TENANT_CODE}")
         else:
             user = User(
                 tenant_id=tenant.id,
                 username=DEMO_USERNAME,
-                password_hash=password_hash,
+                password_hash=get_password_hash(password),
                 full_name="Lab Administrator",
                 full_name_ar="مدير المختبر",
                 is_tenant_admin=True,

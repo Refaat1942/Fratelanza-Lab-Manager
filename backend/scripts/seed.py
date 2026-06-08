@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.db.session import async_session_factory
 from app.models.auth import Permission, Role, RolePermission, User, UserRole
@@ -30,6 +31,8 @@ from app.models.orders import LabOrder, LabOrderItem, LabResult, OrderStatus, Re
 from app.models.patients import Gender, Patient, PatientVisit, VisitStatus
 from app.models.doctors import Doctor
 from app.models.tests import Test
+
+settings = get_settings()
 
 PERMISSIONS = [
     ("patients.read", "patients", "read", "View patients", "عرض المرضى"),
@@ -103,6 +106,9 @@ EGYPTIAN_TESTS = [
 
 
 async def seed() -> None:
+    if settings.is_production:
+        raise RuntimeError("Refusing to seed demo data when ENVIRONMENT=production")
+
     async with async_session_factory() as db:
         existing = await db.execute(select(PlatformUser).limit(1))
         if existing.scalar_one_or_none():

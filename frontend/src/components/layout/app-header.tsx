@@ -58,9 +58,9 @@ export function AppHeader({ onMenuClick, variant = "lab" }: AppHeaderProps) {
   const pathname = usePathname();
   const pageKey = resolveTitle(pathname);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     const isPlatform = localStorage.getItem("is_platform_admin") === "true";
-    logout();
+    await logout();
     router.push(isPlatform ? "/platform/login" : "/login");
   };
 

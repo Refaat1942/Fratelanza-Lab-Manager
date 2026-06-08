@@ -56,6 +56,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       ENVIRONMENT: production
       DEBUG: "false"
+      PLATFORM_ADMIN_USERNAME: ${PLATFORM_ADMIN_USERNAME:-superadmin}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:-}
     ports:
       - "${LABMASTER_API_PORT:-18000}:8000"
     depends_on:
@@ -66,7 +68,7 @@ services:
     volumes:
       - labmaster_uploads:/app/uploads
     command: >
-      sh -c "alembic upgrade head && python scripts/seed.py && python scripts/ensure_platform_admin.py && python scripts/ensure_demo_admin.py && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
+      sh -c "alembic upgrade head && python scripts/ensure_platform_admin.py && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2"
     networks:
       - labmaster_net
 

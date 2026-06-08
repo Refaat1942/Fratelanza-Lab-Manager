@@ -46,7 +46,7 @@ class AuthService:
             )
             tenant = tenant_result.scalar_one_or_none()
             if not tenant:
-                raise ValueError("Invalid tenant code")
+                raise ValueError("Invalid credentials")
             query = query.where(User.tenant_id == tenant.id)
 
         result = await self.db.execute(query)
@@ -132,6 +132,21 @@ class AuthService:
             refresh_token=new_refresh,
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         )
+
+    async def logout(self, refresh_token: str) -> None:
+        payload = verify_token(refresh_token, token_type="refresh")
+        if not payload:
+            return
+        token_hash = _hash_token(refresh_token)
+        result = await self.db.execute(
+            select(RefreshToken).where(
+                RefreshToken.token_hash == token_hash,
+                RefreshToken.revoked_at.is_(None),
+            )
+        )
+        stored = result.scalar_one_or_none()
+        if stored:
+            stored.revoked_at = datetime.now(timezone.utc)
 
     async def create_user(self, tenant_id: UUID, data: UserCreate) -> User:
         from app.services.tenant_limits_service import TenantLimitsService

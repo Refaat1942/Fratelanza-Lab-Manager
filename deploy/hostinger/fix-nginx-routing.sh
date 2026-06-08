@@ -146,13 +146,11 @@ server {
     }
 
     location /docs {
-        proxy_pass http://127.0.0.1:${API_PORT}/docs;
-        proxy_set_header Host \$host;
+        return 404;
     }
 
     location /redoc {
-        proxy_pass http://127.0.0.1:${API_PORT}/redoc;
-        proxy_set_header Host \$host;
+        return 404;
     }
 
     location /health {
@@ -199,8 +197,7 @@ server {
     }
 
     location /docs {
-        proxy_pass http://127.0.0.1:${API_PORT}/docs;
-        proxy_set_header Host \$host;
+        return 404;
     }
 
     location /health {
@@ -285,9 +282,9 @@ echo "=========================================="
 echo ""
 echo "  LabMaster:  https://${DOMAIN}"
 echo "  Platform:   https://${DOMAIN}/platform/login"
-echo "  API Docs:   https://${DOMAIN}/docs"
+echo "  API Docs:   disabled in production"
 echo ""
-echo "  Login: superadmin (SaaS owner) | labadmin + tenant demo-lab (laboratory)"
+echo "  Login: use the administrator credentials provisioned in .env.production"
 echo ""
 echo "  Fratelanza Hub is UNCHANGED at its own domain."
 echo ""
