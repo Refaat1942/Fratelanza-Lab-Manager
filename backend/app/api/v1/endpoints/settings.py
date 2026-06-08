@@ -7,6 +7,7 @@ from app.services.branding_service import BrandingService
 from app.services.tenant_limits_service import TenantLimitsService
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
+ALLOWED_LOGO_CONTENT_TYPES = {"image/png", "image/jpeg", "image/gif", "image/webp"}
 
 
 @router.get("/limits", response_model=TenantLimitsResponse)
@@ -66,8 +67,8 @@ async def upload_logo(
     user: CurrentUser = require_permission("settings.manage"),
     file: UploadFile = File(...),
 ):
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
+    if file.content_type not in ALLOWED_LOGO_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Logo must be PNG, JPEG, GIF, or WEBP")
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Logo must be under 5 MB")

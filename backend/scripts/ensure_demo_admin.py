@@ -1,4 +1,4 @@
-"""CLI wrapper — ensure demo-lab / labadmin exists with known credentials."""
+"""CLI wrapper — ensure the demo tenant admin exists using env-supplied credentials."""
 
 import asyncio
 import sys

@@ -57,8 +57,10 @@ docker compose up -d
 
 | Portal | Email | Password | Tenant Code |
 |--------|-------|----------|-------------|
-| Laboratory | labadmin | *(set on first deploy)* | demo-lab |
-| SaaS Platform | superadmin | *(set on first deploy)* | — |
+| Laboratory | labadmin | *(set in local env / docker compose)* | demo-lab |
+| SaaS Platform | superadmin | *(set in local env / docker compose)* | — |
+
+Production deployments keep demo seeding, API docs, and automatic admin bootstrapping disabled by default. If you need a one-time platform admin bootstrap, set strong `PLATFORM_ADMIN_*` credentials explicitly in `.env.production`, enable `BOOTSTRAP_ADMIN_ACCOUNTS=true` for the first start, then turn it back off.
 
 ### Local Development
 

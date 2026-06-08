@@ -1,4 +1,4 @@
-"""CLI wrapper — ensure platform superadmin exists with known credentials."""
+"""CLI wrapper — ensure platform superadmin exists using env-supplied credentials."""
 
 import asyncio
 import sys

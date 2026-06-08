@@ -11,7 +11,24 @@ from app.schemas.branding import BrandingUpdate
 UPLOAD_DIR = Path("uploads/logos")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif"}
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+IMAGE_SIGNATURES: dict[str, tuple[bytes, ...]] = {
+    ".png": (b"\x89PNG\r\n\x1a\n",),
+    ".jpg": (b"\xff\xd8\xff",),
+    ".jpeg": (b"\xff\xd8\xff",),
+    ".gif": (b"GIF87a", b"GIF89a"),
+}
+WEBP_RIFF_HEADER = b"RIFF"
+WEBP_MARKER = b"WEBP"
+
+
+def detect_image_extension(content: bytes) -> str | None:
+    for extension, signatures in IMAGE_SIGNATURES.items():
+        if any(content.startswith(signature) for signature in signatures):
+            return extension
+    if content.startswith(WEBP_RIFF_HEADER) and len(content) >= 12 and content[8:12] == WEBP_MARKER:
+        return ".webp"
+    return None
 
 
 class BrandingService:
@@ -69,13 +86,20 @@ class BrandingService:
         ext = Path(filename).suffix.lower()
         if ext not in ALLOWED_EXTENSIONS:
             raise ValueError(f"Unsupported image type. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
+        detected_ext = detect_image_extension(content)
+        if not detected_ext:
+            raise ValueError("Unsupported or invalid image file")
+        if detected_ext == ".jpg" and ext == ".jpeg":
+            detected_ext = ".jpeg"
+        elif detected_ext != ext:
+            raise ValueError("Logo file contents do not match the file extension")
 
-        dest = UPLOAD_DIR / f"{tenant_id}{ext}"
+        dest = UPLOAD_DIR / f"{tenant_id}{detected_ext}"
         for old in UPLOAD_DIR.glob(f"{tenant_id}.*"):
             old.unlink(missing_ok=True)
         dest.write_bytes(content)
 
-        logo_path = f"/uploads/logos/{tenant_id}{ext}"
+        logo_path = f"/uploads/logos/{tenant_id}{detected_ext}"
         branding = await self.get_by_tenant_id(tenant_id)
         if branding:
             branding.logo_url = logo_path

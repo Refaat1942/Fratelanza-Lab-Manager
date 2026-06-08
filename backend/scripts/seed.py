@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.db.session import async_session_factory
 from app.models.auth import Permission, Role, RolePermission, User, UserRole
@@ -30,6 +31,8 @@ from app.models.orders import LabOrder, LabOrderItem, LabResult, OrderStatus, Re
 from app.models.patients import Gender, Patient, PatientVisit, VisitStatus
 from app.models.doctors import Doctor
 from app.models.tests import Test
+
+settings = get_settings()
 
 PERMISSIONS = [
     ("patients.read", "patients", "read", "View patients", "عرض المرضى"),
@@ -109,15 +112,19 @@ async def seed() -> None:
             print("Database already seeded.")
             return
 
-        db.add(
-            PlatformUser(
-                username="superadmin",
-                email=None,
-                password_hash=get_password_hash("Admin@123"),
-                full_name="Platform Administrator",
-                is_superadmin=True,
+        if settings.BOOTSTRAP_ADMIN_ACCOUNTS and settings.PLATFORM_ADMIN_PASSWORD:
+            db.add(
+                PlatformUser(
+                    username=settings.PLATFORM_ADMIN_USERNAME.strip().lower(),
+                    email=None,
+                    password_hash=get_password_hash(settings.PLATFORM_ADMIN_PASSWORD),
+                    full_name="Platform Administrator",
+                    is_superadmin=True,
+                )
             )
-        )
+            print(f"Seeded platform admin: {settings.PLATFORM_ADMIN_USERNAME.strip().lower()}")
+        else:
+            print("Skipping platform admin seed; set bootstrap credentials explicitly to create one.")
 
         perm_objects = []
         for code, module, action, desc, desc_ar in PERMISSIONS:
@@ -141,13 +148,20 @@ async def seed() -> None:
             )
         await db.flush()
 
+        if not settings.SEED_DEMO_DATA:
+            await db.commit()
+            print("Seed completed successfully without demo data.")
+            return
+        if not settings.DEMO_ADMIN_PASSWORD:
+            raise ValueError("DEMO_ADMIN_PASSWORD must be set when SEED_DEMO_DATA=true")
+
         plan_result = await db.execute(
             select(SubscriptionPlan).where(SubscriptionPlan.tier == PlanTier.PROFESSIONAL, SubscriptionPlan.billing_cycle == BillingCycle.MONTHLY)
         )
         plan = plan_result.scalar_one()
 
         tenant = Tenant(
-            code="demo-lab",
+            code=settings.DEMO_TENANT_CODE.strip().lower(),
             name="Demo Medical Laboratory",
             name_ar="مختبر العرض الطبي",
             email="demo@labmaster.eg",
@@ -197,9 +211,9 @@ async def seed() -> None:
 
         admin = User(
             tenant_id=tenant.id,
-            username="labadmin",
+            username=settings.DEMO_ADMIN_USERNAME.strip().lower(),
             email=None,
-            password_hash=get_password_hash("Demo@123"),
+            password_hash=get_password_hash(settings.DEMO_ADMIN_PASSWORD),
             full_name="Lab Administrator",
             full_name_ar="مدير المختبر",
             is_tenant_admin=True,
@@ -373,8 +387,13 @@ async def seed() -> None:
 
         await db.commit()
         print("Seed completed successfully!")
-        print("Platform admin username: superadmin")
-        print("Demo lab admin username: labadmin (tenant code: demo-lab)")
+        if settings.BOOTSTRAP_ADMIN_ACCOUNTS and settings.PLATFORM_ADMIN_PASSWORD:
+            print(f"Platform admin username: {settings.PLATFORM_ADMIN_USERNAME.strip().lower()}")
+        print(
+            "Demo lab admin username: "
+            f"{settings.DEMO_ADMIN_USERNAME.strip().lower()} "
+            f"(tenant code: {settings.DEMO_TENANT_CODE.strip().lower()})"
+        )
 
 
 if __name__ == "__main__":

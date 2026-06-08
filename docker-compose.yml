@@ -41,6 +41,16 @@ services:
       SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
       CORS_ORIGINS: '["http://localhost:3000","http://localhost"]'
       REDIS_URL: redis://redis:6379/0
+      ENVIRONMENT: development
+      DEBUG: "true"
+      ENABLE_API_DOCS: "true"
+      BOOTSTRAP_ADMIN_ACCOUNTS: "true"
+      SEED_DEMO_DATA: "true"
+      PLATFORM_ADMIN_USERNAME: superadmin
+      PLATFORM_ADMIN_PASSWORD: DemoOnly-ChangeMe123!
+      DEMO_TENANT_CODE: demo-lab
+      DEMO_ADMIN_USERNAME: labadmin
+      DEMO_ADMIN_PASSWORD: DemoOnly-ChangeMe123!
     ports:
       - "8000:8000"
     depends_on:
