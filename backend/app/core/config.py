@@ -1,7 +1,13 @@
 from functools import lru_cache
 from typing import List
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_INSECURE_SECRET_KEYS = {
+    "change-me-in-production-use-openssl-rand-hex-32",
+    "CHANGE_ME_OPENSSL_RAND_HEX_32",
+}
 
 
 class Settings(BaseSettings):
@@ -21,6 +27,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Set on first deploy only; never reset automatically in production.
+    PLATFORM_ADMIN_PASSWORD: str | None = None
+    DEMO_ADMIN_PASSWORD: str | None = None
+    RESET_BOOTSTRAP_PASSWORDS: bool = False
+
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -29,6 +40,7 @@ class Settings(BaseSettings):
         "http://labmaster.fratelanza.com",
     ]
     RATE_LIMIT: str = "100/minute"
+    AUTH_RATE_LIMIT: str = "10/minute"
 
     REDIS_URL: str = "redis://localhost:6379/0"
 
@@ -37,6 +49,15 @@ class Settings(BaseSettings):
 
     GRACE_PERIOD_DAYS: int = 7
     RENEWAL_REMINDER_DAYS: int = 14
+
+    @model_validator(mode="after")
+    def validate_production_security(self):
+        if self.ENVIRONMENT == "production" and self.SECRET_KEY in _INSECURE_SECRET_KEYS:
+            raise ValueError(
+                "SECRET_KEY must be set to a strong random value in production "
+                "(generate with: openssl rand -hex 32)"
+            )
+        return self
 
 
 @lru_cache

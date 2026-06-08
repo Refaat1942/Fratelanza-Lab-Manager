@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.api.deps import CurrentUser, DbSession, PlatformAdmin
+from app.core.config import get_settings
+from app.core.limiter import limiter
 from app.schemas.auth import (
     LoginRequest,
     PlatformLoginRequest,
@@ -13,10 +15,12 @@ from app.services.auth_service import AuthService
 from app.services.tenant_access_service import TenantAccessService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+settings = get_settings()
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest, db: DbSession):
+@limiter.limit(settings.AUTH_RATE_LIMIT)
+async def login(request: Request, data: LoginRequest, db: DbSession):
     try:
         return await AuthService(db).login(data)
     except ValueError as e:
@@ -27,7 +31,8 @@ async def login(data: LoginRequest, db: DbSession):
 
 
 @router.post("/platform/login", response_model=TokenResponse)
-async def platform_login(data: PlatformLoginRequest, db: DbSession):
+@limiter.limit(settings.AUTH_RATE_LIMIT)
+async def platform_login(request: Request, data: PlatformLoginRequest, db: DbSession):
     try:
         return await AuthService(db).platform_login(data)
     except ValueError as e:
@@ -35,7 +40,8 @@ async def platform_login(data: PlatformLoginRequest, db: DbSession):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(data: RefreshTokenRequest, db: DbSession):
+@limiter.limit(settings.AUTH_RATE_LIMIT)
+async def refresh_token(request: Request, data: RefreshTokenRequest, db: DbSession):
     try:
         return await AuthService(db).refresh(data.refresh_token)
     except ValueError as e:

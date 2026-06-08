@@ -39,7 +39,7 @@ sudo bash deploy/hostinger/enable-ssl.sh labmaster.yourdomain.com
 
 Uses isolated ports + a **separate nginx site** — your other projects stay untouched.
 
-Guides: [Domain Setup](docs/DOMAIN_SETUP.md) | [VPS Deploy](docs/DEPLOYMENT_HOSTINGER.md)
+Guides: [Domain Setup](docs/DOMAIN_SETUP.md) | [VPS Deploy](docs/DEPLOYMENT_HOSTINGER.md) | [Security](docs/SECURITY.md)
 
 ## Quick Start (Local)
 

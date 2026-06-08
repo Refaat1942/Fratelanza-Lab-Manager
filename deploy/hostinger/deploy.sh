@@ -43,9 +43,14 @@ if [ ! -f .env.production ]; then
     cp .env.production.example .env.production
     SECRET=$(openssl rand -hex 32)
     DB_PASS=$(openssl rand -hex 16)
+    PLATFORM_PASS=$(openssl rand -base64 18 | tr -d '/+=' | head -c 20)
+    DEMO_PASS=$(openssl rand -base64 18 | tr -d '/+=' | head -c 20)
     sed -i "s/CHANGE_ME_OPENSSL_RAND_HEX_32/$SECRET/" .env.production
     sed -i "s/CHANGE_ME_STRONG_PASSWORD/$DB_PASS/" .env.production
-    echo "Generated SECRET_KEY and POSTGRES_PASSWORD in .env.production"
+    sed -i "s/CHANGE_ME_STRONG_PLATFORM_PASSWORD/$PLATFORM_PASS/" .env.production
+    sed -i "s/CHANGE_ME_STRONG_DEMO_PASSWORD/$DEMO_PASS/" .env.production
+    echo "Generated SECRET_KEY, POSTGRES_PASSWORD, and bootstrap admin passwords in .env.production"
+    echo "⚠️  Save .env.production securely — it contains your admin passwords."
     echo "⚠️  Edit NEXT_PUBLIC_API_URL and CORS_ORIGINS with your domain before going live."
 fi
 
@@ -62,7 +67,6 @@ echo ""
 echo "Access (direct ports):"
 echo "  Frontend: http://$(hostname -I | awk '{print $1}'):13000"
 echo "  API:      http://$(hostname -I | awk '{print $1}'):18000"
-echo "  API Docs: http://$(hostname -I | awk '{print $1}'):18000/docs"
 echo ""
 echo "Next — connect your domain (safe, won't touch existing projects):"
 echo "  1. Hostinger DNS: A record  labmaster  →  $(hostname -I | awk '{print $1}')"

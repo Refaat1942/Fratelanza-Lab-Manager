@@ -47,6 +47,8 @@ async def get_current_user(
     payload = verify_token(credentials.credentials)
     if not payload:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    if payload.get("role") == "platform_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Laboratory access required")
     user_id = payload.get("sub")
     result = await db.execute(
         select(User)
@@ -58,6 +60,9 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+    token_tenant_id = payload.get("tenant_id")
+    if token_tenant_id and user.tenant_id and str(user.tenant_id) != str(token_tenant_id):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid tenant context")
     return user
 
 
@@ -66,10 +71,11 @@ async def get_current_tenant(
     user: Annotated[User, Depends(get_current_user)],
     x_tenant_id: Annotated[Optional[str], Header()] = None,
 ) -> Tenant:
-    # JWT tenant is authoritative; header is fallback only
-    tenant_id = (str(user.tenant_id) if user.tenant_id else None) or x_tenant_id
-    if not tenant_id:
+    if not user.tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant context required")
+    tenant_id = str(user.tenant_id)
+    if x_tenant_id and x_tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant context mismatch")
     result = await db.execute(select(Tenant).where(Tenant.id == tenant_id, Tenant.deleted_at.is_(None)))
     tenant = result.scalar_one_or_none()
     if not tenant:

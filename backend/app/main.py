@@ -3,15 +3,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.limiter import limiter
+from app.middleware.security_headers import SecurityHeadersMiddleware
 
 settings = get_settings()
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIMIT])
+is_production = settings.ENVIRONMENT == "production"
 
 
 @asynccontextmanager
@@ -31,19 +32,21 @@ app = FastAPI(
     version=settings.APP_VERSION,
     description="LabMaster Egypt - Multi-tenant SaaS ERP/LIMS API",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if is_production else "/docs",
+    redoc_url=None if is_production else "/redoc",
+    openapi_url=None if is_production else "/openapi.json",
 )
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Tenant-Id", "Accept", "Accept-Language"],
 )
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
