@@ -15,6 +15,13 @@ import { BrandingLogo } from "@/components/branding/branding-logo";
 import { DEFAULT_BRANDING, displayName, type TenantBranding } from "@/lib/branding";
 import { toast } from "sonner";
 
+const showDemoCredentials = process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true";
+
+function safeRedirectPath(path: string | null) {
+  if (!path || !path.startsWith("/") || path.startsWith("//")) return "/dashboard";
+  return path;
+}
+
 function LoginPageContent() {
   const locale = useAuthStore((s) => s.locale);
   const [username, setUsername] = useState("");
@@ -27,7 +34,7 @@ function LoginPageContent() {
   const { setBranding: persistBranding } = useBrandingStore();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/dashboard";
+  const redirect = safeRedirectPath(searchParams.get("redirect"));
   const dir = locale === "ar" ? "rtl" : "ltr";
 
   const fetchBranding = useCallback(async (code: string) => {
@@ -173,9 +180,13 @@ function LoginPageContent() {
                     placeholder="demo-lab"
                   />
                   <p className="text-xs leading-relaxed text-muted-foreground">
-                    {locale === "ar"
-                      ? "المعرّف الفريد لمختبرك (أحرف صغيرة، بدون مسافات). للتجربة: demo-lab — المستخدم labadmin — كلمة المرور Demo@123"
-                      : "Your lab ID (lowercase, no spaces). Demo: demo-lab · user labadmin · password Demo@123"}
+                    {showDemoCredentials
+                      ? locale === "ar"
+                        ? "المعرّف الفريد لمختبرك (أحرف صغيرة، بدون مسافات). للتجربة: demo-lab — المستخدم labadmin — كلمة المرور Demo@123"
+                        : "Your lab ID (lowercase, no spaces). Demo: demo-lab · user labadmin · password Demo@123"
+                      : locale === "ar"
+                        ? "المعرّف الفريد لمختبرك (أحرف صغيرة، بدون مسافات)."
+                        : "Your lab ID (lowercase, no spaces)."}
                   </p>
                 </div>
                 <div className="space-y-2">

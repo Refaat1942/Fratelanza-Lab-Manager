@@ -10,7 +10,11 @@ router = APIRouter(prefix="/settings", tags=["Settings"])
 
 
 @router.get("/limits", response_model=TenantLimitsResponse)
-async def get_limits(db: DbSession, tenant: CurrentTenant, user: CurrentUser):
+async def get_limits(
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("settings.manage"),
+):
     limits = await TenantLimitsService(db).get_limits(tenant.id)
     return limits.to_response()
 

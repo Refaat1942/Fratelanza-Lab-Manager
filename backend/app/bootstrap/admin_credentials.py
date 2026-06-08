@@ -1,5 +1,6 @@
 from sqlalchemy import func, select
 
+from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.db.session import async_session_factory
 from app.models.auth import Permission, Role, RolePermission, User, UserRole
@@ -7,16 +8,37 @@ from app.models.platform import PlatformUser, Tenant
 from app.models.tenant_config import Branch
 
 DEMO_TENANT_CODE = "demo-lab"
-DEMO_USERNAME = "labadmin"
-DEMO_PASSWORD = "Demo@123"
-PLATFORM_USERNAME = "superadmin"
-PLATFORM_PASSWORD = "Admin@123"
+DEVELOPMENT_DEMO_PASSWORD = "Demo@123"
+DEVELOPMENT_PLATFORM_PASSWORD = "Admin@123"
+
+
+def _bootstrap_enabled() -> bool:
+    settings = get_settings()
+    return settings.BOOTSTRAP_ADMINS or not settings.is_production
+
+
+def _bootstrap_password(configured_password: str | None, development_password: str) -> str | None:
+    settings = get_settings()
+    if configured_password:
+        return configured_password
+    return development_password if not settings.is_production else None
 
 
 async def ensure_platform_admin() -> None:
+    settings = get_settings()
+    if not _bootstrap_enabled():
+        print("Platform admin bootstrap disabled.")
+        return
+
+    password = _bootstrap_password(settings.PLATFORM_ADMIN_PASSWORD, DEVELOPMENT_PLATFORM_PASSWORD)
+    if not password:
+        print("Platform admin bootstrap skipped: PLATFORM_ADMIN_PASSWORD is required.")
+        return
+
+    username = settings.PLATFORM_ADMIN_USERNAME.strip().lower()
     async with async_session_factory() as db:
         result = await db.execute(
-            select(PlatformUser).where(func.lower(PlatformUser.username) == PLATFORM_USERNAME)
+            select(PlatformUser).where(func.lower(PlatformUser.username) == username)
         )
         user = result.scalar_one_or_none()
 
@@ -26,29 +48,39 @@ async def ensure_platform_admin() -> None:
             )
             user = super_result.scalar_one_or_none()
 
-        password_hash = get_password_hash(PLATFORM_PASSWORD)
-
         if user:
-            user.username = PLATFORM_USERNAME
-            user.password_hash = password_hash
+            user.username = username
+            if settings.RESET_BOOTSTRAP_PASSWORDS:
+                user.password_hash = get_password_hash(password)
             user.is_active = True
             user.is_superadmin = True
-            print(f"Reset platform admin credentials: {PLATFORM_USERNAME}")
+            print(f"Ensured platform admin exists: {username}")
         else:
             db.add(
                 PlatformUser(
-                    username=PLATFORM_USERNAME,
-                    password_hash=password_hash,
+                    username=username,
+                    password_hash=get_password_hash(password),
                     full_name="Platform Administrator",
                     is_superadmin=True,
                 )
             )
-            print(f"Created platform admin: {PLATFORM_USERNAME}")
+            print(f"Created platform admin: {username}")
 
         await db.commit()
 
 
 async def ensure_demo_admin() -> None:
+    settings = get_settings()
+    if not _bootstrap_enabled():
+        print("Demo admin bootstrap disabled.")
+        return
+
+    password = _bootstrap_password(settings.DEMO_ADMIN_PASSWORD, DEVELOPMENT_DEMO_PASSWORD)
+    if not password:
+        print("Demo admin bootstrap skipped: DEMO_ADMIN_PASSWORD is required.")
+        return
+
+    username = settings.DEMO_ADMIN_USERNAME.strip().lower()
     async with async_session_factory() as db:
         tenant_result = await db.execute(
             select(Tenant).where(Tenant.code == DEMO_TENANT_CODE, Tenant.deleted_at.is_(None))
@@ -97,25 +129,25 @@ async def ensure_demo_admin() -> None:
         user_result = await db.execute(
             select(User).where(
                 User.tenant_id == tenant.id,
-                User.username == DEMO_USERNAME,
+                User.username == username,
                 User.deleted_at.is_(None),
             )
         )
         user = user_result.scalar_one_or_none()
-        password_hash = get_password_hash(DEMO_PASSWORD)
 
         if user:
-            user.password_hash = password_hash
+            if settings.RESET_BOOTSTRAP_PASSWORDS:
+                user.password_hash = get_password_hash(password)
             user.is_active = True
             user.is_tenant_admin = True
             if not user.default_branch_id:
                 user.default_branch_id = branch.id
-            print(f"Reset password for {DEMO_USERNAME} @ {DEMO_TENANT_CODE}")
+            print(f"Ensured demo admin exists: {username} @ {DEMO_TENANT_CODE}")
         else:
             user = User(
                 tenant_id=tenant.id,
-                username=DEMO_USERNAME,
-                password_hash=password_hash,
+                username=username,
+                password_hash=get_password_hash(password),
                 full_name="Lab Administrator",
                 full_name_ar="مدير المختبر",
                 is_tenant_admin=True,
@@ -124,6 +156,6 @@ async def ensure_demo_admin() -> None:
             db.add(user)
             await db.flush()
             db.add(UserRole(user_id=user.id, role_id=admin_role.id))
-            print(f"Created {DEMO_USERNAME} @ {DEMO_TENANT_CODE}")
+            print(f"Created {username} @ {DEMO_TENANT_CODE}")
 
         await db.commit()

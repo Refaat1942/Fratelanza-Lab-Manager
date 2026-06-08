@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.deps import CurrentTenant, CurrentUser, DbSession
+from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.assistant import AssistantMessage, AssistantResponse
 from app.services.assistant_service import AssistantService
 
@@ -12,7 +12,7 @@ async def chat(
     data: AssistantMessage,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser,
+    user: CurrentUser = require_permission("reports.read"),
 ):
     result = await AssistantService(db).chat(tenant.id, data.message, data.locale)
     return AssistantResponse(**result)

@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.db.session import async_session_factory
 from app.models.auth import Permission, Role, RolePermission, User, UserRole
@@ -103,6 +104,11 @@ EGYPTIAN_TESTS = [
 
 
 async def seed() -> None:
+    settings = get_settings()
+    if settings.is_production and not settings.ALLOW_DEMO_SEED:
+        print("Demo seed skipped in production. Set ALLOW_DEMO_SEED=true only for non-customer demo environments.")
+        return
+
     async with async_session_factory() as db:
         existing = await db.execute(select(PlatformUser).limit(1))
         if existing.scalar_one_or_none():

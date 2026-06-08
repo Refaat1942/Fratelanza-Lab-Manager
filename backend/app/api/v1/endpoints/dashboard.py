@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.deps import CurrentTenant, CurrentUser, DbSession
+from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.dashboard import DashboardInsights, DashboardStats
 from app.services.dashboard_service import DashboardService
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 async def get_stats(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser,
+    user: CurrentUser = require_permission("reports.read"),
 ):
     return DashboardStats(**await DashboardService(db).get_stats(tenant.id))
 
@@ -20,6 +20,6 @@ async def get_stats(
 async def get_insights(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser,
+    user: CurrentUser = require_permission("reports.read"),
 ):
     return DashboardInsights(**await DashboardService(db).get_insights(tenant.id))

@@ -66,7 +66,10 @@ async def get_current_tenant(
     user: Annotated[User, Depends(get_current_user)],
     x_tenant_id: Annotated[Optional[str], Header()] = None,
 ) -> Tenant:
-    # JWT tenant is authoritative; header is fallback only
+    # JWT tenant is authoritative. Reject conflicting headers instead of silently ignoring them.
+    if user.tenant_id and x_tenant_id and str(user.tenant_id) != x_tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant context mismatch")
+
     tenant_id = (str(user.tenant_id) if user.tenant_id else None) or x_tenant_id
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant context required")
