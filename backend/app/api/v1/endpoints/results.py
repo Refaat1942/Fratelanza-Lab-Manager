@@ -6,6 +6,7 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.results import LabOrderCreate, LabOrderListItem, ResultEntryCreate, ResultListItem
 from app.services.results_service import ResultsService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/results", tags=["Results"])
 
@@ -17,9 +18,13 @@ async def list_results(
     user: CurrentUser = require_permission("results.read"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
     params = PaginationParams(page=page, page_size=page_size)
-    result = await ResultsService(db).list_results(tenant.id, params)
+    result = await ResultsService(db).list_results(
+        tenant.id, params, parse_date_param(date_from), parse_date_param(date_to)
+    )
     return {
         "items": [ResultListItem.model_validate(i) for i in result.items],
         "total": result.total,
@@ -36,9 +41,13 @@ async def list_orders(
     user: CurrentUser = require_permission("results.read"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
     params = PaginationParams(page=page, page_size=page_size)
-    result = await ResultsService(db).list_orders(tenant.id, params)
+    result = await ResultsService(db).list_orders(
+        tenant.id, params, parse_date_param(date_from), parse_date_param(date_to)
+    )
     return {
         "items": [LabOrderListItem.model_validate(i) for i in result.items],
         "total": result.total,

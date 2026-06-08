@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy import select
@@ -8,22 +9,32 @@ from app.models.auth import User, UserRole
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.users import TenantUserCreate
 from app.services.auth_service import AuthService
+from app.utils.list_date_filter import filter_by_entry_date
 
 
 class UserService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_users(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_users(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = (
             select(User)
             .options(selectinload(User.roles).selectinload(UserRole.role))
             .where(User.tenant_id == tenant_id, User.deleted_at.is_(None))
             .order_by(User.created_at.desc())
         )
+        query = filter_by_entry_date(query, User.created_at, date_from, date_to)
         from sqlalchemy import func
+        count_query = select(User.id).where(User.tenant_id == tenant_id, User.deleted_at.is_(None))
+        count_query = filter_by_entry_date(count_query, User.created_at, date_from, date_to)
         count_result = await self.db.execute(
-            select(func.count()).where(User.tenant_id == tenant_id, User.deleted_at.is_(None))
+            select(func.count()).select_from(count_query.subquery())
         )
         total = count_result.scalar() or 0
         query = query.offset((params.page - 1) * params.page_size).limit(params.page_size)

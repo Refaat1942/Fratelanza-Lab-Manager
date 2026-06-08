@@ -1,14 +1,21 @@
 import axios, { AxiosError } from "axios";
+import { getApiBaseUrl } from "./api-base";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_URL = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: API_URL,
   headers: { "Content-Type": "application/json" },
-  timeout: 30000,
+  timeout: 60000,
 });
 
 api.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    config.baseURL = getApiBaseUrl();
+  }
+  if (config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+  }
   if (typeof window !== "undefined") {
     const token = localStorage.getItem("access_token");
     const isPlatform = localStorage.getItem("is_platform_admin") === "true";
@@ -44,7 +51,7 @@ api.interceptors.response.use(
       if (refresh && !config._retry && !isPlatform) {
         config._retry = true;
         try {
-          const { data } = await axios.post(`${API_URL}/auth/refresh`, { refresh_token: refresh });
+          const { data } = await axios.post(`${getApiBaseUrl()}/auth/refresh`, { refresh_token: refresh });
           localStorage.setItem("access_token", data.access_token);
           localStorage.setItem("refresh_token", data.refresh_token);
           config.headers = config.headers || {};

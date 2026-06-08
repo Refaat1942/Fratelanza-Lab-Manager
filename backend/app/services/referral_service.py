@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -9,13 +9,20 @@ from app.models.patients import Patient
 from app.models.tenant_config import Branch
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.referrals import ReferralCreate
+from app.utils.list_date_filter import filter_by_entry_date
 
 
 class ReferralService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_referrals(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_referrals(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = (
             select(Referral, Doctor, Patient)
             .join(Doctor, Referral.doctor_id == Doctor.id)
@@ -23,9 +30,10 @@ class ReferralService:
             .where(Referral.tenant_id == tenant_id)
             .order_by(Referral.referral_date.desc())
         )
-        count = await self.db.scalar(select(func.count()).select_from(
-            select(Referral.id).where(Referral.tenant_id == tenant_id).subquery()
-        ))
+        query = filter_by_entry_date(query, Referral.referral_date, date_from, date_to)
+        count_query = select(Referral.id).where(Referral.tenant_id == tenant_id)
+        count_query = filter_by_entry_date(count_query, Referral.referral_date, date_from, date_to)
+        count = await self.db.scalar(select(func.count()).select_from(count_query.subquery()))
         query = query.offset((params.page - 1) * params.page_size).limit(params.page_size)
         items = []
         for ref, doctor, patient in (await self.db.execute(query)).all():

@@ -51,14 +51,14 @@ export default function BranchesPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([api.get("/branches"), api.get("/settings/limits")])
+    Promise.all([api.get(`/branches${queryParams.replace(/^&/, "?")}`), api.get("/settings/limits")])
       .then(([branchRes, limitsRes]) => {
         setBranches(branchRes.data || []);
         setLimits(limitsRes.data);
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 

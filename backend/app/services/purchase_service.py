@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -6,22 +6,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inventory import POStatus, PurchaseOrder, PurchaseOrderItem, Supplier
 from app.schemas.common import PaginatedResponse, PaginationParams
+from app.utils.list_date_filter import filter_by_entry_date
 
 
 class PurchaseService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_orders(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_orders(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = (
             select(PurchaseOrder, Supplier)
             .join(Supplier, PurchaseOrder.supplier_id == Supplier.id)
             .where(PurchaseOrder.tenant_id == tenant_id, PurchaseOrder.deleted_at.is_(None))
             .order_by(PurchaseOrder.order_date.desc())
         )
-        count = await self.db.scalar(select(func.count()).select_from(
-            select(PurchaseOrder.id).where(PurchaseOrder.tenant_id == tenant_id, PurchaseOrder.deleted_at.is_(None)).subquery()
-        ))
+        query = filter_by_entry_date(query, PurchaseOrder.order_date, date_from, date_to)
+        count_query = select(PurchaseOrder.id).where(
+            PurchaseOrder.tenant_id == tenant_id, PurchaseOrder.deleted_at.is_(None)
+        )
+        count_query = filter_by_entry_date(count_query, PurchaseOrder.order_date, date_from, date_to)
+        count = await self.db.scalar(select(func.count()).select_from(count_query.subquery()))
         query = query.offset((params.page - 1) * params.page_size).limit(params.page_size)
         items = []
         for po, supplier in (await self.db.execute(query)).all():

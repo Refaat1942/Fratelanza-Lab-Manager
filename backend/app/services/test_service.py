@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -8,6 +9,7 @@ from app.models.tests import Test, TestCategory, TestResultTemplate
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.tests import ResultTemplateUpdate, TestCreate, TestUpdate
 from app.services.audit_service import AuditService
+from app.utils.list_date_filter import filter_by_entry_date
 
 
 class TestService:
@@ -23,8 +25,16 @@ class TestService:
         )
         return list(result.scalars().all())
 
-    async def list_tests(self, tenant_id: UUID, params: PaginationParams, category_id: Optional[UUID] = None) -> PaginatedResponse:
+    async def list_tests(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        category_id: Optional[UUID] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = select(Test).where(Test.tenant_id == tenant_id, Test.deleted_at.is_(None))
+        query = filter_by_entry_date(query, Test.created_at, date_from, date_to)
         if category_id:
             query = query.where(Test.category_id == category_id)
         if params.search:

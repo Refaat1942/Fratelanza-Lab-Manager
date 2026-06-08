@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -8,6 +9,7 @@ from app.models.doctors import Doctor
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.doctors import DoctorCreate, DoctorUpdate
 from app.services.audit_service import AuditService
+from app.utils.list_date_filter import filter_by_entry_date
 
 
 class DoctorService:
@@ -15,8 +17,15 @@ class DoctorService:
         self.db = db
         self.audit = AuditService(db)
 
-    async def list_doctors(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_doctors(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = select(Doctor).where(Doctor.tenant_id == tenant_id, Doctor.deleted_at.is_(None))
+        query = filter_by_entry_date(query, Doctor.created_at, date_from, date_to)
         if params.search:
             term = f"%{params.search}%"
             query = query.where(

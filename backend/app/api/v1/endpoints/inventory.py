@@ -7,6 +7,7 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.inventory import InventoryItemCreate, InventoryItemResponse, InventoryItemUpdate
 from app.services.inventory_service import InventoryService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
@@ -22,9 +23,13 @@ async def list_inventory(
     branch_id: UUID | None = None,
     sort_by: str | None = "name",
     sort_order: str = "asc",
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
-    result = await InventoryService(db).list_items(tenant.id, params, branch_id)
+    result = await InventoryService(db).list_items(
+        tenant.id, params, branch_id, parse_date_param(date_from), parse_date_param(date_to)
+    )
     return {
         "items": [InventoryItemResponse.model_validate(i) for i in result.items],
         "total": result.total,

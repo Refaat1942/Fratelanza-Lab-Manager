@@ -10,9 +10,12 @@ export interface TenantBranding {
   custom_domain?: string | null;
   report_header_html?: string | null;
   report_footer_html?: string | null;
+  renewal_reminder_days?: number;
+  renewal_reminder_enabled?: boolean;
+  subscription_end_date?: string | null;
 }
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1").replace(/\/$/, "");
+import { getApiBaseUrl } from "./api-base";
 
 export const DEFAULT_BRANDING: TenantBranding = {
   company_name: "LabMaster Egypt",
@@ -32,14 +35,7 @@ export function resolveAssetUrl(path: string | null | undefined): string | null 
 
   const uploadPath = path.startsWith("/uploads") ? path : `/uploads/${path}`;
 
-  if (typeof window !== "undefined") {
-    const originApi = `${window.location.origin}/api/v1`;
-    if (API_BASE === originApi || API_BASE.startsWith(window.location.origin)) {
-      return `${originApi}${uploadPath}`;
-    }
-  }
-
-  return `${API_BASE}${uploadPath}`;
+  return `${getApiBaseUrl()}${uploadPath}`;
 }
 
 /** Append cache-buster so replaced logos reload immediately after upload */

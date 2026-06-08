@@ -36,18 +36,18 @@ export default function UsersPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ username: "", password: "", full_name: "" });
   const [saving, setSaving] = useState(false);
-  const { dateFrom, dateTo, setDateFrom, setDateTo, reset } = useDateRange();
+  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([api.get("/users"), api.get("/settings/limits")])
+    Promise.all([api.get(`/users${queryParams.replace(/^&/, "?")}`), api.get("/settings/limits")])
       .then(([usersRes, limitsRes]) => {
         setUsers(usersRes.data.items || []);
         setLimits(limitsRes.data);
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 

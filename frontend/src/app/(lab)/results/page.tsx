@@ -49,7 +49,7 @@ export default function ResultsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([api.get("/results"), api.get("/patients?page_size=100"), api.get("/tests?page_size=100")])
+    Promise.all([api.get(`/results${queryParams.replace(/^&/, "?")}`), api.get("/patients?page_size=100"), api.get("/tests?page_size=100")])
       .then(([res, pat, tst]) => {
         setResults(res.data.items || []);
         setPatients(pat.data.items || []);
@@ -57,7 +57,7 @@ export default function ResultsPage() {
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 

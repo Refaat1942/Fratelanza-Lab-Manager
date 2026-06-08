@@ -6,6 +6,7 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.crm import CrmContactCreate, CrmContactResponse, CrmContactUpdate, MarketingCampaignCreate, MarketingCampaignResponse
 from app.services.crm_service import CrmService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/crm", tags=["CRM"])
 
@@ -14,8 +15,15 @@ router = APIRouter(prefix="/crm", tags=["CRM"])
 async def list_contacts(
     db: DbSession, tenant: CurrentTenant, user: CurrentUser = require_permission("reports.read"),
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
-    result = await CrmService(db).list_contacts(tenant.id, PaginationParams(page=page, page_size=page_size))
+    result = await CrmService(db).list_contacts(
+        tenant.id,
+        PaginationParams(page=page, page_size=page_size),
+        parse_date_param(date_from),
+        parse_date_param(date_to),
+    )
     return {"items": [CrmContactResponse.model_validate(i) for i in result.items], "total": result.total, "page": result.page, "page_size": result.page_size, "pages": result.pages}
 
 
@@ -43,8 +51,15 @@ async def delete_contact(contact_id: UUID, db: DbSession, tenant: CurrentTenant,
 async def list_campaigns(
     db: DbSession, tenant: CurrentTenant, user: CurrentUser = require_permission("reports.read"),
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
-    result = await CrmService(db).list_campaigns(tenant.id, PaginationParams(page=page, page_size=page_size))
+    result = await CrmService(db).list_campaigns(
+        tenant.id,
+        PaginationParams(page=page, page_size=page_size),
+        parse_date_param(date_from),
+        parse_date_param(date_to),
+    )
     return {"items": [MarketingCampaignResponse.model_validate({**{c.name: getattr(i, c.name) for c in i.__table__.columns}, "status": i.status.value}) for i in result.items], "total": result.total, "page": result.page, "page_size": result.page_size, "pages": result.pages}
 
 

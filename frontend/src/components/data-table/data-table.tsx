@@ -109,7 +109,7 @@ export function DataTable<TData, TValue>({
 
       <Card className="overflow-hidden py-0 shadow-card">
         <CardContent className="p-0">
-          <Table>
+          <Table className="table-fixed w-full">
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="bg-muted/40 hover:bg-muted/40">

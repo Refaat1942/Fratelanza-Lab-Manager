@@ -6,6 +6,7 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.referrals import ReferralCreate, ReferralResponse
 from app.services.referral_service import ReferralService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/referrals", tags=["Referrals"])
 
@@ -15,8 +16,15 @@ async def list_referrals(
     db: DbSession, tenant: CurrentTenant,
     user: CurrentUser = require_permission("doctors.read"),
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
-    result = await ReferralService(db).list_referrals(tenant.id, PaginationParams(page=page, page_size=page_size))
+    result = await ReferralService(db).list_referrals(
+        tenant.id,
+        PaginationParams(page=page, page_size=page_size),
+        parse_date_param(date_from),
+        parse_date_param(date_to),
+    )
     return {"items": [ReferralResponse.model_validate(i) for i in result.items], "total": result.total, "page": result.page, "page_size": result.page_size, "pages": result.pages}
 
 

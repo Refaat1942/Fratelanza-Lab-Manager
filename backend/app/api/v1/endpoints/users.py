@@ -6,6 +6,7 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.users import TenantUserCreate, TenantUserResponse
 from app.services.user_service import UserService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -17,9 +18,13 @@ async def list_users(
     user: CurrentUser = require_permission("users.manage"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
     params = PaginationParams(page=page, page_size=page_size)
-    result = await UserService(db).list_users(tenant.id, params)
+    result = await UserService(db).list_users(
+        tenant.id, params, parse_date_param(date_from), parse_date_param(date_to)
+    )
     return {
         "items": [TenantUserResponse.model_validate(i) for i in result.items],
         "total": result.total,

@@ -49,11 +49,11 @@ export default function DoctorsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get("/doctors")
+    api.get(`/doctors?page_size=100${queryParams}`)
       .then((res) => setDoctors(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 

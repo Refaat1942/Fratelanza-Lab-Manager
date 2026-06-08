@@ -37,6 +37,9 @@ async def get_branding(
         custom_domain=tenant.custom_domain,
         report_header_html=branding.report_header_html,
         report_footer_html=branding.report_footer_html,
+        renewal_reminder_days=branding.renewal_reminder_days or 14,
+        renewal_reminder_enabled=branding.renewal_reminder_enabled if branding.renewal_reminder_enabled is not None else True,
+        subscription_end_date=branding.subscription_end_date,
     )
 
 
@@ -60,6 +63,9 @@ async def update_branding(
         custom_domain=tenant.custom_domain,
         report_header_html=branding.report_header_html,
         report_footer_html=branding.report_footer_html,
+        renewal_reminder_days=branding.renewal_reminder_days or 14,
+        renewal_reminder_enabled=branding.renewal_reminder_enabled if branding.renewal_reminder_enabled is not None else True,
+        subscription_end_date=branding.subscription_end_date,
     )
 
 
@@ -93,4 +99,7 @@ async def upload_logo(
         custom_domain=tenant.custom_domain,
         report_header_html=branding.report_header_html,
         report_footer_html=branding.report_footer_html,
+        renewal_reminder_days=branding.renewal_reminder_days or 14,
+        renewal_reminder_enabled=branding.renewal_reminder_enabled if branding.renewal_reminder_enabled is not None else True,
+        subscription_end_date=branding.subscription_end_date,
     )

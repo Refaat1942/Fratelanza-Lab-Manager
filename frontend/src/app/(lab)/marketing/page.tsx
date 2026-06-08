@@ -42,11 +42,11 @@ export default function MarketingPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get("/crm/campaigns?page_size=100")
+    api.get(`/crm/campaigns?page_size=100${queryParams}`)
       .then((res) => setCampaigns(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 

@@ -41,11 +41,11 @@ export default function SuppliersPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get("/suppliers?page_size=100")
+    api.get(`/suppliers?page_size=100${queryParams}`)
       .then((res) => setSuppliers(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 

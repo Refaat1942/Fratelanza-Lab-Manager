@@ -8,19 +8,19 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import Invoice, InvoiceStatus, Payment
-from app.models.doctors import Doctor
-from app.models.expenses import Expense
+from app.models.doctors import Doctor, Referral
+from app.models.expenses import Expense, ExpenseCategory
 from app.models.inventory import InventoryBatch, InventoryItem
-from app.models.orders import LabOrder, OrderStatus
+from app.models.orders import LabOrder, LabOrderItem, OrderStatus
 from app.models.patients import Patient
-from app.models.doctors import Referral
+from app.models.tests import Test
 from app.models.tenant_config import Branch
 from app.services.billing_service import BillingService
 from app.services.expense_service import ExpenseService
 from app.utils.date_filter import apply_date_range, date_end, date_start
 
 
-REPORT_TYPES = {"daily", "monthly", "profitability", "inventory", "referrals", "patients", "branches"}
+REPORT_TYPES = {"daily", "monthly", "profitability", "inventory", "referrals", "patients", "branches", "labs_done"}
 
 
 class ReportsService:
@@ -49,6 +49,8 @@ class ReportsService:
             headers, rows = await self._referrals_report(tenant_id, date_from, date_to)
         elif report_type == "patients":
             headers, rows = await self._patients_report(tenant_id, date_from, date_to)
+        elif report_type == "labs_done":
+            headers, rows = await self._labs_done_report(tenant_id, date_from, date_to)
         else:
             headers, rows = await self._branches_report(tenant_id, date_from, date_to)
 
@@ -133,17 +135,95 @@ class ReportsService:
         expenses = await ExpenseService(self.db).get_summary(
             tenant_id, date_from=date_from, date_to=date_to
         )
-        net = float(financial["total_collected"]) - float(expenses["total_expenses"])
-        headers = ["Metric", "Amount (EGP)"]
+        invoiced = float(financial["total_invoiced"])
+        collected = float(financial["total_collected"])
+        outstanding = float(financial["outstanding"])
+        total_exp = float(expenses["total_expenses"])
+        net = collected - total_exp
+        inv_count = int(financial["invoice_count"] or 0)
+        avg_invoice = invoiced / inv_count if inv_count else 0
+        collection_rate = (collected / invoiced * 100) if invoiced else 0
+        margin = (net / collected * 100) if collected else 0
+
+        exp_cat_q = (
+            select(ExpenseCategory.name, func.coalesce(func.sum(Expense.amount), 0))
+            .join(Expense, Expense.category_id == ExpenseCategory.id)
+            .where(Expense.tenant_id == tenant_id, Expense.deleted_at.is_(None))
+        )
+        for clause in apply_date_range(Expense.expense_date, date_from, date_to):
+            exp_cat_q = exp_cat_q.where(clause)
+        exp_by_cat = await self.db.execute(exp_cat_q.group_by(ExpenseCategory.name))
+        cat_rows = list(exp_by_cat.all())
+
+        headers = ["Metric", "Value"]
         rows = [
-            ["Total Invoiced", financial["total_invoiced"]],
-            ["Total Collected", financial["total_collected"]],
-            ["Outstanding", financial["outstanding"]],
-            ["Total Expenses", expenses["total_expenses"]],
-            ["Net Profit", net],
-            ["Invoice Count", financial["invoice_count"]],
+            ["Period From", date_from.isoformat() if date_from else "All"],
+            ["Period To", date_to.isoformat() if date_to else "All"],
+            ["Total Invoiced (EGP)", invoiced],
+            ["Total Collected (EGP)", collected],
+            ["Outstanding (EGP)", outstanding],
+            ["Collection Rate (%)", round(collection_rate, 2)],
+            ["Average Invoice (EGP)", round(avg_invoice, 2)],
+            ["Total Expenses (EGP)", total_exp],
+            ["Net Profit (EGP)", net],
+            ["Profit Margin (%)", round(margin, 2)],
+            ["Invoice Count", inv_count],
             ["Expense Count", expenses["expense_count"]],
+            ["", ""],
+            ["Expense Category", "Amount (EGP)"],
         ]
+        for cat_name, cat_total in cat_rows:
+            rows.append([cat_name or "Uncategorized", float(cat_total or 0)])
+        return headers, rows
+
+    async def _labs_done_report(self, tenant_id: UUID, date_from, date_to):
+        q = (
+            select(LabOrder, Patient, Doctor)
+            .join(Patient, LabOrder.patient_id == Patient.id)
+            .outerjoin(Doctor, LabOrder.referring_doctor_id == Doctor.id)
+            .where(
+                LabOrder.tenant_id == tenant_id,
+                LabOrder.deleted_at.is_(None),
+                LabOrder.status.in_([OrderStatus.COMPLETED, OrderStatus.DELIVERED]),
+            )
+        )
+        date_col = func.coalesce(LabOrder.completed_at, LabOrder.ordered_at)
+        for clause in apply_date_range(date_col, date_from, date_to):
+            q = q.where(clause)
+        result = await self.db.execute(q.order_by(LabOrder.ordered_at.desc()))
+
+        headers = [
+            "Order #", "Patient", "Phone", "Doctor", "Tests", "Status",
+            "Ordered", "Completed", "Invoice #", "Amount (EGP)",
+        ]
+        rows = []
+        for order, patient, doctor in result.all():
+            items_result = await self.db.execute(
+                select(Test.name)
+                .join(LabOrderItem, LabOrderItem.test_id == Test.id)
+                .where(LabOrderItem.order_id == order.id)
+            )
+            test_names = ", ".join(t[0] for t in items_result.all())
+
+            inv_result = await self.db.execute(
+                select(Invoice.invoice_number, Invoice.total)
+                .where(Invoice.order_id == order.id, Invoice.deleted_at.is_(None))
+                .limit(1)
+            )
+            inv_row = inv_result.first()
+
+            rows.append([
+                order.order_number,
+                patient.full_name,
+                patient.phone or "",
+                doctor.full_name if doctor else "",
+                test_names,
+                order.status.value if order.status else "",
+                order.ordered_at.strftime("%Y-%m-%d %H:%M") if order.ordered_at else "",
+                order.completed_at.strftime("%Y-%m-%d %H:%M") if order.completed_at else "",
+                inv_row[0] if inv_row else "",
+                float(inv_row[1]) if inv_row else 0,
+            ])
         return headers, rows
 
     async def _inventory_report(self, tenant_id: UUID):

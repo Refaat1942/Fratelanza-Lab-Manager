@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -7,6 +8,7 @@ from app.models.inventory import Supplier
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.suppliers import SupplierCreate, SupplierUpdate
 from app.services.audit_service import AuditService
+from app.utils.list_date_filter import filter_by_entry_date
 
 
 class SupplierService:
@@ -14,8 +16,15 @@ class SupplierService:
         self.db = db
         self.audit = AuditService(db)
 
-    async def list_suppliers(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_suppliers(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = select(Supplier).where(Supplier.tenant_id == tenant_id, Supplier.deleted_at.is_(None))
+        query = filter_by_entry_date(query, Supplier.created_at, date_from, date_to)
         if params.search:
             term = f"%{params.search}%"
             query = query.where(or_(Supplier.name.ilike(term), Supplier.code.ilike(term)))

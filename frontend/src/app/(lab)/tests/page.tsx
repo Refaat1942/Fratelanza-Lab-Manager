@@ -61,14 +61,14 @@ export default function TestsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([api.get("/tests"), api.get("/tests/categories")])
+    Promise.all([api.get(`/tests?page_size=100${queryParams}`), api.get("/tests/categories")])
       .then(([testsRes, catRes]) => {
         setTests(testsRes.data.items || []);
         setCategories(catRes.data || []);
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 

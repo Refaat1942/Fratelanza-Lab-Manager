@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -11,13 +11,20 @@ from app.models.tests import Test, TestResultTemplate
 from app.models.tenant_config import Branch
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.results import LabOrderCreate, ResultEntryCreate
+from app.utils.list_date_filter import filter_by_entry_date
 
 
 class ResultsService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_results(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_results(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = (
             select(LabResult, LabOrder, Patient, Test)
             .join(LabOrder, LabResult.order_id == LabOrder.id)
@@ -26,6 +33,7 @@ class ResultsService:
             .where(LabResult.tenant_id == tenant_id, LabResult.deleted_at.is_(None))
             .order_by(LabOrder.ordered_at.desc())
         )
+        query = filter_by_entry_date(query, LabOrder.ordered_at, date_from, date_to)
         count_result = await self.db.execute(select(func.count()).select_from(query.subquery()))
         total = count_result.scalar() or 0
         query = query.offset((params.page - 1) * params.page_size).limit(params.page_size)
@@ -47,7 +55,13 @@ class ResultsService:
         pages = (total + params.page_size - 1) // params.page_size if params.page_size else 0
         return PaginatedResponse(items=items, total=total, page=params.page, page_size=params.page_size, pages=pages)
 
-    async def list_orders(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_orders(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = (
             select(LabOrder, Patient, func.count(LabOrderItem.id))
             .join(Patient, LabOrder.patient_id == Patient.id)
@@ -56,10 +70,11 @@ class ResultsService:
             .group_by(LabOrder.id, Patient.id)
             .order_by(LabOrder.ordered_at.desc())
         )
+        query = filter_by_entry_date(query, LabOrder.ordered_at, date_from, date_to)
+        count_query = select(LabOrder.id).where(LabOrder.tenant_id == tenant_id, LabOrder.deleted_at.is_(None))
+        count_query = filter_by_entry_date(count_query, LabOrder.ordered_at, date_from, date_to)
         count_result = await self.db.execute(
-            select(func.count()).select_from(
-                select(LabOrder.id).where(LabOrder.tenant_id == tenant_id, LabOrder.deleted_at.is_(None)).subquery()
-            )
+            select(func.count()).select_from(count_query.subquery())
         )
         total = count_result.scalar() or 0
         query = query.offset((params.page - 1) * params.page_size).limit(params.page_size)

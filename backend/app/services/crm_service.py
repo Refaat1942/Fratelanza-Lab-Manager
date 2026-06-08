@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -6,14 +7,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.crm import CrmContact, MarketingCampaign
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.crm import CrmContactCreate, CrmContactUpdate, MarketingCampaignCreate
+from app.utils.list_date_filter import filter_by_entry_date
 
 
 class CrmService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_contacts(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_contacts(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = select(CrmContact).where(CrmContact.tenant_id == tenant_id, CrmContact.deleted_at.is_(None))
+        query = filter_by_entry_date(query, CrmContact.created_at, date_from, date_to)
         count = await self.db.scalar(select(func.count()).select_from(query.subquery()))
         query = query.order_by(CrmContact.created_at.desc()).offset((params.page - 1) * params.page_size).limit(params.page_size)
         items = list((await self.db.execute(query)).scalars().all())
@@ -48,8 +57,15 @@ class CrmService:
         await self.db.flush()
         return True
 
-    async def list_campaigns(self, tenant_id: UUID, params: PaginationParams) -> PaginatedResponse:
+    async def list_campaigns(
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> PaginatedResponse:
         query = select(MarketingCampaign).where(MarketingCampaign.tenant_id == tenant_id, MarketingCampaign.deleted_at.is_(None))
+        query = filter_by_entry_date(query, MarketingCampaign.created_at, date_from, date_to)
         count = await self.db.scalar(select(func.count()).select_from(query.subquery()))
         query = query.order_by(MarketingCampaign.created_at.desc()).offset((params.page - 1) * params.page_size).limit(params.page_size)
         items = list((await self.db.execute(query)).scalars().all())

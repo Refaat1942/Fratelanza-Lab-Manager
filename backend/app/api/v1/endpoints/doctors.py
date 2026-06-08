@@ -6,6 +6,7 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.doctors import DoctorCreate, DoctorResponse, DoctorUpdate
 from app.services.doctor_service import DoctorService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/doctors", tags=["Doctors"])
 
@@ -20,9 +21,13 @@ async def list_doctors(
     search: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "desc",
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
     params = PaginationParams(page=page, page_size=page_size, search=search, sort_by=sort_by, sort_order=sort_order)
-    result = await DoctorService(db).list_doctors(tenant.id, params)
+    result = await DoctorService(db).list_doctors(
+        tenant.id, params, parse_date_param(date_from), parse_date_param(date_to)
+    )
     return {
         "items": [DoctorResponse.model_validate(d) for d in result.items],
         "total": result.total,

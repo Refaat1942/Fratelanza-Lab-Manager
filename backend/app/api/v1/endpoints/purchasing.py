@@ -7,6 +7,7 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.models.tenant_config import Branch
 from app.schemas.common import MessageResponse, PaginationParams
 from app.services.purchase_service import PurchaseService
+from app.utils.date_filter import parse_date_param
 from sqlalchemy import select
 
 router = APIRouter(prefix="/purchasing", tags=["Purchasing"])
@@ -22,8 +23,15 @@ class POCreate(BaseModel):
 async def list_purchase_orders(
     db: DbSession, tenant: CurrentTenant, user: CurrentUser = require_permission("inventory.read"),
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
-    result = await PurchaseService(db).list_orders(tenant.id, PaginationParams(page=page, page_size=page_size))
+    result = await PurchaseService(db).list_orders(
+        tenant.id,
+        PaginationParams(page=page, page_size=page_size),
+        parse_date_param(date_from),
+        parse_date_param(date_to),
+    )
     return {"items": result.items, "total": result.total, "page": result.page, "page_size": result.page_size, "pages": result.pages}
 
 

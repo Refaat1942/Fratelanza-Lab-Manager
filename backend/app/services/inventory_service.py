@@ -1,3 +1,4 @@
+from datetime import date
 from io import BytesIO
 from typing import Optional
 from uuid import UUID
@@ -11,6 +12,7 @@ from app.models.tenant_config import Branch
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.inventory import InventoryItemCreate, InventoryItemUpdate
 from app.services.audit_service import AuditService
+from app.utils.list_date_filter import filter_by_entry_date
 
 
 class InventoryService:
@@ -19,9 +21,15 @@ class InventoryService:
         self.audit = AuditService(db)
 
     async def list_items(
-        self, tenant_id: UUID, params: PaginationParams, branch_id: Optional[UUID] = None
+        self,
+        tenant_id: UUID,
+        params: PaginationParams,
+        branch_id: Optional[UUID] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> PaginatedResponse:
         query = select(InventoryItem).where(InventoryItem.tenant_id == tenant_id, InventoryItem.deleted_at.is_(None))
+        query = filter_by_entry_date(query, InventoryItem.created_at, date_from, date_to)
         if branch_id:
             query = query.where(InventoryItem.branch_id == branch_id)
         if params.search:

@@ -46,11 +46,11 @@ export default function CrmPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get("/crm/contacts?page_size=100")
+    api.get(`/crm/contacts?page_size=100${queryParams}`)
       .then((res) => setContacts(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 

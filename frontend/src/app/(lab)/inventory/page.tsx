@@ -55,11 +55,11 @@ export default function InventoryPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get("/inventory?page_size=100")
+    api.get(`/inventory?page_size=100${queryParams}`)
       .then((res) => setItems(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 

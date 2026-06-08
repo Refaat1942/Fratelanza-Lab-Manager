@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -14,6 +15,9 @@ class BrandingResponse(BaseModel):
     custom_domain: Optional[str] = None
     report_header_html: Optional[str] = None
     report_footer_html: Optional[str] = None
+    renewal_reminder_days: int = 14
+    renewal_reminder_enabled: bool = True
+    subscription_end_date: Optional[date] = None
 
     model_config = {"from_attributes": True}
 
@@ -28,6 +32,9 @@ class BrandingUpdate(BaseModel):
     accent_color: Optional[str] = Field(None, max_length=20)
     report_header_html: Optional[str] = None
     report_footer_html: Optional[str] = None
+    renewal_reminder_days: Optional[int] = Field(None, ge=1, le=90)
+    renewal_reminder_enabled: Optional[bool] = None
+    subscription_end_date: Optional[date] = None
 
 
 class PublicBrandingResponse(BaseModel):

@@ -1,6 +1,8 @@
 from typing import Optional
 
-from sqlalchemy import Boolean, ForeignKey, String, Text
+from datetime import date
+
+from sqlalchemy import Boolean, Date, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -35,3 +37,6 @@ class TenantBranding(Base, UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin):
     custom_css: Mapped[Optional[str]] = mapped_column(Text)
     report_header_html: Mapped[Optional[str]] = mapped_column(Text)
     report_footer_html: Mapped[Optional[str]] = mapped_column(Text)
+    renewal_reminder_days: Mapped[int] = mapped_column(Integer, default=14)
+    renewal_reminder_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    subscription_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)

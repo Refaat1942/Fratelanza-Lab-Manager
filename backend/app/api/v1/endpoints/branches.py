@@ -1,11 +1,12 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.branches import BranchCreate, BranchResponse, BranchUpdate
 from app.schemas.common import MessageResponse
 from app.services.branch_service import BranchService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/branches", tags=["Branches"])
 
@@ -15,8 +16,12 @@ async def list_branches(
     db: DbSession,
     tenant: CurrentTenant,
     user: CurrentUser = require_permission("settings.manage"),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
-    branches = await BranchService(db).list_branches(tenant.id)
+    branches = await BranchService(db).list_branches(
+        tenant.id, parse_date_param(date_from), parse_date_param(date_to)
+    )
     return [BranchResponse.model_validate(b) for b in branches]
 
 

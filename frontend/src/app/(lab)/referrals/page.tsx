@@ -44,7 +44,7 @@ export default function ReferralsPage() {
   const load = useCallback(() => {
     setLoading(true);
     Promise.all([
-      api.get("/referrals?page_size=100"),
+      api.get(`/referrals?page_size=100${queryParams}`),
       api.get("/doctors?page_size=100"),
       api.get("/patients?page_size=100"),
     ])
@@ -55,7 +55,7 @@ export default function ReferralsPage() {
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 

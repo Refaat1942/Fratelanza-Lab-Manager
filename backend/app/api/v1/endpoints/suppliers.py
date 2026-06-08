@@ -6,6 +6,7 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.suppliers import SupplierCreate, SupplierResponse, SupplierUpdate
 from app.services.supplier_service import SupplierService
+from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
 
@@ -18,9 +19,13 @@ async def list_suppliers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: str | None = None,
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
 ):
     params = PaginationParams(page=page, page_size=page_size, search=search)
-    result = await SupplierService(db).list_suppliers(tenant.id, params)
+    result = await SupplierService(db).list_suppliers(
+        tenant.id, params, parse_date_param(date_from), parse_date_param(date_to)
+    )
     return {
         "items": [SupplierResponse.model_validate(s) for s in result.items],
         "total": result.total,

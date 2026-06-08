@@ -19,6 +19,7 @@ const reports = [
   { id: "referrals", en: "Doctor Referrals", ar: "إحالات الأطباء" },
   { id: "patients", en: "Patient Statistics", ar: "إحصائيات المرضى" },
   { id: "branches", en: "Branch Performance", ar: "أداء الفروع" },
+  { id: "labs_done", en: "Completed Lab Tests", ar: "التحاليل المنجزة" },
 ];
 
 function defaultRange() {

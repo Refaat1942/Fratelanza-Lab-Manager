@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -5,18 +6,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tenant_config import Branch
 from app.schemas.branches import BranchCreate, BranchUpdate
+from app.utils.list_date_filter import filter_by_entry_date
 
 
 class BranchService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def list_branches(self, tenant_id: UUID) -> list[Branch]:
-        result = await self.db.execute(
+    async def list_branches(
+        self,
+        tenant_id: UUID,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> list[Branch]:
+        query = (
             select(Branch)
             .where(Branch.tenant_id == tenant_id, Branch.deleted_at.is_(None))
             .order_by(Branch.is_headquarters.desc(), Branch.name.asc())
         )
+        query = filter_by_entry_date(query, Branch.created_at, date_from, date_to)
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def create_branch(self, tenant_id: UUID, data: BranchCreate) -> Branch:

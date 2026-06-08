@@ -43,7 +43,7 @@ export default function PurchasingPage() {
   const load = useCallback(() => {
     setLoading(true);
     Promise.all([
-      api.get("/purchasing/orders?page_size=100"),
+      api.get(`/purchasing/orders?page_size=100${queryParams}`),
       api.get("/suppliers?page_size=100"),
     ])
       .then(([ord, sup]) => {
@@ -52,7 +52,7 @@ export default function PurchasingPage() {
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [queryParams]);
 
   useEffect(() => { load(); }, [load]);
 
