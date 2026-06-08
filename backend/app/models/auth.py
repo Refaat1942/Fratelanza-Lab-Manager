@@ -19,6 +19,7 @@ class User(Base, UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDeleteMix
     phone: Mapped[Optional[str]] = mapped_column(String(50))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_tenant_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
     default_branch_id: Mapped[Optional[str]] = mapped_column(UUID(as_uuid=True), ForeignKey("branches.id"))
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     locale: Mapped[str] = mapped_column(String(5), default="ar")

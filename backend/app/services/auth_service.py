@@ -134,10 +134,14 @@ class AuthService:
         )
 
     async def create_user(self, tenant_id: UUID, data: UserCreate) -> User:
+        from app.schemas.auth import RESERVED_USERNAMES
         from app.services.tenant_limits_service import TenantLimitsService
 
-        await TenantLimitsService(self.db).assert_can_add_user(tenant_id)
+        if not data.is_system:
+            await TenantLimitsService(self.db).assert_can_add_user(tenant_id)
         username = data.username.strip().lower()
+        if username in RESERVED_USERNAMES and not data.is_system:
+            raise ValueError(f"Username '{username}' is reserved and cannot be used")
         user = User(
             tenant_id=tenant_id,
             username=username,
@@ -147,6 +151,7 @@ class AuthService:
             full_name_ar=data.full_name_ar,
             phone=data.phone,
             is_tenant_admin=data.is_tenant_admin,
+            is_system=data.is_system,
             default_branch_id=data.default_branch_id,
             locale=data.locale,
         )

@@ -122,6 +122,11 @@ export default function UsersPage() {
                 : `${limits.current_users} / ${limits.max_users} users`
               : `${users.length} ${locale === "ar" ? "مستخدم" : "users"}`}
           </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {locale === "ar"
+              ? "حسابات النظام والإدارة الأساسية مخفية من هذه القائمة."
+              : "System and bootstrap admin accounts are hidden from this list."}
+          </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger

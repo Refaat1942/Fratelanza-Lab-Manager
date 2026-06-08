@@ -68,7 +68,10 @@ async def deactivate_user(
 ):
     if str(user.id) == str(user_id):
         raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
-    ok = await UserService(db).deactivate_user(tenant.id, user_id)
+    try:
+        ok = await UserService(db).deactivate_user(tenant.id, user_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not ok:
         raise HTTPException(status_code=404, detail="User not found")
     return MessageResponse(message="User deactivated", message_ar="تم تعطيل المستخدم")

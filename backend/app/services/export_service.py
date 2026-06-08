@@ -262,7 +262,9 @@ class ExportService:
 
     async def _export_users(self, tenant_id: UUID, date_from, date_to):
         from app.models.auth import User
-        q = select(User).where(User.tenant_id == tenant_id, User.deleted_at.is_(None))
+        q = select(User).where(
+            User.tenant_id == tenant_id, User.deleted_at.is_(None), User.is_system.is_(False)
+        )
         for clause in apply_date_range(User.created_at, date_from, date_to):
             q = q.where(clause)
         result = await self.db.execute(q.order_by(User.full_name))

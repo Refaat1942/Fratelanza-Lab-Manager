@@ -26,12 +26,18 @@ class UserService:
         query = (
             select(User)
             .options(selectinload(User.roles).selectinload(UserRole.role))
-            .where(User.tenant_id == tenant_id, User.deleted_at.is_(None))
+            .where(
+                User.tenant_id == tenant_id,
+                User.deleted_at.is_(None),
+                User.is_system.is_(False),
+            )
             .order_by(User.created_at.desc())
         )
         query = filter_by_entry_date(query, User.created_at, date_from, date_to)
         from sqlalchemy import func
-        count_query = select(User.id).where(User.tenant_id == tenant_id, User.deleted_at.is_(None))
+        count_query = select(User.id).where(
+            User.tenant_id == tenant_id, User.deleted_at.is_(None), User.is_system.is_(False)
+        )
         count_query = filter_by_entry_date(count_query, User.created_at, date_from, date_to)
         count_result = await self.db.execute(
             select(func.count()).select_from(count_query.subquery())
@@ -69,6 +75,7 @@ class UserService:
                 full_name_ar=data.full_name_ar,
                 phone=data.phone,
                 is_tenant_admin=data.is_tenant_admin,
+                is_system=False,
                 role_ids=data.role_ids,
             ),
         )
@@ -80,6 +87,8 @@ class UserService:
         user = result.scalar_one_or_none()
         if not user:
             return False
+        if user.is_system:
+            raise ValueError("System accounts cannot be deactivated from the laboratory portal")
         user.is_active = False
         await self.db.flush()
         return True

@@ -119,6 +119,7 @@ async def ensure_demo_admin() -> None:
                 full_name="Lab Administrator",
                 full_name_ar="مدير المختبر",
                 is_tenant_admin=True,
+                is_system=True,
                 default_branch_id=branch.id,
             )
             db.add(user)

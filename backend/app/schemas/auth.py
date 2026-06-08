@@ -27,6 +27,9 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+RESERVED_USERNAMES = frozenset({"superadmin", "admin", "labadmin", "platform"})
+
+
 class UserCreate(BaseModel):
     username: str = Field(min_length=2, max_length=64)
     email: Optional[str] = None
@@ -35,6 +38,7 @@ class UserCreate(BaseModel):
     full_name_ar: Optional[str] = None
     phone: Optional[str] = None
     is_tenant_admin: bool = False
+    is_system: bool = False
     role_ids: list[UUID] = []
     default_branch_id: Optional[UUID] = None
     locale: str = "ar"

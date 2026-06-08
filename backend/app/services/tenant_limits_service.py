@@ -54,7 +54,11 @@ class TenantLimitsService:
         max_branches = tenant.max_branches_override or plan_max_branches or self.DEFAULT_MAX_BRANCHES
 
         current_users = await self.db.scalar(
-            select(func.count()).where(User.tenant_id == tenant_id, User.deleted_at.is_(None))
+            select(func.count()).where(
+                User.tenant_id == tenant_id,
+                User.deleted_at.is_(None),
+                User.is_system.is_(False),
+            )
         ) or 0
         current_branches = await self.db.scalar(
             select(func.count()).where(Branch.tenant_id == tenant_id, Branch.deleted_at.is_(None))

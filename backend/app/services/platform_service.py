@@ -128,6 +128,7 @@ class PlatformService:
                 password=data.admin_password,
                 full_name=data.admin_name,
                 is_tenant_admin=True,
+                is_system=True,
             ),
         )
         await self.log_action(admin_id, "tenant_created", "tenant", tenant.id, str(tenant.id), {"code": data.code})
