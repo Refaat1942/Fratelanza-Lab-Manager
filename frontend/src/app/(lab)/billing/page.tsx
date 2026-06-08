@@ -2,19 +2,22 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, Eye, Trash2, MoreHorizontal } from "lucide-react";
+import { Plus, Eye, Trash2, MoreHorizontal, Printer, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
+import { useBrandingStore } from "@/stores/branding-store";
 import { t } from "@/lib/i18n";
 import { api, getApiError } from "@/lib/api";
+import { displayName, resolveAssetUrl } from "@/lib/branding";
 import { toast } from "sonner";
 
 interface Invoice {
@@ -27,6 +30,7 @@ interface Invoice {
   paid_amount: number;
   status: string;
   issued_at?: string;
+  created_at?: string;
 }
 
 interface InvoiceDetail extends Invoice {
@@ -49,6 +53,7 @@ interface TestItem { id: string; name: string; price: number; }
 
 export default function BillingPage() {
   const locale = useAuthStore((s) => s.locale);
+  const branding = useBrandingStore((s) => s.branding);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -61,6 +66,10 @@ export default function BillingPage() {
   const [discount, setDiscount] = useState("0");
   const [payAmount, setPayAmount] = useState("");
   const [saving, setSaving] = useState(false);
+  const [receiptDesign, setReceiptDesign] = useState({
+    header: locale === "ar" ? "شكراً لاختياركم مختبرنا" : "Thank you for choosing our laboratory",
+    footer: locale === "ar" ? "نتمنى لكم دوام الصحة" : "We wish you good health",
+  });
 
   const load = useCallback(() => {
     setLoading(true);
@@ -81,6 +90,17 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("labmaster_receipt_design");
+    if (saved) {
+      try {
+        setReceiptDesign(JSON.parse(saved));
+      } catch {
+        localStorage.removeItem("labmaster_receipt_design");
+      }
+    }
+  }, []);
 
   const createInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,6 +147,16 @@ export default function BillingPage() {
     }
   };
 
+  const saveReceiptDesign = () => {
+    localStorage.setItem("labmaster_receipt_design", JSON.stringify(receiptDesign));
+    toast.success(locale === "ar" ? "تم حفظ تصميم الإيصال" : "Receipt design saved");
+  };
+
+  const printReceipt = () => {
+    if (!detail) return;
+    window.print();
+  };
+
   const deleteInvoice = async (id: string) => {
     if (!confirm(locale === "ar" ? "إلغاء الفاتورة؟" : "Cancel invoice?")) return;
     try {
@@ -158,7 +188,7 @@ export default function BillingPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => viewDetail(row.original.id)}>
-              <Eye className="mr-2 h-4 w-4" />{locale === "ar" ? "عرض" : "View"}
+              <Eye className="me-2 h-4 w-4" />{locale === "ar" ? "عرض" : "View"}
             </DropdownMenuItem>
             {row.original.status !== "paid" && (
               <DropdownMenuItem onClick={async () => {
@@ -173,7 +203,7 @@ export default function BillingPage() {
               </DropdownMenuItem>
             )}
             <DropdownMenuItem className="text-destructive" onClick={() => deleteInvoice(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+              <Trash2 className="me-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -192,7 +222,7 @@ export default function BillingPage() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+            <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{locale === "ar" ? "فاتورة جديدة" : "New Invoice"}</DialogTitle></DialogHeader>
@@ -200,7 +230,7 @@ export default function BillingPage() {
               <div className="space-y-2">
                 <Label>{locale === "ar" ? "المريض" : "Patient"}</Label>
                 <Select value={patientId} onValueChange={(v) => v && setPatientId(v)}>
-                  <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={locale === "ar" ? "اختر المريض" : "Select patient"} /></SelectTrigger>
                   <SelectContent>
                     {patients.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}
                   </SelectContent>
@@ -209,7 +239,7 @@ export default function BillingPage() {
               <div className="space-y-2">
                 <Label>{locale === "ar" ? "التحليل" : "Test"}</Label>
                 <Select value={testId} onValueChange={(v) => v && setTestId(v)}>
-                  <SelectTrigger><SelectValue placeholder="Select test" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={locale === "ar" ? "اختر التحليل" : "Select test"} /></SelectTrigger>
                   <SelectContent>
                     {tests.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} — EGP {t.price}</SelectItem>)}
                   </SelectContent>
@@ -220,7 +250,7 @@ export default function BillingPage() {
                 <Input type="number" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} />
               </div>
               <Button type="submit" className="w-full" disabled={saving || !patientId || !testId}>
-                {saving ? "..." : t(locale, "save")}
+                {saving ? t(locale, "saving") : t(locale, "save")}
               </Button>
             </form>
           </DialogContent>
@@ -251,7 +281,14 @@ export default function BillingPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={invoices} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={invoices}
+          searchPlaceholder={t(locale, "search")}
+          dateAccessor={(invoice) => invoice.issued_at || invoice.created_at}
+          exportFileName="billing.xls"
+          locale={locale}
+        />
       )}
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
@@ -262,6 +299,12 @@ export default function BillingPage() {
                 <DialogTitle>{detail.invoice_number} — {detail.patient_name}</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" onClick={printReceipt}>
+                    <Printer className="me-2 h-4 w-4" />
+                    {locale === "ar" ? "طباعة إيصال العميل" : "Print Customer Receipt"}
+                  </Button>
+                </div>
                 <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
                   <div><span className="text-muted-foreground">Subtotal</span><p className="font-medium">EGP {detail.subtotal?.toLocaleString()}</p></div>
                   <div><span className="text-muted-foreground">Discount</span><p className="font-medium">EGP {detail.discount?.toLocaleString()}</p></div>
@@ -298,11 +341,83 @@ export default function BillingPage() {
                     <Button onClick={recordPayment}>{locale === "ar" ? "تسجيل دفع" : "Record Payment"}</Button>
                   </div>
                 )}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">{locale === "ar" ? "تصميم الإيصال" : "Receipt Design"}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="space-y-2">
+                      <Label>{locale === "ar" ? "نص أعلى الإيصال" : "Receipt header text"}</Label>
+                      <Textarea
+                        rows={2}
+                        value={receiptDesign.header}
+                        onChange={(event) => setReceiptDesign({ ...receiptDesign, header: event.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{locale === "ar" ? "نص أسفل الإيصال" : "Receipt footer text"}</Label>
+                      <Textarea
+                        rows={2}
+                        value={receiptDesign.footer}
+                        onChange={(event) => setReceiptDesign({ ...receiptDesign, footer: event.target.value })}
+                      />
+                    </div>
+                    <Button type="button" variant="outline" onClick={saveReceiptDesign}>
+                      <Save className="me-2 h-4 w-4" />
+                      {locale === "ar" ? "حفظ تصميم الإيصال" : "Save Receipt Design"}
+                    </Button>
+                  </CardContent>
+                </Card>
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      {detail && (
+        <div id="receipt-print-root" dir={locale === "ar" ? "rtl" : "ltr"}>
+          <div className="receipt-paper">
+            <div className="receipt-header">
+              {branding.logo_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={resolveAssetUrl(branding.logo_url) || ""} alt={displayName(branding, locale)} />
+              )}
+              <h1>{displayName(branding, locale)}</h1>
+              <p>{receiptDesign.header}</p>
+            </div>
+            <div className="receipt-meta">
+              <span>{locale === "ar" ? "رقم الفاتورة" : "Invoice"}: {detail.invoice_number}</span>
+              <span>{new Date(detail.issued_at || detail.created_at || Date.now()).toLocaleString()}</span>
+              <span>{locale === "ar" ? "العميل" : "Customer"}: {detail.patient_name}</span>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>{locale === "ar" ? "البند" : "Item"}</th>
+                  <th>{locale === "ar" ? "الكمية" : "Qty"}</th>
+                  <th>{locale === "ar" ? "الإجمالي" : "Total"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.items.map((item, index) => (
+                  <tr key={index}>
+                    <td>{item.description}</td>
+                    <td>{item.quantity}</td>
+                    <td>EGP {(item.total ?? item.unit_price * item.quantity).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="receipt-totals">
+              <div><span>{locale === "ar" ? "الخصم" : "Discount"}</span><strong>EGP {(detail.discount || 0).toLocaleString()}</strong></div>
+              <div><span>{locale === "ar" ? "الإجمالي" : "Total"}</span><strong>EGP {detail.total.toLocaleString()}</strong></div>
+              <div><span>{locale === "ar" ? "المدفوع" : "Paid"}</span><strong>EGP {detail.paid_amount.toLocaleString()}</strong></div>
+              <div><span>{locale === "ar" ? "المتبقي" : "Balance"}</span><strong>EGP {detail.balance.toLocaleString()}</strong></div>
+            </div>
+            <p className="receipt-footer">{receiptDesign.footer}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

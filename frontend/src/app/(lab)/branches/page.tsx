@@ -29,6 +29,7 @@ interface Branch {
   phone?: string;
   is_headquarters: boolean;
   is_active: boolean;
+  created_at?: string;
 }
 
 const emptyBranch = {
@@ -128,10 +129,10 @@ export default function BranchesPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => openEdit(row.original)}>
-              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+              <Pencil className="me-2 h-4 w-4" />{t(locale, "edit")}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deleteBranch(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+              <Trash2 className="me-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -163,7 +164,7 @@ export default function BranchesPage() {
               />
             }
           >
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="me-2 h-4 w-4" />
             {t(locale, "create")}
           </DialogTrigger>
           <DialogContent className="max-w-lg">
@@ -202,7 +203,7 @@ export default function BranchesPage() {
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={saving}>
-                {saving ? "Saving..." : t(locale, "save")}
+                {saving ? t(locale, "saving") : t(locale, "save")}
               </Button>
             </form>
           </DialogContent>
@@ -213,7 +214,14 @@ export default function BranchesPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : (
-        <DataTable columns={columns} data={branches} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={branches}
+          searchPlaceholder={t(locale, "search")}
+          dateAccessor="created_at"
+          exportFileName="branches.xls"
+          locale={locale}
+        />
       )}
     </div>
   );

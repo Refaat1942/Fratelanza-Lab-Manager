@@ -159,13 +159,13 @@ export default function PatientsPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => setViewPatient(row.original)}>
-              <Eye className="mr-2 h-4 w-4" />{locale === "ar" ? "عرض" : "View"}
+              <Eye className="me-2 h-4 w-4" />{locale === "ar" ? "عرض" : "View"}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => openEdit(row.original)}>
-              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+              <Pencil className="me-2 h-4 w-4" />{t(locale, "edit")}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deletePatient(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+              <Trash2 className="me-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -173,8 +173,8 @@ export default function PatientsPage() {
     },
   ];
 
-  const PatientForm = () => (
-    <form onSubmit={savePatient} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+  const patientForm = (
+    <form onSubmit={savePatient} className="space-y-4 max-h-[70vh] overflow-y-auto pe-1">
       <Tabs defaultValue="personal">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="personal">{locale === "ar" ? "شخصي" : "Personal"}</TabsTrigger>
@@ -265,7 +265,7 @@ export default function PatientsPage() {
         </TabsContent>
       </Tabs>
       <Button type="submit" className="w-full" disabled={saving}>
-        {saving ? "Saving..." : t(locale, "save")}
+        {saving ? t(locale, "saving") : t(locale, "save")}
       </Button>
     </form>
   );
@@ -279,13 +279,13 @@ export default function PatientsPage() {
         </div>
         <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setEditId(null); setForm(emptyPatient); } }}>
           <DialogTrigger render={<Button className="shadow-md" />}>
-            <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+            <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{editId ? (locale === "ar" ? "تعديل مريض" : "Edit Patient") : (locale === "ar" ? "مريض جديد" : "New Patient")}</DialogTitle>
             </DialogHeader>
-            <PatientForm />
+            {patientForm}
           </DialogContent>
         </Dialog>
       </div>
@@ -314,7 +314,14 @@ export default function PatientsPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : (
-        <DataTable columns={columns} data={patients} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={patients}
+          searchPlaceholder={t(locale, "search")}
+          dateAccessor="created_at"
+          exportFileName="patients.xls"
+          locale={locale}
+        />
       )}
     </div>
   );

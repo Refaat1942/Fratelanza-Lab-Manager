@@ -104,7 +104,7 @@ export default function ReferralsPage() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+            <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{locale === "ar" ? "إحالة جديدة" : "New Referral"}</DialogTitle></DialogHeader>
@@ -112,7 +112,7 @@ export default function ReferralsPage() {
               <div className="space-y-2">
                 <Label>{locale === "ar" ? "الطبيب" : "Doctor"}</Label>
                 <Select value={doctorId} onValueChange={(v) => v && setDoctorId(v)}>
-                  <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={locale === "ar" ? "اختر الطبيب" : "Select doctor"} /></SelectTrigger>
                   <SelectContent>
                     {doctors.map((d) => <SelectItem key={d.id} value={d.id}>{d.full_name}</SelectItem>)}
                   </SelectContent>
@@ -121,7 +121,7 @@ export default function ReferralsPage() {
               <div className="space-y-2">
                 <Label>{locale === "ar" ? "المريض" : "Patient"}</Label>
                 <Select value={patientId} onValueChange={(v) => v && setPatientId(v)}>
-                  <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={locale === "ar" ? "اختر المريض" : "Select patient"} /></SelectTrigger>
                   <SelectContent>
                     {patients.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}
                   </SelectContent>
@@ -139,7 +139,14 @@ export default function ReferralsPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={referrals} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={referrals}
+          searchPlaceholder={t(locale, "search")}
+          dateAccessor="referral_date"
+          exportFileName="referrals.xls"
+          locale={locale}
+        />
       )}
     </div>
   );

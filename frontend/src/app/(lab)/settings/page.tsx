@@ -162,9 +162,9 @@ export default function SettingsPage() {
                     disabled={uploading}
                   >
                     {uploading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="me-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <Upload className="mr-2 h-4 w-4" />
+                      <Upload className="me-2 h-4 w-4" />
                     )}
                     {locale === "ar" ? "اختر صورة الشعار" : "Choose logo image"}
                   </Button>
@@ -202,7 +202,7 @@ export default function SettingsPage() {
                 </div>
 
                 <Button onClick={saveBranding} disabled={saving}>
-                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {saving ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
                   {t(locale, "save")}
                 </Button>
               </CardContent>

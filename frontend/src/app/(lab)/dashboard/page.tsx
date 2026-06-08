@@ -18,6 +18,7 @@ import { t } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { PageHeader } from "@/components/layout/page-header";
 import { AnimatedStagger, AnimatedItem } from "@/components/layout/animated-page";
+import { DateRangeFilter, type DateRange } from "@/components/filters/date-range-filter";
 
 interface Insights {
   stats: {
@@ -48,13 +49,19 @@ export default function DashboardPage() {
   const user = useAuthStore((s) => s.user);
   const [data, setData] = useState<Insights | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState<DateRange>({ from: "", to: "" });
 
   useEffect(() => {
-    api.get("/dashboard/insights")
+    const params = new URLSearchParams();
+    if (dateRange.from) params.set("date_from", dateRange.from);
+    if (dateRange.to) params.set("date_to", dateRange.to);
+
+    setLoading(true);
+    api.get(`/dashboard/insights${params.toString() ? `?${params}` : ""}`)
       .then((res) => setData(res.data))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [dateRange]);
 
   if (loading) {
     return (
@@ -99,7 +106,9 @@ export default function DashboardPage() {
             ? `مرحباً ${user?.full_name_ar || user?.full_name} — رؤى وتحليلات المختبر`
             : `Welcome ${user?.full_name} — laboratory insights & analytics`
         }
-      />
+      >
+        <DateRangeFilter value={dateRange} onChange={setDateRange} locale={locale} />
+      </PageHeader>
 
       {/* Financial KPIs */}
       <AnimatedStagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

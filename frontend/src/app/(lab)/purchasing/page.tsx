@@ -105,7 +105,7 @@ export default function PurchasingPage() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger render={<Button />}>
-            <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+            <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{locale === "ar" ? "أمر شراء جديد" : "New Purchase Order"}</DialogTitle></DialogHeader>
@@ -113,7 +113,7 @@ export default function PurchasingPage() {
               <div className="space-y-2">
                 <Label>{locale === "ar" ? "المورد" : "Supplier"}</Label>
                 <Select value={supplierId} onValueChange={(v) => v && setSupplierId(v)}>
-                  <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder={locale === "ar" ? "اختر المورد" : "Select supplier"} /></SelectTrigger>
                   <SelectContent>
                     {suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                   </SelectContent>
@@ -131,7 +131,14 @@ export default function PurchasingPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={orders} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={orders}
+          searchPlaceholder={t(locale, "search")}
+          dateAccessor="order_date"
+          exportFileName="purchasing.xls"
+          locale={locale}
+        />
       )}
     </div>
   );

@@ -32,6 +32,7 @@ interface Test {
   turnaround_hours: number;
   is_active: boolean;
   category_id: string;
+  created_at?: string;
 }
 
 interface Category {
@@ -158,10 +159,10 @@ export default function TestsPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => openEdit(row.original)}>
-              <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
+              <Pencil className="me-2 h-4 w-4" />{t(locale, "edit")}
             </DropdownMenuItem>
             <DropdownMenuItem className="text-destructive" onClick={() => deleteTest(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />{t(locale, "delete")}
+              <Trash2 className="me-2 h-4 w-4" />{t(locale, "delete")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -180,7 +181,7 @@ export default function TestsPage() {
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyTest); } }}>
           <DialogTrigger render={<Button className="shadow-md" />}>
-            <Plus className="mr-2 h-4 w-4" />
+            <Plus className="me-2 h-4 w-4" />
             {t(locale, "create")}
           </DialogTrigger>
           <DialogContent className="max-w-lg">
@@ -226,7 +227,7 @@ export default function TestsPage() {
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={saving || !form.category_id}>
-                {saving ? "Saving..." : t(locale, "save")}
+                {saving ? t(locale, "saving") : t(locale, "save")}
               </Button>
             </form>
           </DialogContent>
@@ -237,7 +238,14 @@ export default function TestsPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : (
-        <DataTable columns={columns} data={tests} searchPlaceholder={t(locale, "search")} onExport={() => toast.info("Export")} />
+        <DataTable
+          columns={columns}
+          data={tests}
+          searchPlaceholder={t(locale, "search")}
+          dateAccessor="created_at"
+          exportFileName="tests.xls"
+          locale={locale}
+        />
       )}
     </div>
   );

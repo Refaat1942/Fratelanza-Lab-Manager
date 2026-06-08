@@ -23,6 +23,7 @@ interface UserRow {
   is_active: boolean;
   is_tenant_admin: boolean;
   last_login_at?: string;
+  created_at?: string;
 }
 
 export default function UsersPage() {
@@ -82,7 +83,7 @@ export default function UsersPage() {
       header: "Roles",
       cell: ({ row }) => row.original.is_tenant_admin
         ? <Badge>Admin</Badge>
-        : row.original.roles.map((r) => <Badge key={r} variant="outline" className="mr-1">{r}</Badge>),
+        : row.original.roles.map((r) => <Badge key={r} variant="outline" className="me-1">{r}</Badge>),
     },
     {
       accessorKey: "is_active",
@@ -98,7 +99,7 @@ export default function UsersPage() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem className="text-destructive" onClick={() => deactivateUser(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />{locale === "ar" ? "تعطيل" : "Deactivate"}
+              <Trash2 className="me-2 h-4 w-4" />{locale === "ar" ? "تعطيل" : "Deactivate"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -125,7 +126,7 @@ export default function UsersPage() {
               <Button disabled={!!limits && limits.current_users >= limits.max_users} />
             }
           >
-            <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
+            <Plus className="me-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>{locale === "ar" ? "مستخدم جديد" : "New User"}</DialogTitle></DialogHeader>
@@ -150,7 +151,14 @@ export default function UsersPage() {
       {loading ? (
         <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" /></div>
       ) : (
-        <DataTable columns={columns} data={users} searchPlaceholder={t(locale, "search")} />
+        <DataTable
+          columns={columns}
+          data={users}
+          searchPlaceholder={t(locale, "search")}
+          dateAccessor={(user) => user.last_login_at || user.created_at}
+          exportFileName="users.xls"
+          locale={locale}
+        />
       )}
     </div>
   );

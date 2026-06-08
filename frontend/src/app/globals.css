@@ -244,3 +244,103 @@
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+
+#receipt-print-root,
+#daily-operations-print-root {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #receipt-print-root,
+  #receipt-print-root *,
+  #daily-operations-print-root,
+  #daily-operations-print-root * {
+    visibility: visible;
+  }
+
+  #receipt-print-root,
+  #daily-operations-print-root {
+    display: block;
+    position: absolute;
+    inset: 0;
+    background: white;
+    color: black;
+    padding: 24px;
+  }
+
+  .receipt-paper,
+  .daily-operations-paper {
+    margin: 0 auto;
+    max-width: 760px;
+    color: black;
+    font-family: Arial, sans-serif;
+  }
+
+  .receipt-header,
+  .daily-operations-header {
+    text-align: center;
+    border-bottom: 1px solid #111;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+
+  .receipt-header img,
+  .daily-operations-header img {
+    display: block;
+    max-height: 72px;
+    max-width: 160px;
+    margin: 0 auto 8px;
+    object-fit: contain;
+  }
+
+  .receipt-meta,
+  .daily-operations-meta {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 16px;
+    font-size: 13px;
+  }
+
+  .receipt-paper table,
+  .daily-operations-paper table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13px;
+  }
+
+  .receipt-paper th,
+  .receipt-paper td,
+  .daily-operations-paper th,
+  .daily-operations-paper td {
+    border: 1px solid #111;
+    padding: 8px;
+    text-align: start;
+  }
+
+  .receipt-totals,
+  .daily-operations-totals {
+    display: grid;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .receipt-totals div,
+  .daily-operations-totals div {
+    display: flex;
+    justify-content: space-between;
+    border-bottom: 1px dotted #777;
+    padding-bottom: 6px;
+  }
+
+  .receipt-footer,
+  .daily-operations-footer {
+    margin-top: 24px;
+    text-align: center;
+    font-size: 13px;
+  }
+}
