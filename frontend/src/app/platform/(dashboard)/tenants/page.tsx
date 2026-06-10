@@ -123,8 +123,16 @@ export default function TenantsPage() {
 
   const createTenant = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.plan_id) {
+      toast.error(locale === "ar" ? "اختر الباقة" : "Select a subscription plan");
+      return;
+    }
     try {
-      await api.post("/platform/tenants", form);
+      await api.post("/platform/tenants", {
+        ...form,
+        code: form.code.trim().toLowerCase(),
+        admin_username: form.admin_username.trim().toLowerCase(),
+      });
       toast.success(locale === "ar" ? "تم إنشاء المختبر" : "Laboratory created");
       setOpen(false);
       setForm(emptyForm);

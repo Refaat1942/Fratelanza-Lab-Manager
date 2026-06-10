@@ -100,14 +100,15 @@ class PlatformService:
             raise ValueError("Plan not found")
 
         code = data.code.strip().lower()
+        admin_username = data.admin_username.strip().lower()
         tenant = Tenant(
             code=code,
             name=data.name,
             name_ar=data.name_ar,
-            email=data.email,
+            email=(data.email or "").strip() or f"{code}@labmaster.local",
             phone=data.phone,
             tax_number=data.tax_number,
-            status=TenantStatus.TRIAL,
+            status=TenantStatus.ACTIVE,
             database_name=tenant_database_name(code) if settings.TENANT_DATABASE_PER_CUSTOMER else None,
         )
         self.db.add(tenant)
@@ -147,7 +148,7 @@ class PlatformService:
             await AuthService(self.db, tenant_db).create_user(
                 tenant.id,
                 UserCreate(
-                    username=data.admin_username,
+                    username=admin_username,
                     password=data.admin_password,
                     full_name=data.admin_name,
                     is_tenant_admin=True,
@@ -157,6 +158,7 @@ class PlatformService:
             await tenant_db.commit()
 
         await self.log_action(admin_id, "tenant_created", "tenant", tenant.id, str(tenant.id), {"code": code})
+        await self.db.flush()
         return tenant
 
     async def _tenant_db_session(self, tenant: Tenant):
