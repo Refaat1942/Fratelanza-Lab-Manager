@@ -6,7 +6,10 @@ server {
     listen [::]:80;
     server_name __LABMASTER_DOMAIN__;
 
-    # Certbot will add HTTPS redirect after SSL is issued
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        allow all;
+    }
 
     client_max_body_size 50M;
 
