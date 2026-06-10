@@ -16,6 +16,22 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://labmaster:labmaster@localhost:5432/labmaster"
     DATABASE_URL_SYNC: str = "postgresql://labmaster:labmaster@localhost:5432/labmaster"
 
+    # Platform registry DB (tenants, subscriptions, platform admins). Defaults to DATABASE_URL.
+    PLATFORM_DATABASE_URL: str | None = None
+    PLATFORM_DATABASE_URL_SYNC: str | None = None
+
+    # Each customer laboratory gets its own PostgreSQL database when enabled.
+    TENANT_DATABASE_PER_CUSTOMER: bool = True
+    TENANT_DATABASE_PREFIX: str = "labmaster_tenant_"
+
+    @property
+    def platform_database_url(self) -> str:
+        return self.PLATFORM_DATABASE_URL or self.DATABASE_URL
+
+    @property
+    def platform_database_url_sync(self) -> str:
+        return self.PLATFORM_DATABASE_URL_SYNC or self.DATABASE_URL_SYNC
+
     SECRET_KEY: str = "change-me-in-production-use-openssl-rand-hex-32"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30

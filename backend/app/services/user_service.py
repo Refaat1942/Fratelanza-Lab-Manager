@@ -66,7 +66,7 @@ class UserService:
 
     async def create_user(self, tenant_id: UUID, data: TenantUserCreate) -> User:
         from app.schemas.auth import UserCreate
-        return await AuthService(self.db).create_user(
+        return await AuthService(tenant_db=self.db).create_user(
             tenant_id,
             UserCreate(
                 username=data.username,

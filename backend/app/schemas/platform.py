@@ -83,6 +83,7 @@ class TenantResponse(BaseModel):
     custom_domain: Optional[str] = None
     max_users_override: Optional[int] = None
     max_branches_override: Optional[int] = None
+    database_name: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

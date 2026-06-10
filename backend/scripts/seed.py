@@ -1,4 +1,4 @@
-"""Seed database with initial platform data, permissions, plans, and demo tenant."""
+"""Seed platform registry and demo laboratory (dedicated tenant DB when enabled)."""
 
 import asyncio
 import sys
@@ -9,7 +9,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select
 
+from app.core.config import get_settings
 from app.core.security import get_password_hash
+from app.db.manager import get_database_manager, tenant_database_name
 from app.db.session import async_session_factory
 from app.models.auth import Permission, Role, RolePermission, User, UserRole
 from app.models.platform import (
@@ -29,7 +31,10 @@ from app.models.inventory import InventoryBatch, InventoryCategory, InventoryIte
 from app.models.orders import LabOrder, LabOrderItem, LabResult, OrderStatus, ResultStatus
 from app.models.patients import Gender, Patient, PatientVisit, VisitStatus
 from app.models.doctors import Doctor
-from app.models.tests import Test
+from app.services.tenant_provisioning_service import TenantProvisioningService
+
+settings = get_settings()
+manager = get_database_manager()
 
 PERMISSIONS = [
     ("patients.read", "patients", "read", "View patients", "عرض المرضى"),
@@ -102,14 +107,225 @@ EGYPTIAN_TESTS = [
 ]
 
 
+async def seed_tenant_data(db, tenant: Tenant) -> None:
+    perm_objects = []
+    for code, module, action, desc, desc_ar in PERMISSIONS:
+        p = Permission(code=code, module=module, action=action, description=desc, description_ar=desc_ar)
+        db.add(p)
+        perm_objects.append(p)
+    await db.flush()
+
+    branch = Branch(
+        tenant_id=tenant.id,
+        code="HQ",
+        name="Main Branch - Cairo",
+        name_ar="الفرع الرئيسي - القاهرة",
+        city="Cairo",
+        governorate="Cairo",
+        is_headquarters=True,
+    )
+    db.add(branch)
+    db.add(
+        TenantBranding(
+            tenant_id=tenant.id,
+            company_name="Demo Medical Laboratory",
+            company_name_ar="مختبر العرض الطبي",
+            primary_color="#1e3a5f",
+        )
+    )
+    await db.flush()
+
+    admin_role = Role(tenant_id=tenant.id, name="Administrator", name_ar="مدير النظام", is_system=True)
+    reception_role = Role(tenant_id=tenant.id, name="Receptionist", name_ar="الاستقبال", is_system=True)
+    lab_role = Role(tenant_id=tenant.id, name="Lab Technician", name_ar="فني المختبر", is_system=True)
+    db.add_all([admin_role, reception_role, lab_role])
+    await db.flush()
+
+    for p in perm_objects:
+        db.add(RolePermission(role_id=admin_role.id, permission_id=p.id))
+
+    admin = User(
+        tenant_id=tenant.id,
+        username="labadmin",
+        email=None,
+        password_hash=get_password_hash("Demo@123"),
+        full_name="Lab Administrator",
+        full_name_ar="مدير المختبر",
+        is_tenant_admin=True,
+        is_system=True,
+        default_branch_id=branch.id,
+    )
+    db.add(admin)
+    await db.flush()
+    db.add(UserRole(user_id=admin.id, role_id=admin_role.id))
+
+    for sku, name, name_ar, cat, unit, cost in EGYPTIAN_INVENTORY:
+        item = InventoryItem(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            sku=sku,
+            name=name,
+            name_ar=name_ar,
+            category=cat,
+            unit=unit,
+            unit_cost=cost,
+            reorder_level=10,
+        )
+        db.add(item)
+        await db.flush()
+        db.add(
+            InventoryBatch(
+                tenant_id=tenant.id,
+                item_id=item.id,
+                branch_id=branch.id,
+                batch_number=f"B-{sku}",
+                quantity=50 if cat != InventoryCategory.REAGENT else 20,
+                unit_cost=cost,
+            )
+        )
+
+    demo_doctor = Doctor(
+        tenant_id=tenant.id,
+        code="DR-001",
+        full_name="Dr. Ahmed Hassan",
+        full_name_ar="د. أحمد حسن",
+        specialty="Internal Medicine",
+        phone="+201100000001",
+        commission_rate=10,
+    )
+    db.add(demo_doctor)
+    await db.flush()
+
+    demo_patients = [
+        ("P000001", "Mohamed Ali", "محمد علي", "+201200000001"),
+        ("P000002", "Sara Ibrahim", "سارة إبراهيم", "+201200000002"),
+        ("P000003", "Omar Farouk", "عمر فاروق", "+201200000003"),
+    ]
+    patient_objs = []
+    for code, name, name_ar, phone in demo_patients:
+        p = Patient(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_code=code,
+            full_name=name,
+            full_name_ar=name_ar,
+            phone=phone,
+            gender=Gender.MALE,
+        )
+        db.add(p)
+        await db.flush()
+        patient_objs.append(p)
+
+    for cat_code, cat_name, cat_name_ar, tests in EGYPTIAN_TESTS:
+        category = TestCategory(
+            tenant_id=tenant.id,
+            code=cat_code,
+            name=cat_name,
+            name_ar=cat_name_ar,
+        )
+        db.add(category)
+        await db.flush()
+        for code, name, name_ar, price, cost in tests:
+            db.add(
+                Test(
+                    tenant_id=tenant.id,
+                    category_id=category.id,
+                    code=code,
+                    name=name,
+                    name_ar=name_ar,
+                    price=price,
+                    cost=cost,
+                )
+            )
+
+    await db.flush()
+    glu_test = await db.execute(select(Test).where(Test.tenant_id == tenant.id, Test.code == "GLU"))
+    glu = glu_test.scalar_one()
+    cbc_test = await db.execute(select(Test).where(Test.tenant_id == tenant.id, Test.code == "CBC"))
+    cbc = cbc_test.scalar_one()
+
+    now = datetime.now(timezone.utc)
+    visit = PatientVisit(
+        tenant_id=tenant.id,
+        patient_id=patient_objs[0].id,
+        branch_id=branch.id,
+        visit_number="V00001",
+        visit_date=now,
+        status=VisitStatus.IN_PROGRESS,
+        referring_doctor_id=demo_doctor.id,
+    )
+    db.add(visit)
+    await db.flush()
+
+    order = LabOrder(
+        tenant_id=tenant.id,
+        visit_id=visit.id,
+        patient_id=patient_objs[0].id,
+        branch_id=branch.id,
+        order_number="ORD-00001",
+        status=OrderStatus.IN_LAB,
+        ordered_at=now,
+        referring_doctor_id=demo_doctor.id,
+    )
+    db.add(order)
+    await db.flush()
+
+    for test in [glu, cbc]:
+        item = LabOrderItem(
+            tenant_id=tenant.id,
+            order_id=order.id,
+            test_id=test.id,
+            price=float(test.price),
+        )
+        db.add(item)
+        await db.flush()
+        db.add(
+            LabResult(
+                tenant_id=tenant.id,
+                order_id=order.id,
+                order_item_id=item.id,
+                test_id=test.id,
+                branch_id=branch.id,
+                status=ResultStatus.PENDING,
+            )
+        )
+
+    invoice = Invoice(
+        tenant_id=tenant.id,
+        branch_id=branch.id,
+        patient_id=patient_objs[0].id,
+        visit_id=visit.id,
+        order_id=order.id,
+        invoice_number="INV-00001",
+        status=InvoiceStatus.ISSUED,
+        subtotal=float(glu.price) + float(cbc.price),
+        total=float(glu.price) + float(cbc.price),
+        issued_at=now,
+    )
+    db.add(invoice)
+    await db.flush()
+    for test in [glu, cbc]:
+        db.add(
+            InvoiceItem(
+                tenant_id=tenant.id,
+                invoice_id=invoice.id,
+                test_id=test.id,
+                description=test.name,
+                quantity=1,
+                unit_price=float(test.price),
+                total=float(test.price),
+            )
+        )
+
+
 async def seed() -> None:
-    async with async_session_factory() as db:
-        existing = await db.execute(select(PlatformUser).limit(1))
+    async with async_session_factory() as platform_db:
+        existing = await platform_db.execute(select(PlatformUser).limit(1))
         if existing.scalar_one_or_none():
             print("Database already seeded.")
             return
 
-        db.add(
+        platform_db.add(
             PlatformUser(
                 username="superadmin",
                 email=None,
@@ -119,15 +335,8 @@ async def seed() -> None:
             )
         )
 
-        perm_objects = []
-        for code, module, action, desc, desc_ar in PERMISSIONS:
-            p = Permission(code=code, module=module, action=action, description=desc, description_ar=desc_ar)
-            db.add(p)
-            perm_objects.append(p)
-        await db.flush()
-
         for name, name_ar, tier, cycle, price, branches, users in PLANS:
-            db.add(
+            platform_db.add(
                 SubscriptionPlan(
                     name=name,
                     name_ar=name_ar,
@@ -139,10 +348,13 @@ async def seed() -> None:
                     features={"modules": ["patients", "tests", "billing", "inventory", "reports"]},
                 )
             )
-        await db.flush()
+        await platform_db.flush()
 
-        plan_result = await db.execute(
-            select(SubscriptionPlan).where(SubscriptionPlan.tier == PlanTier.PROFESSIONAL, SubscriptionPlan.billing_cycle == BillingCycle.MONTHLY)
+        plan_result = await platform_db.execute(
+            select(SubscriptionPlan).where(
+                SubscriptionPlan.tier == PlanTier.PROFESSIONAL,
+                SubscriptionPlan.billing_cycle == BillingCycle.MONTHLY,
+            )
         )
         plan = plan_result.scalar_one()
 
@@ -153,11 +365,12 @@ async def seed() -> None:
             email="demo@labmaster.eg",
             phone="+201000000000",
             status=TenantStatus.ACTIVE,
+            database_name=tenant_database_name("demo-lab") if settings.TENANT_DATABASE_PER_CUSTOMER else None,
         )
-        db.add(tenant)
-        await db.flush()
+        platform_db.add(tenant)
+        await platform_db.flush()
 
-        db.add(
+        platform_db.add(
             TenantSubscription(
                 tenant_id=tenant.id,
                 plan_id=plan.id,
@@ -166,216 +379,24 @@ async def seed() -> None:
                 amount_paid=plan.price_egp,
             )
         )
-        branch = Branch(
-            tenant_id=tenant.id,
-            code="HQ",
-            name="Main Branch - Cairo",
-            name_ar="الفرع الرئيسي - القاهرة",
-            city="Cairo",
-            governorate="Cairo",
-            is_headquarters=True,
-        )
-        db.add(branch)
-        db.add(
-            TenantBranding(
-                tenant_id=tenant.id,
-                company_name="Demo Medical Laboratory",
-                company_name_ar="مختبر العرض الطبي",
-                primary_color="#1e3a5f",
-            )
-        )
-        await db.flush()
+        await platform_db.flush()
 
-        admin_role = Role(tenant_id=tenant.id, name="Administrator", name_ar="مدير النظام", is_system=True)
-        reception_role = Role(tenant_id=tenant.id, name="Receptionist", name_ar="الاستقبال", is_system=True)
-        lab_role = Role(tenant_id=tenant.id, name="Lab Technician", name_ar="فني المختبر", is_system=True)
-        db.add_all([admin_role, reception_role, lab_role])
-        await db.flush()
+        if settings.TENANT_DATABASE_PER_CUSTOMER:
+            db_name = await TenantProvisioningService(platform_db).provision_new_tenant(tenant)
+            tenant_factory = await manager.get_tenant_session_factory(db_name)
+        else:
+            tenant_factory = async_session_factory
 
-        for p in perm_objects:
-            db.add(RolePermission(role_id=admin_role.id, permission_id=p.id))
+        async with tenant_factory() as tenant_db:
+            await seed_tenant_data(tenant_db, tenant)
+            await tenant_db.commit()
 
-        admin = User(
-            tenant_id=tenant.id,
-            username="labadmin",
-            email=None,
-            password_hash=get_password_hash("Demo@123"),
-            full_name="Lab Administrator",
-            full_name_ar="مدير المختبر",
-            is_tenant_admin=True,
-            is_system=True,
-            default_branch_id=branch.id,
-        )
-        db.add(admin)
-        await db.flush()
-        db.add(UserRole(user_id=admin.id, role_id=admin_role.id))
-
-        for sku, name, name_ar, cat, unit, cost in EGYPTIAN_INVENTORY:
-            item = InventoryItem(
-                tenant_id=tenant.id,
-                branch_id=branch.id,
-                sku=sku,
-                name=name,
-                name_ar=name_ar,
-                category=cat,
-                unit=unit,
-                unit_cost=cost,
-                reorder_level=10,
-            )
-            db.add(item)
-            await db.flush()
-            db.add(
-                InventoryBatch(
-                    tenant_id=tenant.id,
-                    item_id=item.id,
-                    branch_id=branch.id,
-                    batch_number=f"B-{sku}",
-                    quantity=50 if cat != InventoryCategory.REAGENT else 20,
-                    unit_cost=cost,
-                )
-            )
-
-        demo_doctor = Doctor(
-            tenant_id=tenant.id,
-            code="DR-001",
-            full_name="Dr. Ahmed Hassan",
-            full_name_ar="د. أحمد حسن",
-            specialty="Internal Medicine",
-            phone="+201100000001",
-            commission_rate=10,
-        )
-        db.add(demo_doctor)
-        await db.flush()
-
-        demo_patients = [
-            ("P000001", "Mohamed Ali", "محمد علي", "+201200000001"),
-            ("P000002", "Sara Ibrahim", "سارة إبراهيم", "+201200000002"),
-            ("P000003", "Omar Farouk", "عمر فاروق", "+201200000003"),
-        ]
-        patient_objs = []
-        for code, name, name_ar, phone in demo_patients:
-            p = Patient(
-                tenant_id=tenant.id,
-                branch_id=branch.id,
-                patient_code=code,
-                full_name=name,
-                full_name_ar=name_ar,
-                phone=phone,
-                gender=Gender.MALE,
-            )
-            db.add(p)
-            await db.flush()
-            patient_objs.append(p)
-
-        for cat_code, cat_name, cat_name_ar, tests in EGYPTIAN_TESTS:
-            category = TestCategory(
-                tenant_id=tenant.id,
-                code=cat_code,
-                name=cat_name,
-                name_ar=cat_name_ar,
-            )
-            db.add(category)
-            await db.flush()
-            for code, name, name_ar, price, cost in tests:
-                db.add(
-                    Test(
-                        tenant_id=tenant.id,
-                        category_id=category.id,
-                        code=code,
-                        name=name,
-                        name_ar=name_ar,
-                        price=price,
-                        cost=cost,
-                    )
-                )
-
-        await db.flush()
-        glu_test = await db.execute(
-            select(Test).where(Test.tenant_id == tenant.id, Test.code == "GLU")
-        )
-        glu = glu_test.scalar_one()
-        cbc_test = await db.execute(
-            select(Test).where(Test.tenant_id == tenant.id, Test.code == "CBC")
-        )
-        cbc = cbc_test.scalar_one()
-
-        now = datetime.now(timezone.utc)
-        visit = PatientVisit(
-            tenant_id=tenant.id,
-            patient_id=patient_objs[0].id,
-            branch_id=branch.id,
-            visit_number="V00001",
-            visit_date=now,
-            status=VisitStatus.IN_PROGRESS,
-            referring_doctor_id=demo_doctor.id,
-        )
-        db.add(visit)
-        await db.flush()
-
-        order = LabOrder(
-            tenant_id=tenant.id,
-            visit_id=visit.id,
-            patient_id=patient_objs[0].id,
-            branch_id=branch.id,
-            order_number="ORD-00001",
-            status=OrderStatus.IN_LAB,
-            ordered_at=now,
-            referring_doctor_id=demo_doctor.id,
-        )
-        db.add(order)
-        await db.flush()
-
-        for test in [glu, cbc]:
-            item = LabOrderItem(
-                tenant_id=tenant.id,
-                order_id=order.id,
-                test_id=test.id,
-                price=float(test.price),
-            )
-            db.add(item)
-            await db.flush()
-            db.add(
-                LabResult(
-                    tenant_id=tenant.id,
-                    order_id=order.id,
-                    order_item_id=item.id,
-                    test_id=test.id,
-                    branch_id=branch.id,
-                    status=ResultStatus.PENDING,
-                )
-            )
-
-        invoice = Invoice(
-            tenant_id=tenant.id,
-            branch_id=branch.id,
-            patient_id=patient_objs[0].id,
-            visit_id=visit.id,
-            order_id=order.id,
-            invoice_number="INV-00001",
-            status=InvoiceStatus.ISSUED,
-            subtotal=float(glu.price) + float(cbc.price),
-            total=float(glu.price) + float(cbc.price),
-            issued_at=now,
-        )
-        db.add(invoice)
-        await db.flush()
-        for test in [glu, cbc]:
-            db.add(
-                InvoiceItem(
-                    tenant_id=tenant.id,
-                    invoice_id=invoice.id,
-                    test_id=test.id,
-                    description=test.name,
-                    quantity=1,
-                    unit_price=float(test.price),
-                    total=float(test.price),
-                )
-            )
-
-        await db.commit()
+        await platform_db.commit()
         print("Seed completed successfully!")
         print("Platform admin username: superadmin")
         print("Demo lab admin username: labadmin (tenant code: demo-lab)")
+        if settings.TENANT_DATABASE_PER_CUSTOMER:
+            print(f"Demo laboratory database: {tenant.database_name}")
 
 
 if __name__ == "__main__":

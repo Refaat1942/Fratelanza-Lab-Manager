@@ -56,6 +56,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       ENVIRONMENT: production
       DEBUG: "false"
+      TENANT_DATABASE_PER_CUSTOMER: ${TENANT_DATABASE_PER_CUSTOMER:-true}
+      TENANT_DATABASE_PREFIX: ${TENANT_DATABASE_PREFIX:-labmaster_tenant_}
     ports:
       - "${LABMASTER_API_PORT:-18000}:8000"
     depends_on:

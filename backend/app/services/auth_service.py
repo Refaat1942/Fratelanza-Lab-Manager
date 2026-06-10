@@ -14,12 +14,15 @@ from app.core.security import (
     verify_password,
     verify_token,
 )
+from app.db.manager import get_database_manager
 from app.models.auth import RefreshToken, Role, RolePermission, User, UserRole
 from app.models.platform import PlatformUser, Tenant
 from app.services.tenant_access_service import TenantAccessService
+from app.services.tenant_provisioning_service import TenantProvisioningService
 from app.schemas.auth import LoginRequest, PlatformLoginRequest, TokenResponse, UserCreate
 
 settings = get_settings()
+manager = get_database_manager()
 
 
 def _hash_token(token: str) -> str:
@@ -27,48 +30,82 @@ def _hash_token(token: str) -> str:
 
 
 class AuthService:
-    def __init__(self, db: AsyncSession):
-        self.db = db
+    def __init__(
+        self,
+        platform_db: AsyncSession | None = None,
+        tenant_db: AsyncSession | None = None,
+    ):
+        if platform_db is None and tenant_db is None:
+            raise ValueError("At least one database session is required")
+        self.platform_db = platform_db
+        self.tenant_db = tenant_db or platform_db
 
-    async def login(self, data: LoginRequest) -> TokenResponse:
+    @classmethod
+    async def login_with_platform(cls, platform_db: AsyncSession, data: LoginRequest) -> TokenResponse:
         username = data.username.strip().lower()
         tenant_code = data.tenant_code.strip().lower() if data.tenant_code else None
-        query = select(User).options(
-            selectinload(User.roles)
-            .selectinload(UserRole.role)
-            .selectinload(Role.permissions)
-            .selectinload(RolePermission.permission)
-        ).where(User.username == username, User.deleted_at.is_(None))
+        if not tenant_code:
+            raise ValueError("Tenant code is required")
 
-        if tenant_code:
-            tenant_result = await self.db.execute(
-                select(Tenant).where(Tenant.code == tenant_code, Tenant.deleted_at.is_(None))
+        tenant_result = await platform_db.execute(
+            select(Tenant).where(Tenant.code == tenant_code, Tenant.deleted_at.is_(None))
+        )
+        tenant = tenant_result.scalar_one_or_none()
+        if not tenant:
+            raise ValueError("Invalid tenant code")
+
+        await TenantAccessService(platform_db).assert_tenant_active(tenant.id)
+        database_name = await TenantProvisioningService(platform_db).ensure_tenant_database(tenant)
+
+        factory = await manager.get_tenant_session_factory(database_name)
+        async with factory() as tenant_db:
+            service = cls(platform_db, tenant_db)
+            return await service._authenticate_lab_user(username, data.password, tenant, database_name)
+
+    async def _authenticate_lab_user(
+        self,
+        username: str,
+        password: str,
+        tenant: Tenant,
+        database_name: str,
+    ) -> TokenResponse:
+        result = await self.tenant_db.execute(
+            select(User)
+            .options(
+                selectinload(User.roles)
+                .selectinload(UserRole.role)
+                .selectinload(Role.permissions)
+                .selectinload(RolePermission.permission)
             )
-            tenant = tenant_result.scalar_one_or_none()
-            if not tenant:
-                raise ValueError("Invalid tenant code")
-            query = query.where(User.tenant_id == tenant.id)
-
-        result = await self.db.execute(query)
+            .where(
+                User.username == username,
+                User.tenant_id == tenant.id,
+                User.deleted_at.is_(None),
+            )
+        )
         user = result.scalar_one_or_none()
-        if not user or not verify_password(data.password, user.password_hash):
+        if not user or not verify_password(password, user.password_hash):
             raise ValueError("Invalid credentials")
         if not user.is_active:
             raise ValueError("Account is inactive")
-        if user.tenant_id:
-            await TenantAccessService(self.db).assert_tenant_active(user.tenant_id)
 
         permissions = self._extract_permissions(user)
         access_token = create_access_token(
             str(user.id),
             tenant_id=user.tenant_id,
+            database_name=database_name,
             permissions=list(permissions),
         )
-        refresh_token = create_refresh_token(str(user.id))
+        refresh_token = create_refresh_token(
+            str(user.id),
+            tenant_id=user.tenant_id,
+            database_name=database_name,
+        )
         await self._store_refresh_token(user.id, refresh_token)
 
         user.last_login_at = datetime.now(timezone.utc)
-        await self.db.flush()
+        await self.tenant_db.flush()
+        await self.tenant_db.commit()
 
         return TokenResponse(
             access_token=access_token,
@@ -77,8 +114,10 @@ class AuthService:
         )
 
     async def platform_login(self, data: PlatformLoginRequest) -> TokenResponse:
+        if self.platform_db is None:
+            raise ValueError("Platform database session required")
         username = data.username.strip().lower()
-        result = await self.db.execute(
+        result = await self.platform_db.execute(
             select(PlatformUser).where(
                 func.lower(PlatformUser.username) == username,
                 PlatformUser.is_active.is_(True),
@@ -95,12 +134,23 @@ class AuthService:
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         )
 
-    async def refresh(self, refresh_token: str) -> TokenResponse:
+    @classmethod
+    async def refresh_with_platform(cls, platform_db: AsyncSession, refresh_token: str) -> TokenResponse:
         payload = verify_token(refresh_token, token_type="refresh")
         if not payload:
             raise ValueError("Invalid refresh token")
+
+        database_name = payload.get("database_name") or manager.platform_database_name
+        factory = await manager.get_tenant_session_factory(database_name)
+        async with factory() as tenant_db:
+            service = cls(platform_db, tenant_db)
+            return await service._refresh(refresh_token, payload, database_name)
+
+    async def _refresh(
+        self, refresh_token: str, payload: dict, database_name: str
+    ) -> TokenResponse:
         token_hash = _hash_token(refresh_token)
-        result = await self.db.execute(
+        result = await self.tenant_db.execute(
             select(RefreshToken).where(
                 RefreshToken.token_hash == token_hash,
                 RefreshToken.revoked_at.is_(None),
@@ -110,22 +160,28 @@ class AuthService:
         if not stored or stored.expires_at < datetime.now(timezone.utc):
             raise ValueError("Refresh token expired or revoked")
 
-        user_result = await self.db.execute(select(User).where(User.id == stored.user_id))
+        user_result = await self.tenant_db.execute(select(User).where(User.id == stored.user_id))
         user = user_result.scalar_one_or_none()
         if not user or not user.is_active:
             raise ValueError("User not found")
         if user.tenant_id:
-            await TenantAccessService(self.db).assert_tenant_active(user.tenant_id)
+            await TenantAccessService(self.platform_db).assert_tenant_active(user.tenant_id)
 
         permissions = await self._get_permissions(user.id)
         access_token = create_access_token(
             str(user.id),
             tenant_id=user.tenant_id,
+            database_name=database_name,
             permissions=list(permissions),
         )
-        new_refresh = create_refresh_token(str(user.id))
+        new_refresh = create_refresh_token(
+            str(user.id),
+            tenant_id=user.tenant_id,
+            database_name=database_name,
+        )
         stored.revoked_at = datetime.now(timezone.utc)
         await self._store_refresh_token(user.id, new_refresh)
+        await self.tenant_db.commit()
 
         return TokenResponse(
             access_token=access_token,
@@ -138,7 +194,7 @@ class AuthService:
         from app.services.tenant_limits_service import TenantLimitsService
 
         if not data.is_system:
-            await TenantLimitsService(self.db).assert_can_add_user(tenant_id)
+            await TenantLimitsService(self.tenant_db, self.platform_db).assert_can_add_user(tenant_id)
         username = data.username.strip().lower()
         if username in RESERVED_USERNAMES and not data.is_system:
             raise ValueError(f"Username '{username}' is reserved and cannot be used")
@@ -155,16 +211,16 @@ class AuthService:
             default_branch_id=data.default_branch_id,
             locale=data.locale,
         )
-        self.db.add(user)
-        await self.db.flush()
+        self.tenant_db.add(user)
+        await self.tenant_db.flush()
         for role_id in data.role_ids:
-            self.db.add(UserRole(user_id=user.id, role_id=role_id))
-        await self.db.flush()
+            self.tenant_db.add(UserRole(user_id=user.id, role_id=role_id))
+        await self.tenant_db.flush()
         return user
 
     async def _store_refresh_token(self, user_id: UUID, token: str) -> None:
         expires = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-        self.db.add(
+        self.tenant_db.add(
             RefreshToken(
                 user_id=user_id,
                 token_hash=_hash_token(token),
@@ -182,7 +238,7 @@ class AuthService:
         return perms
 
     async def _get_permissions(self, user_id: UUID) -> set[str]:
-        result = await self.db.execute(
+        result = await self.tenant_db.execute(
             select(User)
             .options(
                 selectinload(User.roles)
