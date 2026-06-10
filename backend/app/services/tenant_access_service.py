@@ -1,12 +1,14 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models.auth import RefreshToken, User
-from app.models.platform import Tenant, TenantStatus
+from app.models.platform import SubscriptionStatus, Tenant, TenantStatus, TenantSubscription
 
+settings = get_settings()
 BLOCKED_STATUSES = (TenantStatus.SUSPENDED, TenantStatus.LOCKED, TenantStatus.EXPIRED)
 
 
@@ -26,7 +28,47 @@ class TenantAccessService:
             raise ValueError("Tenant not found")
         if tenant.status in BLOCKED_STATUSES:
             raise ValueError(f"Tenant account is {tenant.status.value}")
+        await self.assert_subscription_active(tenant_id)
         return tenant
+
+    async def assert_subscription_active(self, tenant_id: UUID) -> TenantSubscription:
+        """Block lab access when subscription is past expiry and grace period."""
+        result = await self.db.execute(
+            select(TenantSubscription)
+            .where(TenantSubscription.tenant_id == tenant_id)
+            .order_by(TenantSubscription.created_at.desc())
+            .limit(1)
+        )
+        sub = result.scalar_one_or_none()
+        if not sub:
+            raise ValueError("No subscription found for this laboratory. Contact platform support.")
+
+        if sub.status == SubscriptionStatus.CANCELLED:
+            raise ValueError("Subscription cancelled. Contact platform support to renew.")
+
+        now = datetime.now(timezone.utc)
+        expires_at = self._as_utc(sub.expires_at)
+        if now <= expires_at:
+            return sub
+
+        grace_end = self._as_utc(sub.grace_ends_at)
+        if grace_end is None:
+            grace_end = expires_at + timedelta(days=settings.GRACE_PERIOD_DAYS)
+
+        if now <= grace_end:
+            return sub
+
+        raise ValueError(
+            "Subscription expired. Please renew your monthly plan to continue using LabMaster."
+        )
+
+    @staticmethod
+    def _as_utc(dt: datetime | None) -> datetime | None:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
 
     async def revoke_tenant_sessions(self, tenant_id: UUID) -> int:
         now = datetime.now(timezone.utc)
