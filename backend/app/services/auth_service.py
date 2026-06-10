@@ -60,15 +60,22 @@ class AuthService:
         factory = await manager.get_tenant_session_factory(database_name)
         async with factory() as tenant_db:
             service = cls(platform_db, tenant_db)
-            return await service._authenticate_lab_user(username, data.password, tenant, database_name)
+            try:
+                return await service._authenticate_lab_user(username, data.password, tenant, database_name)
+            except ValueError as exc:
+                if str(exc) != "Invalid credentials":
+                    raise
 
-    async def _authenticate_lab_user(
-        self,
-        username: str,
-        password: str,
-        tenant: Tenant,
-        database_name: str,
-    ) -> TokenResponse:
+        # User may still exist in the shared platform DB from an older create path — copy then retry once.
+        if settings.TENANT_DATABASE_PER_CUSTOMER and database_name != manager.platform_database_name:
+            await TenantProvisioningService(platform_db).migrate_existing_tenant(tenant.id)
+            await platform_db.commit()
+            async with factory() as tenant_db:
+                service = cls(platform_db, tenant_db)
+                return await service._authenticate_lab_user(username, data.password, tenant, database_name)
+        raise ValueError("Invalid credentials")
+
+    async def _find_lab_user(self, username: str, tenant_id: UUID) -> User | None:
         result = await self.tenant_db.execute(
             select(User)
             .options(
@@ -79,11 +86,72 @@ class AuthService:
             )
             .where(
                 User.username == username,
-                User.tenant_id == tenant.id,
+                User.tenant_id == tenant_id,
                 User.deleted_at.is_(None),
             )
         )
-        user = result.scalar_one_or_none()
+        return result.scalar_one_or_none()
+
+    async def _sync_lab_user_from_platform(
+        self, tenant: Tenant, username: str, password: str
+    ) -> User | None:
+        """Copy lab user from platform registry DB into tenant DB when credentials match there."""
+        if self.platform_db is None:
+            return None
+        legacy_result = await self.platform_db.execute(
+            select(User).where(
+                User.tenant_id == tenant.id,
+                User.username == username,
+                User.deleted_at.is_(None),
+            )
+        )
+        legacy = legacy_result.scalar_one_or_none()
+        if not legacy or not verify_password(password, legacy.password_hash):
+            return None
+
+        existing = await self.tenant_db.execute(
+            select(User).where(User.id == legacy.id, User.tenant_id == tenant.id)
+        )
+        user = existing.scalar_one_or_none()
+        if user:
+            user.password_hash = legacy.password_hash
+            user.is_active = legacy.is_active
+            user.is_tenant_admin = legacy.is_tenant_admin
+            await self.tenant_db.flush()
+        else:
+            self.tenant_db.add(
+                User(
+                    id=legacy.id,
+                    tenant_id=legacy.tenant_id,
+                    username=legacy.username,
+                    email=legacy.email,
+                    password_hash=legacy.password_hash,
+                    full_name=legacy.full_name,
+                    full_name_ar=legacy.full_name_ar,
+                    phone=legacy.phone,
+                    is_active=legacy.is_active,
+                    is_tenant_admin=legacy.is_tenant_admin,
+                    is_system=legacy.is_system,
+                    default_branch_id=legacy.default_branch_id,
+                    locale=legacy.locale,
+                )
+            )
+            await self.tenant_db.flush()
+            user = await self._find_lab_user(username, tenant.id)
+        return user
+
+    async def _authenticate_lab_user(
+        self,
+        username: str,
+        password: str,
+        tenant: Tenant,
+        database_name: str,
+    ) -> TokenResponse:
+        user = await self._find_lab_user(username, tenant.id)
+        if user and not verify_password(password, user.password_hash):
+            user = None
+        if not user:
+            user = await self._sync_lab_user_from_platform(tenant, username, password)
         if not user or not verify_password(password, user.password_hash):
             raise ValueError("Invalid credentials")
         if not user.is_active:

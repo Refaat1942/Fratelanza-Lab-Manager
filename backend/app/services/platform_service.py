@@ -205,15 +205,41 @@ class PlatformService:
         if not tenant:
             return None
 
-        user = await self.get_tenant_admin(tenant_id)
-        if not user:
-            raise ValueError("Tenant admin user not found")
-
         updates = data.model_dump(exclude_unset=True)
         db_name = manager.resolve_tenant_database(tenant.code, tenant.database_name)
         factory = await manager.get_tenant_session_factory(db_name)
         async with factory() as tenant_db:
-            user = await tenant_db.get(User, user.id)
+            existing_admin = await self.get_tenant_admin(tenant_id)
+            if existing_admin:
+                user = await tenant_db.get(User, existing_admin.id)
+            else:
+                user = None
+
+            if not user and updates.get("username") and updates.get("password"):
+                from app.schemas.auth import UserCreate
+
+                user = await AuthService(self.db, tenant_db).create_user(
+                    tenant_id,
+                    UserCreate(
+                        username=updates["username"].strip().lower(),
+                        password=updates["password"],
+                        full_name=updates.get("full_name") or "Lab Administrator",
+                        full_name_ar=updates.get("full_name_ar"),
+                        is_tenant_admin=True,
+                        is_system=True,
+                    ),
+                )
+                await tenant_db.commit()
+                await self.log_action(
+                    admin_id,
+                    "tenant_admin_created",
+                    "user",
+                    tenant.id,
+                    str(user.id),
+                    {"username": user.username},
+                )
+                return user
+
             if not user:
                 raise ValueError("Tenant admin user not found")
 
@@ -242,14 +268,21 @@ class PlatformService:
                 user.is_active = updates["is_active"]
 
             await tenant_db.commit()
+            saved_id = user.id
+            saved_username = user.username
+
+        async with factory() as tenant_db:
+            user = await tenant_db.get(User, saved_id)
+            if not user:
+                raise ValueError("Tenant admin user not found after save")
 
         await self.log_action(
             admin_id,
             "tenant_admin_updated",
             "user",
             tenant.id,
-            str(user.id),
-            {"username": user.username},
+            str(saved_id),
+            {"username": saved_username},
         )
         return user
 
