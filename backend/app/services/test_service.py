@@ -29,6 +29,21 @@ class TestService:
         existing = result.scalar_one_or_none()
         if existing:
             return existing
+
+        # Reuse soft-deleted GEN row (unique on tenant_id + code)
+        archived = await self.db.execute(
+            select(TestCategory).where(
+                TestCategory.tenant_id == tenant_id,
+                TestCategory.code == "GEN",
+            )
+        )
+        restored = archived.scalar_one_or_none()
+        if restored:
+            restored.deleted_at = None
+            restored.is_active = True
+            await self.db.flush()
+            return restored
+
         category = TestCategory(
             tenant_id=tenant_id,
             code="GEN",
@@ -100,16 +115,33 @@ class TestService:
         )
         return result.scalar_one_or_none()
 
+    async def _next_test_code(self, tenant_id: UUID) -> str:
+        result = await self.db.execute(
+            select(Test.code).where(Test.tenant_id == tenant_id, Test.code.like("T%"))
+        )
+        max_num = 0
+        for (code,) in result.all():
+            suffix = code[1:]
+            if len(code) == 5 and suffix.isdigit():
+                max_num = max(max_num, int(suffix))
+        return f"T{max_num + 1:04d}"
+
     async def create_test(self, tenant_id: UUID, data: TestCreate, user_id: UUID) -> Test:
-        payload = data.model_dump()
-        payload["category_id"] = await self.resolve_category_id(tenant_id, data.category_id)
-        count = (await self.db.execute(select(func.count()).where(Test.tenant_id == tenant_id))).scalar() or 0
-        test = Test(tenant_id=tenant_id, code=f"T{count + 1:04d}", **payload)
+        category_id = await self.resolve_category_id(tenant_id, data.category_id)
+        fields = data.model_dump(exclude={"category_id"})
+        test = Test(
+            tenant_id=tenant_id,
+            category_id=category_id,
+            code=await self._next_test_code(tenant_id),
+            **fields,
+        )
         self.db.add(test)
         await self.db.flush()
+        audit_values = data.model_dump(mode="json")
+        audit_values["category_id"] = str(category_id)
         await self.audit.log(
             tenant_id=tenant_id, user_id=user_id, action="create", module="tests",
-            entity_type="test", entity_id=str(test.id), new_values=payload,
+            entity_type="test", entity_id=str(test.id), new_values=audit_values,
         )
         return test
 
