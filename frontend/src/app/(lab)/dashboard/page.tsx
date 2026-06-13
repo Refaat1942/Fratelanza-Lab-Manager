@@ -53,7 +53,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<Insights | null>(null);
   const [loading, setLoading] = useState(true);
   const [printing, setPrinting] = useState(false);
-  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
+  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange(0);
 
   const load = useCallback(() => {
     setLoading(true);
