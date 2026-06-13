@@ -35,6 +35,9 @@ curl -fsSL https://raw.githubusercontent.com/Refaat1942/Fratelanza-Lab-Manager/m
 cd /opt/labmaster
 sudo bash deploy/hostinger/setup-domain.sh labmaster.yourdomain.com
 sudo bash deploy/hostinger/enable-ssl.sh labmaster.yourdomain.com
+
+# If another project (e.g. Fratelanza) opens instead — isolated nginx fix:
+sudo bash deploy/hostinger/apply-labmaster-nginx.sh labmaster.yourdomain.com
 ```
 
 Uses isolated ports + a **separate nginx site** — your other projects stay untouched.
