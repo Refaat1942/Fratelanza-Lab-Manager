@@ -204,6 +204,12 @@ class PatientService:
         total_price = sum(float(i.price) for i in order_items)
         total_cost = sum(float(i.cost or 0) for i in order_items)
 
+        if data.discount_percent is not None and data.discount_percent > 0:
+            discount_amount = round(total_price * data.discount_percent / 100, 2)
+        else:
+            discount_amount = float(data.discount)
+        discount_amount = min(discount_amount, total_price)
+
         invoice_items: list[InvoiceItemCreate] = []
         for item in order_items:
             test = await self.db.get(Test, item.test_id)
@@ -222,7 +228,7 @@ class PatientService:
                 patient_id=patient.id,
                 visit_id=order.visit_id,
                 order_id=order.id,
-                discount=data.discount,
+                discount=discount_amount,
                 items=invoice_items,
             ),
             user_id,
@@ -250,8 +256,8 @@ class PatientService:
             order_number=order.order_number,
             invoice_id=invoice.id,
             invoice_number=invoice.invoice_number,
-            total_price=total_price - data.discount,
+            total_price=total_price - discount_amount,
             total_cost=total_cost,
-            margin=total_price - data.discount - total_cost,
+            margin=total_price - discount_amount - total_cost,
             test_count=len(order_items),
         )

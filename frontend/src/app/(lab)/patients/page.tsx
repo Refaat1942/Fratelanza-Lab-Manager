@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, MoreHorizontal, Pencil, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { DataTable } from "@/components/data-table/data-table";
 import { TestLinesPicker, validTestIds, type TestCatalogItem, type TestLine } from "@/components/tests/test-lines-picker";
 import { useAuthStore } from "@/stores/auth-store";
@@ -42,7 +45,8 @@ export default function PatientsPage() {
   const [visitForm, setVisitForm] = useState(emptyVisit);
   const [editForm, setEditForm] = useState(emptyEdit);
   const [testLines, setTestLines] = useState<TestLine[]>([{ testId: "" }]);
-  const [discount, setDiscount] = useState("0");
+  const [discountType, setDiscountType] = useState<"amount" | "percent">("amount");
+  const [discountValue, setDiscountValue] = useState("0");
   const [saving, setSaving] = useState(false);
   const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
@@ -69,10 +73,28 @@ export default function PatientsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const subtotal = useMemo(() => {
+    return validTestIds(testLines).reduce((sum, id) => {
+      const test = tests.find((t) => t.id === id);
+      return sum + (test?.price || 0);
+    }, 0);
+  }, [testLines, tests]);
+
+  const discountAmount = useMemo(() => {
+    const val = parseFloat(discountValue) || 0;
+    if (discountType === "percent") {
+      return Math.round(subtotal * Math.min(val, 100) / 100 * 100) / 100;
+    }
+    return Math.min(val, subtotal);
+  }, [discountType, discountValue, subtotal]);
+
+  const finalTotal = Math.max(0, subtotal - discountAmount);
+
   const resetVisitForm = () => {
     setVisitForm(emptyVisit);
     setTestLines([{ testId: "" }]);
-    setDiscount("0");
+    setDiscountType("amount");
+    setDiscountValue("0");
   };
 
   const saveVisit = async (e: React.FormEvent) => {
@@ -85,13 +107,20 @@ export default function PatientsPage() {
     setSaving(true);
     try {
       const phone = visitForm.phone.trim();
-      const { data } = await api.post("/patients/quick-visit", {
+      const parsedDiscount = parseFloat(discountValue) || 0;
+      const payload: Record<string, unknown> = {
         full_name: visitForm.full_name.trim(),
         phone: phone || null,
         age: visitForm.age ? parseInt(visitForm.age, 10) : null,
         test_ids: testIds,
-        discount: parseFloat(discount) || 0,
-      });
+      };
+      if (discountType === "percent" && parsedDiscount > 0) {
+        payload.discount_percent = Math.min(parsedDiscount, 100);
+        payload.discount = 0;
+      } else {
+        payload.discount = parsedDiscount;
+      }
+      const { data } = await api.post("/patients/quick-visit", payload);
       toast.success(
         locale === "ar"
           ? `تم التسجيل — ${data.test_count} تحليل — EGP ${data.total_price.toLocaleString()}`
@@ -247,13 +276,41 @@ export default function PatientsPage() {
                 showLabCost
               />
               <div className="space-y-2">
-                <Label>{locale === "ar" ? "خصم (جنيه)" : "Discount (EGP)"}</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={discount}
-                  onChange={(e) => setDiscount(e.target.value)}
-                />
+                <Label>{locale === "ar" ? "الخصم" : "Discount"}</Label>
+                <div className="grid grid-cols-[120px_1fr] gap-2">
+                  <Select
+                    value={discountType}
+                    onValueChange={(v) => v && setDiscountType(v as "amount" | "percent")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="amount">
+                        {locale === "ar" ? "جنيه" : "EGP"}
+                      </SelectItem>
+                      <SelectItem value="percent">
+                        {locale === "ar" ? "نسبة %" : "%"}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min="0"
+                    max={discountType === "percent" ? 100 : undefined}
+                    step={discountType === "percent" ? "0.1" : "1"}
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    placeholder={discountType === "percent" ? "10" : "0"}
+                  />
+                </div>
+                {(parseFloat(discountValue) || 0) > 0 && subtotal > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {locale === "ar"
+                      ? `خصم: EGP ${discountAmount.toLocaleString()} — الإجمالي بعد الخصم: EGP ${finalTotal.toLocaleString()}`
+                      : `Discount: EGP ${discountAmount.toLocaleString()} — Total after discount: EGP ${finalTotal.toLocaleString()}`}
+                  </p>
+                )}
               </div>
               <Button type="submit" className="w-full" disabled={saving}>
                 {saving

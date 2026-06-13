@@ -106,6 +106,7 @@ class PatientQuickVisitCreate(BaseModel):
     patient_id: Optional[UUID] = None
     test_ids: list[UUID] = Field(min_length=1)
     discount: float = Field(default=0, ge=0)
+    discount_percent: Optional[float] = Field(None, ge=0, le=100)
 
 
 class PatientQuickVisitResponse(BaseModel):
