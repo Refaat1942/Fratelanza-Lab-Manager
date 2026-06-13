@@ -8,6 +8,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.patients import Patient, PatientVisit, VisitStatus
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.patients import PatientCreate, PatientUpdate, PatientVisitCreate
+from app.schemas.patients import (
+    PatientQuickVisitCreate,
+    PatientQuickVisitResponse,
+    format_patient_age_note,
+)
+from app.schemas.results import LabOrderCreate
+from app.schemas.billing import InvoiceCreate, InvoiceItemCreate
+from app.services.results_service import ResultsService
+from app.services.billing_service import BillingService
+from app.models.tests import Test
+from app.models.orders import LabOrderItem
 from app.services.audit_service import AuditService
 from app.utils.date_filter import apply_date_range
 
@@ -150,3 +161,97 @@ class PatientService:
             entity_id=str(visit.id),
         )
         return visit
+
+    async def quick_visit(
+        self, tenant_id: UUID, data: PatientQuickVisitCreate, user_id: UUID
+    ) -> PatientQuickVisitResponse:
+        """Create/update patient, lab order, and invoice in one step."""
+        if data.patient_id:
+            patient = await self.get_patient(tenant_id, data.patient_id)
+            if not patient:
+                raise ValueError("Patient not found")
+            patient.full_name = data.full_name.strip()
+            patient.phone = data.phone.strip()
+            if data.age is not None:
+                patient.notes = format_patient_age_note(data.age)
+            await self.db.flush()
+        else:
+            patient = await self.create_patient(
+                tenant_id,
+                PatientCreate(
+                    full_name=data.full_name.strip(),
+                    phone=data.phone.strip(),
+                    notes=format_patient_age_note(data.age),
+                ),
+                user_id,
+            )
+
+        for test_id in data.test_ids:
+            test = await self.db.get(Test, test_id)
+            if not test or test.tenant_id != tenant_id or test.deleted_at:
+                raise ValueError("One or more tests were not found")
+
+        order = await ResultsService(self.db).create_order(
+            tenant_id,
+            LabOrderCreate(patient_id=patient.id, test_ids=data.test_ids),
+            user_id,
+        )
+
+        items_result = await self.db.execute(
+            select(LabOrderItem).where(LabOrderItem.order_id == order.id)
+        )
+        order_items = list(items_result.scalars().all())
+        total_price = sum(float(i.price) for i in order_items)
+        total_cost = sum(float(i.cost or 0) for i in order_items)
+
+        invoice_items: list[InvoiceItemCreate] = []
+        for item in order_items:
+            test = await self.db.get(Test, item.test_id)
+            invoice_items.append(
+                InvoiceItemCreate(
+                    description=test.name if test else "Test",
+                    unit_price=float(item.price),
+                    quantity=1,
+                    test_id=item.test_id,
+                )
+            )
+
+        invoice = await BillingService(self.db).create_invoice(
+            tenant_id,
+            InvoiceCreate(
+                patient_id=patient.id,
+                visit_id=order.visit_id,
+                order_id=order.id,
+                discount=data.discount,
+                items=invoice_items,
+            ),
+            user_id,
+        )
+
+        await self.audit.log(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            action="quick_visit",
+            module="patients",
+            entity_type="patient",
+            entity_id=str(patient.id),
+            new_values={
+                "order_id": str(order.id),
+                "invoice_id": str(invoice.id),
+                "test_count": len(order_items),
+                "total_price": total_price,
+            },
+        )
+
+        return PatientQuickVisitResponse(
+            patient_id=patient.id,
+            patient_code=patient.patient_code,
+            order_id=order.id,
+            order_number=order.order_number,
+            invoice_id=invoice.id,
+            invoice_number=invoice.invoice_number,
+            total_price=total_price - data.discount,
+            total_cost=total_cost,
+            margin=total_price - data.discount - total_cost,
+            test_count=len(order_items),
+        )

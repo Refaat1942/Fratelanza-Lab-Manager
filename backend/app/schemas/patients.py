@@ -7,6 +7,21 @@ from pydantic import BaseModel, Field
 from app.models.patients import Gender, VisitStatus
 
 
+def format_patient_age_note(age: Optional[int]) -> Optional[str]:
+    if age is None:
+        return None
+    return f"Age: {age}"
+
+
+def parse_age_from_notes(notes: Optional[str]) -> Optional[int]:
+    if not notes or not notes.startswith("Age:"):
+        return None
+    try:
+        return int(notes.split(":", 1)[1].strip().split()[0])
+    except (ValueError, IndexError):
+        return None
+
+
 class PatientCreate(BaseModel):
     branch_id: Optional[UUID] = None
     national_id: Optional[str] = Field(None, max_length=20)
@@ -59,6 +74,7 @@ class PatientResponse(BaseModel):
     notes: Optional[str] = None
     branch_id: Optional[UUID] = None
     created_at: datetime
+    age: Optional[int] = None
 
     model_config = {"from_attributes": True}
 
@@ -80,3 +96,26 @@ class PatientVisitResponse(BaseModel):
     referring_doctor_id: Optional[UUID] = None
 
     model_config = {"from_attributes": True}
+
+
+class PatientQuickVisitCreate(BaseModel):
+    """Register patient with tests in one step (name, phone, age + test list)."""
+    full_name: str = Field(min_length=2, max_length=255)
+    phone: str = Field(min_length=6, max_length=50)
+    age: Optional[int] = Field(None, ge=0, le=150)
+    patient_id: Optional[UUID] = None
+    test_ids: list[UUID] = Field(min_length=1)
+    discount: float = Field(default=0, ge=0)
+
+
+class PatientQuickVisitResponse(BaseModel):
+    patient_id: UUID
+    patient_code: str
+    order_id: UUID
+    order_number: str
+    invoice_id: UUID
+    invoice_number: str
+    total_price: float
+    total_cost: float
+    margin: float
+    test_count: int

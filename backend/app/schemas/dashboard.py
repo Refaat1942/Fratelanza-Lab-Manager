@@ -51,11 +51,19 @@ class OrderInsight(BaseModel):
     in_lab_orders: int
 
 
+class LaboratoryInsight(BaseModel):
+    tests_ordered: int
+    sales_total: float
+    cost_total: float
+    margin: float
+
+
 class DashboardInsights(BaseModel):
     stats: DashboardStats
     financial: FinancialInsight
     expenses: ExpenseInsight
     orders: OrderInsight
+    laboratory: LaboratoryInsight
     recent_patients: list[RecentPatient]
     recent_invoices: list[RecentInvoice]
     low_stock: list[LowStockItem]

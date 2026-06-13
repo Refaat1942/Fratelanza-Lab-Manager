@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DataTable } from "@/components/data-table/data-table";
+import { TestLinesPicker, validTestIds, type TestCatalogItem, type TestLine } from "@/components/tests/test-lines-picker";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
 import { DateRangeFilter } from "@/components/filters/date-range-filter";
@@ -48,19 +49,18 @@ interface FinancialSummary {
 }
 
 interface Patient { id: string; full_name: string; }
-interface TestItem { id: string; name: string; price: number; }
 
 export default function BillingPage() {
   const locale = useAuthStore((s) => s.locale);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [summary, setSummary] = useState<FinancialSummary | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [tests, setTests] = useState<TestItem[]>([]);
+  const [tests, setTests] = useState<TestCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<InvoiceDetail | null>(null);
   const [patientId, setPatientId] = useState("");
-  const [testId, setTestId] = useState("");
+  const [testLines, setTestLines] = useState<TestLine[]>([{ testId: "" }]);
   const [discount, setDiscount] = useState("0");
   const [payAmount, setPayAmount] = useState("");
   const [saving, setSaving] = useState(false);
@@ -79,7 +79,14 @@ export default function BillingPage() {
         setInvoices(inv.data.items || []);
         setSummary(sum.data);
         setPatients(pat.data.items || []);
-        setTests(tst.data.items || []);
+        setTests(
+          (tst.data.items || []).map((t: { id: string; name: string; price: number; cost: number }) => ({
+            id: t.id,
+            name: t.name,
+            price: t.price,
+            cost: t.cost ?? 0,
+          }))
+        );
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
@@ -89,17 +96,22 @@ export default function BillingPage() {
 
   const createInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
-    const test = tests.find((t) => t.id === testId);
-    if (!test) return;
+    const testIds = validTestIds(testLines);
+    if (!patientId || testIds.length === 0) return;
+    const items = testIds.map((id) => {
+      const test = tests.find((t) => t.id === id)!;
+      return { description: test.name, unit_price: test.price, quantity: 1, test_id: id };
+    });
     setSaving(true);
     try {
       await api.post("/billing/invoices", {
         patient_id: patientId,
         discount: parseFloat(discount) || 0,
-        items: [{ description: test.name, unit_price: test.price, quantity: 1, test_id: test.id }],
+        items,
       });
       toast.success(locale === "ar" ? "تم إنشاء الفاتورة" : "Invoice created");
       setOpen(false);
+      setTestLines([{ testId: "" }]);
       load();
     } catch (err) {
       toast.error(getApiError(err));
@@ -195,11 +207,11 @@ export default function BillingPage() {
             {locale === "ar" ? "الفواتير والمدفوعات والملخص المالي" : "Invoices, payments, and financial overview"}
           </p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setTestLines([{ testId: "" }]); }}>
           <DialogTrigger render={<Button />}>
             <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>{locale === "ar" ? "فاتورة جديدة" : "New Invoice"}</DialogTitle></DialogHeader>
             <form onSubmit={createInvoice} className="space-y-4">
               <div className="space-y-2">
@@ -211,20 +223,22 @@ export default function BillingPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>{locale === "ar" ? "التحليل" : "Test"}</Label>
-                <Select value={testId} onValueChange={(v) => v && setTestId(v)}>
-                  <SelectTrigger><SelectValue placeholder="Select test" /></SelectTrigger>
-                  <SelectContent>
-                    {tests.map((t) => <SelectItem key={t.id} value={t.id}>{t.name} — EGP {t.price}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              <TestLinesPicker
+                locale={locale}
+                tests={tests}
+                lines={testLines}
+                onChange={setTestLines}
+                showLabCost
+              />
               <div className="space-y-2">
                 <Label>{locale === "ar" ? "خصم (جنيه)" : "Discount (EGP)"}</Label>
                 <Input type="number" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} />
               </div>
-              <Button type="submit" className="w-full" disabled={saving || !patientId || !testId}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={saving || !patientId || validTestIds(testLines).length === 0}
+              >
                 {saving ? "..." : t(locale, "save")}
               </Button>
             </form>

@@ -83,6 +83,8 @@ class BillingService:
             tenant_id=tenant_id,
             branch_id=branch_id,
             patient_id=data.patient_id,
+            visit_id=data.visit_id,
+            order_id=data.order_id,
             invoice_number=invoice_number,
             status=InvoiceStatus.ISSUED,
             subtotal=subtotal,

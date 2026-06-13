@@ -6,15 +6,24 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.patients import (
     PatientCreate,
+    PatientQuickVisitCreate,
+    PatientQuickVisitResponse,
     PatientResponse,
     PatientUpdate,
     PatientVisitCreate,
     PatientVisitResponse,
+    parse_age_from_notes,
 )
 from app.services.patient_service import PatientService
 from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/patients", tags=["Patients"])
+
+
+def _patient_response(patient) -> PatientResponse:
+    response = PatientResponse.model_validate(patient)
+    response.age = parse_age_from_notes(patient.notes)
+    return response
 
 
 @router.get("", response_model=dict)
@@ -36,7 +45,7 @@ async def list_patients(
         tenant.id, params, branch_id, parse_date_param(date_from), parse_date_param(date_to)
     )
     return {
-        "items": [PatientResponse.model_validate(p) for p in result.items],
+        "items": [_patient_response(p) for p in result.items],
         "total": result.total,
         "page": result.page,
         "page_size": result.page_size,
@@ -52,7 +61,20 @@ async def create_patient(
     user: CurrentUser = require_permission("patients.create"),
 ):
     patient = await PatientService(db).create_patient(tenant.id, data, user.id)
-    return PatientResponse.model_validate(patient)
+    return _patient_response(patient)
+
+
+@router.post("/quick-visit", response_model=PatientQuickVisitResponse, status_code=status.HTTP_201_CREATED)
+async def quick_visit(
+    data: PatientQuickVisitCreate,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("patients.create"),
+):
+    try:
+        return await PatientService(db).quick_visit(tenant.id, data, user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/{patient_id}", response_model=PatientResponse)
@@ -65,7 +87,7 @@ async def get_patient(
     patient = await PatientService(db).get_patient(tenant.id, patient_id)
     if not patient:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
-    return PatientResponse.model_validate(patient)
+    return _patient_response(patient)
 
 
 @router.put("/{patient_id}", response_model=PatientResponse)
@@ -79,7 +101,7 @@ async def update_patient(
     patient = await PatientService(db).update_patient(tenant.id, patient_id, data, user.id)
     if not patient:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
-    return PatientResponse.model_validate(patient)
+    return _patient_response(patient)
 
 
 @router.delete("/{patient_id}", response_model=MessageResponse)
