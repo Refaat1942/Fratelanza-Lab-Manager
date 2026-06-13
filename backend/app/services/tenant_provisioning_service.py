@@ -44,34 +44,71 @@ class TenantProvisioningService:
         async with factory() as tenant_db:
             try:
                 existing = await tenant_db.get(Tenant, tenant.id)
+                if not existing:
+                    by_code = (
+                        await tenant_db.execute(select(Tenant).where(Tenant.code == tenant.code))
+                    ).scalar_one_or_none()
+                    if by_code:
+                        if by_code.id == tenant.id:
+                            existing = by_code
+                        elif await self._tenant_registry_has_linked_data(tenant_db, by_code.id):
+                            raise ValueError(
+                                f"Database {tenant.database_name} already has laboratory "
+                                f"'{tenant.code}' with a different id. Manual review required."
+                            )
+                        else:
+                            # Stale or soft-deleted registry row from a partial provision
+                            await tenant_db.delete(by_code)
+                            await tenant_db.flush()
+
                 if existing:
-                    existing.code = tenant.code
-                    existing.name = tenant.name
-                    existing.name_ar = tenant.name_ar
-                    existing.email = tenant.email
-                    existing.phone = tenant.phone
-                    existing.status = tenant.status
-                    existing.database_name = tenant.database_name
+                    self._apply_tenant_registry_fields(existing, tenant)
+                    existing.deleted_at = None
                 else:
-                    tenant_db.add(
-                        Tenant(
-                            id=tenant.id,
-                            code=tenant.code,
-                            name=tenant.name,
-                            name_ar=tenant.name_ar,
-                            email=tenant.email,
-                            phone=tenant.phone,
-                            tax_number=tenant.tax_number,
-                            status=tenant.status,
-                            locale=tenant.locale,
-                            timezone=tenant.timezone,
-                            database_name=tenant.database_name,
-                        )
-                    )
+                    tenant_db.add(self._tenant_registry_row(tenant))
                 await tenant_db.commit()
             except Exception:
                 await tenant_db.rollback()
                 raise
+
+    @staticmethod
+    def _apply_tenant_registry_fields(row: Tenant, tenant: Tenant) -> None:
+        row.code = tenant.code
+        row.name = tenant.name
+        row.name_ar = tenant.name_ar
+        row.email = tenant.email
+        row.phone = tenant.phone
+        row.tax_number = tenant.tax_number
+        row.status = tenant.status
+        row.locale = tenant.locale
+        row.timezone = tenant.timezone
+        row.database_name = tenant.database_name
+
+    @staticmethod
+    def _tenant_registry_row(tenant: Tenant) -> Tenant:
+        return Tenant(
+            id=tenant.id,
+            code=tenant.code,
+            name=tenant.name,
+            name_ar=tenant.name_ar,
+            email=tenant.email,
+            phone=tenant.phone,
+            tax_number=tenant.tax_number,
+            status=tenant.status,
+            locale=tenant.locale,
+            timezone=tenant.timezone,
+            database_name=tenant.database_name,
+        )
+
+    async def _tenant_registry_has_linked_data(
+        self, tenant_db: AsyncSession, tenant_id: UUID
+    ) -> bool:
+        from app.models.auth import User
+
+        count = await tenant_db.scalar(
+            select(func.count()).select_from(User).where(User.tenant_id == tenant_id)
+        )
+        return (count or 0) > 0
 
     async def provision_new_tenant(self, tenant: Tenant) -> str:
         return await self.ensure_tenant_database(tenant)

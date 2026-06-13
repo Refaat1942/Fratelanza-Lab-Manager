@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import select
 
 from app.core.config import get_settings
-from app.db.manager import get_database_manager
+from app.db.manager import get_database_manager, tenant_database_name
 from app.db.session import async_session_factory
 from app.models.platform import Tenant
 from app.services.tenant_provisioning_service import TenantProvisioningService
@@ -43,12 +43,18 @@ async def migrate(tenant_code: str | None, dry_run: bool) -> None:
             return
 
         for tenant in tenants:
-            target_db = tenant.database_name or f"{settings.TENANT_DATABASE_PREFIX}{tenant.code.replace('-', '_')}"
+            target_db = tenant.database_name or tenant_database_name(tenant.code)
             print(f"- {tenant.code}: -> {target_db}")
             if dry_run:
                 continue
-            db_name = await TenantProvisioningService(platform_db).migrate_existing_tenant(tenant.id)
-            print(f"  migrated to {db_name}")
+            try:
+                db_name = await TenantProvisioningService(platform_db).migrate_existing_tenant(
+                    tenant.id
+                )
+                print(f"  OK: {db_name}")
+            except Exception as exc:
+                print(f"  FAILED {tenant.code}: {exc}")
+                raise
 
         if not dry_run:
             await platform_db.commit()
