@@ -10,8 +10,27 @@ from app.models.platform import Tenant
 from app.schemas.branding import BrandingUpdate, PublicBrandingResponse
 from app.services.branding_service import BrandingService
 
+from app.core.config import get_settings
+
+settings = get_settings()
+
 router = APIRouter(prefix="/public", tags=["Public"])
 manager = get_database_manager()
+
+
+@router.get("/version")
+async def get_app_version():
+    """Public build info — use to verify production deploy."""
+    return {
+        "version": settings.APP_VERSION,
+        "build": settings.BUILD_SHA,
+        "features": [
+            "arabic_daily_report_pdf_excel",
+            "patient_paid_remaining",
+            "automated_backups",
+            "tenant_db_sync_on_login",
+        ],
+    }
 
 
 async def _load_tenant_branding(tenant_code: str, platform_db):

@@ -39,6 +39,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [appVersion, setAppVersion] = useState<string | null>(null);
   const [subscription, setSubscription] = useState<{
     plan_name?: string | null;
     status?: string | null;
@@ -54,14 +55,20 @@ export default function SettingsPage() {
     Promise.all([
       api.get("/settings/branding"),
       api.get("/settings/subscription"),
+      api.get("/public/version").catch(() => ({ data: null })),
     ])
-      .then(([brandingRes, subscriptionRes]) => {
+      .then(([brandingRes, subscriptionRes, versionRes]) => {
         const data = brandingRes.data;
         setForm({
           ...data,
           subscription_end_date: data.subscription_end_date || "",
         });
         setSubscription(subscriptionRes.data);
+        if (versionRes.data?.version) {
+          setAppVersion(
+            `${versionRes.data.version}${versionRes.data.build ? ` (${versionRes.data.build})` : ""}`
+          );
+        }
         if (subscriptionRes.data?.expires_at && !data.subscription_end_date) {
           setForm((prev) => ({
             ...prev,
@@ -348,6 +355,19 @@ export default function SettingsPage() {
                     <Switch defaultChecked className="mt-3" />
                   </div>
                 ))}
+                {appVersion && (
+                  <div className="rounded-lg border border-dashed p-4 text-sm">
+                    <Label className="text-base">
+                      {locale === "ar" ? "إصدار النظام" : "System version"}
+                    </Label>
+                    <p className="mt-1 font-mono text-muted-foreground">{appVersion}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {locale === "ar"
+                        ? "إذا لم ترَ الميزات الجديدة، نفّذ update-production.sh على السيرفر"
+                        : "If new features are missing, run update-production.sh on the server"}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

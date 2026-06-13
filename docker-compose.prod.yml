@@ -58,6 +58,8 @@ services:
       DEBUG: "false"
       TENANT_DATABASE_PER_CUSTOMER: ${TENANT_DATABASE_PER_CUSTOMER:-true}
       TENANT_DATABASE_PREFIX: ${TENANT_DATABASE_PREFIX:-labmaster_tenant_}
+      APP_VERSION: ${APP_VERSION:-1.2.0}
+      BUILD_SHA: ${BUILD_SHA:-unknown}
     ports:
       - "${LABMASTER_API_PORT:-18000}:8000"
     depends_on:

@@ -8,7 +8,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     APP_NAME: str = "LabMaster Egypt API"
-    APP_VERSION: str = "1.0.0"
+    APP_VERSION: str = "1.2.0"
+    BUILD_SHA: str = "dev"
     API_V1_PREFIX: str = "/api/v1"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True

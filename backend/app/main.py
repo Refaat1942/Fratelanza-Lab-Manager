@@ -63,7 +63,12 @@ app.mount(
 @app.get("/health")
 @limiter.limit("30/minute")
 async def health(request: Request):
-    return {"status": "healthy", "app": settings.APP_NAME, "version": settings.APP_VERSION}
+    return {
+        "status": "healthy",
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "build": settings.BUILD_SHA,
+    }
 
 
 @app.exception_handler(ValueError)
