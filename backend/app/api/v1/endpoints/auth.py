@@ -15,15 +15,21 @@ from app.services.tenant_access_service import TenantAccessService
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
+def _auth_error(exc: ValueError) -> HTTPException:
+    msg = str(exc)
+    if msg.startswith("Tenant account is") or "expired" in msg.lower() or "cancelled" in msg.lower():
+        return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
+    if "subscription" in msg.lower():
+        return HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=msg)
+    return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=msg)
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(data: LoginRequest, db: DbSession):
     try:
         return await AuthService(db).login(data)
     except ValueError as e:
-        msg = str(e)
-        if msg.startswith("Tenant account is"):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=msg)
+        raise _auth_error(e) from e
 
 
 @router.post("/platform/login", response_model=TokenResponse)
@@ -39,10 +45,7 @@ async def refresh_token(data: RefreshTokenRequest, db: DbSession):
     try:
         return await AuthService(db).refresh(data.refresh_token)
     except ValueError as e:
-        msg = str(e)
-        if msg.startswith("Tenant account is"):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=msg)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=msg)
+        raise _auth_error(e) from e
 
 
 @router.get("/platform/me", response_model=PlatformAdminResponse)

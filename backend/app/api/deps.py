@@ -70,12 +70,20 @@ async def get_current_tenant(
     tenant_id = (str(user.tenant_id) if user.tenant_id else None) or x_tenant_id
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant context required")
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id, Tenant.deleted_at.is_(None)))
-    tenant = result.scalar_one_or_none()
-    if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-    if tenant.status in BLOCKED_STATUSES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Tenant account is {tenant.status.value}")
+    if user.tenant_id and str(user.tenant_id) != tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant context mismatch")
+    try:
+        tenant = await TenantAccessService(db).assert_tenant_active(UUID(tenant_id))
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = (
+            status.HTTP_403_FORBIDDEN
+            if "expired" in detail.lower() or "cancelled" in detail.lower() or "account is" in detail.lower()
+            else status.HTTP_402_PAYMENT_REQUIRED
+            if "subscription" in detail.lower()
+            else status.HTTP_404_NOT_FOUND
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from exc
     return tenant
 
 

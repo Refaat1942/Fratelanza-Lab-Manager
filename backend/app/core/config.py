@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     GRACE_PERIOD_DAYS: int = 7
     RENEWAL_REMINDER_DAYS: int = 14
 
+    # When true in development, reset demo/platform admin passwords on startup (never enable in production)
+    BOOTSTRAP_DEMO_ADMINS: bool = False
+
 
 @lru_cache
 def get_settings() -> Settings:

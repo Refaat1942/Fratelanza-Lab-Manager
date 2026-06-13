@@ -18,13 +18,14 @@ limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIM
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.bootstrap.admin_credentials import ensure_demo_admin, ensure_platform_admin
+    if settings.ENVIRONMENT == "development" and settings.DEBUG:
+        from app.bootstrap.admin_credentials import ensure_demo_admin, ensure_platform_admin
 
-    try:
-        await ensure_platform_admin()
-        await ensure_demo_admin()
-    except Exception as exc:
-        print(f"Admin bootstrap skipped: {exc}")
+        try:
+            await ensure_platform_admin()
+            await ensure_demo_admin()
+        except Exception as exc:
+            print(f"Admin bootstrap skipped: {exc}")
     yield
 
 
