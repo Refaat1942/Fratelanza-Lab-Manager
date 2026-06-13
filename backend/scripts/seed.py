@@ -31,7 +31,8 @@ from app.models.inventory import InventoryBatch, InventoryCategory, InventoryIte
 from app.models.orders import LabOrder, LabOrderItem, LabResult, OrderStatus, ResultStatus
 from app.models.patients import Gender, Patient, PatientVisit, VisitStatus
 from app.models.doctors import Doctor
-from app.services.tenant_provisioning_service import TenantProvisioningService
+from app.core.modules import ENTERPRISE_MODULES, PROFESSIONAL_MODULES, STARTER_MODULES
+from app.services.tenant_feature_service import TenantFeatureService
 
 settings = get_settings()
 manager = get_database_manager()
@@ -336,6 +337,12 @@ async def seed() -> None:
         )
 
         for name, name_ar, tier, cycle, price, branches, users in PLANS:
+            if tier == PlanTier.STARTER:
+                modules = STARTER_MODULES
+            elif tier == PlanTier.PROFESSIONAL:
+                modules = PROFESSIONAL_MODULES
+            else:
+                modules = ENTERPRISE_MODULES
             platform_db.add(
                 SubscriptionPlan(
                     name=name,
@@ -345,7 +352,7 @@ async def seed() -> None:
                     price_egp=price,
                     max_branches=branches,
                     max_users=users,
-                    features={"modules": ["patients", "tests", "billing", "inventory", "reports"]},
+                    features={"modules": [m for m in modules if m not in {"dashboard", "settings"}]},
                 )
             )
         await platform_db.flush()
@@ -380,6 +387,8 @@ async def seed() -> None:
             )
         )
         await platform_db.flush()
+
+        await TenantFeatureService(platform_db).seed_from_plan(tenant.id, plan)
 
         if settings.TENANT_DATABASE_PER_CUSTOMER:
             db_name = await TenantProvisioningService(platform_db).provision_new_tenant(tenant)

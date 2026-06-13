@@ -2,11 +2,12 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
-from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.api.deps import CurrentTenant, CurrentUser, DbSession, PlatformDbSession, require_permission
 from app.schemas.branding import BrandingResponse, BrandingUpdate
-from app.schemas.platform import TenantLimitsResponse
+from app.schemas.platform import TenantFeaturesResponse, TenantLimitsResponse
 from app.services.branding_service import BrandingService
 from app.services.tenant_limits_service import TenantLimitsService
+from app.services.tenant_feature_service import TenantFeatureService
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
@@ -34,6 +35,20 @@ def _branding_response(tenant, branding) -> BrandingResponse:
 async def get_limits(db: DbSession, tenant: CurrentTenant, user: CurrentUser):
     limits = await TenantLimitsService(db).get_limits(tenant.id)
     return limits.to_response()
+
+
+@router.get("/features", response_model=TenantFeaturesResponse)
+async def get_features(
+    tenant: CurrentTenant,
+    user: CurrentUser,
+    platform_db: PlatformDbSession,
+):
+    svc = TenantFeatureService(platform_db)
+    modules = await svc.get_module_states(tenant.id)
+    return TenantFeaturesResponse(
+        modules=modules,
+        enabled_modules=await svc.get_enabled_modules(tenant.id),
+    )
 
 
 @router.get("/branding", response_model=BrandingResponse)

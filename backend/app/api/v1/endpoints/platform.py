@@ -16,6 +16,7 @@ from app.models.platform import (
 from app.schemas.common import MessageResponse
 from app.schemas.platform import (
     FeatureFlagUpdate,
+    ModuleCatalogItem,
     PlatformAuditLogResponse,
     PlatformAdminResponse,
     RevenueDashboard,
@@ -29,12 +30,14 @@ from app.schemas.platform import (
     TenantChangePlanRequest,
     TenantCreate,
     TenantDetailResponse,
+    TenantFeaturesResponse,
     TenantLimitsResponse,
     TenantResponse,
     TenantSubscriptionResponse,
     TenantUpdate,
 )
 from app.services.platform_service import PlatformService
+from app.services.tenant_feature_service import TenantFeatureService
 from app.services.tenant_limits_service import TenantLimitsService
 
 router = APIRouter(prefix="/platform", tags=["SaaS Platform"])
@@ -139,6 +142,12 @@ async def get_tenant(tenant_id: UUID, db: PlatformDbSession, admin: PlatformAdmi
     async with factory() as tenant_db:
         limits = await TenantLimitsService(tenant_db, db).get_limits(tenant_id)
         detail.limits = limits.to_response()
+    feature_svc = TenantFeatureService(db)
+    modules = await feature_svc.get_module_states(tenant_id)
+    detail.features = TenantFeaturesResponse(
+        modules=modules,
+        enabled_modules=await feature_svc.get_enabled_modules(tenant_id),
+    )
     return detail
 
 
@@ -243,8 +252,16 @@ async def change_plan(tenant_id: UUID, data: TenantChangePlanRequest, db: Platfo
 
 @router.put("/tenants/{tenant_id}/features", response_model=MessageResponse)
 async def update_feature_flags(tenant_id: UUID, flags: list[FeatureFlagUpdate], db: PlatformDbSession, admin: PlatformAdmin):
+    tenant = await PlatformService(db).get_tenant(tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
     await PlatformService(db).update_feature_flags(tenant_id, flags, admin.id)
     return MessageResponse(message="Feature flags updated", message_ar="تم تحديث الميزات")
+
+
+@router.get("/modules", response_model=list[ModuleCatalogItem])
+async def list_module_catalog(admin: PlatformAdmin):
+    return [ModuleCatalogItem.model_validate(item) for item in TenantFeatureService.catalog()]
 
 
 @router.get("/plans", response_model=list[SubscriptionPlanResponse])

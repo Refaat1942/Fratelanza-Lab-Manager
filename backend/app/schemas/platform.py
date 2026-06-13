@@ -109,6 +109,24 @@ class FeatureFlagUpdate(BaseModel):
     config: dict = {}
 
 
+class FeatureFlagResponse(BaseModel):
+    feature_key: str
+    is_enabled: bool
+    config: dict = {}
+
+
+class ModuleCatalogItem(BaseModel):
+    key: str
+    label_en: str
+    label_ar: str
+    locked: bool = False
+
+
+class TenantFeaturesResponse(BaseModel):
+    modules: dict[str, bool]
+    enabled_modules: list[str]
+
+
 class RevenueDashboard(BaseModel):
     total_tenants: int
     active_subscriptions: int
@@ -166,6 +184,7 @@ class TenantDetailResponse(TenantResponse):
     plan_tier: Optional[PlanTier] = None
     admin: Optional[TenantAdminResponse] = None
     limits: Optional[TenantLimitsResponse] = None
+    features: Optional[TenantFeaturesResponse] = None
 
 
 class SubscriptionListItem(BaseModel):

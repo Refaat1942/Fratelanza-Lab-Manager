@@ -6,12 +6,15 @@ import { Loader2 } from "lucide-react";
 import { api, getApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useBrandingStore } from "@/stores/branding-store";
+import { useFeaturesStore } from "@/stores/features-store";
+import { pathnameToModule } from "@/lib/modules";
 
 export function LabAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { setUser } = useAuthStore();
   const { setBranding } = useBrandingStore();
+  const { setFeatures, clearFeatures, isModuleEnabled, loaded: featuresLoaded } = useFeaturesStore();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -30,10 +33,14 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
         if (res.data.tenant_id) localStorage.setItem("tenant_id", res.data.tenant_id);
         localStorage.removeItem("is_platform_admin");
         try {
-          const brandRes = await api.get("/settings/branding");
+          const [brandRes, featuresRes] = await Promise.all([
+            api.get("/settings/branding"),
+            api.get("/settings/features"),
+          ]);
           setBranding(brandRes.data);
+          setFeatures(featuresRes.data.modules, featuresRes.data.enabled_modules);
         } catch {
-          /* branding optional — don't block app */
+          /* optional — don't block app */
         }
         setReady(true);
       })
@@ -43,9 +50,18 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
           sessionStorage.setItem("login_error", msg);
         }
         localStorage.clear();
+        clearFeatures();
         router.replace(msg.startsWith("Tenant account is") ? "/login?suspended=1" : "/login");
       });
-  }, [router, pathname, setUser, setBranding]);
+  }, [router, pathname, setUser, setBranding, setFeatures, clearFeatures]);
+
+  useEffect(() => {
+    if (!ready || !featuresLoaded) return;
+    const moduleKey = pathnameToModule(pathname);
+    if (moduleKey && !isModuleEnabled(moduleKey)) {
+      router.replace("/dashboard");
+    }
+  }, [ready, featuresLoaded, pathname, isModuleEnabled, router]);
 
   if (!ready) {
     return (

@@ -17,6 +17,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { DataTable } from "@/components/data-table/data-table";
+import { ModuleToggles, type ModuleCatalogItem } from "@/components/platform/module-toggles";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
 import { api, getApiError } from "@/lib/api";
@@ -70,6 +71,7 @@ interface TenantDetail {
   max_branches_override?: number;
   admin?: TenantAdmin;
   limits?: TenantLimits;
+  features?: { modules: Record<string, boolean>; enabled_modules: string[] };
 }
 
 const emptyForm = {
@@ -94,6 +96,8 @@ export default function TenantsPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editCode, setEditCode] = useState("");
   const [editLimits, setEditLimits] = useState<TenantLimits | null>(null);
+  const [moduleCatalog, setModuleCatalog] = useState<ModuleCatalogItem[]>([]);
+  const [moduleStates, setModuleStates] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -102,9 +106,11 @@ export default function TenantsPage() {
     Promise.all([
       api.get("/platform/tenants"),
       api.get("/platform/plans"),
-    ]).then(([tRes, pRes]) => {
+      api.get("/platform/modules"),
+    ]).then(([tRes, pRes, mRes]) => {
       setTenants(tRes.data);
       setPlans(pRes.data);
+      setModuleCatalog(mRes.data);
     }).catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
   };
@@ -148,6 +154,10 @@ export default function TenantsPage() {
       setEditId(tenant.id);
       setEditCode(data.code);
       setEditLimits(data.limits || null);
+      setModuleStates(
+        data.features?.modules ||
+          Object.fromEntries(moduleCatalog.map((m) => [m.key, true]))
+      );
       setEditForm({
         name: data.name || "",
         name_ar: data.name_ar || "",
@@ -192,6 +202,15 @@ export default function TenantsPage() {
 
       if (Object.keys(adminPayload).length > 0) {
         await api.patch(`/platform/tenants/${editId}/admin`, adminPayload);
+      }
+
+      const flags = moduleCatalog.map((item) => ({
+        feature_key: item.key,
+        is_enabled: moduleStates[item.key] ?? true,
+        config: {},
+      }));
+      if (flags.length > 0) {
+        await api.put(`/platform/tenants/${editId}/features`, flags);
       }
 
       toast.success(locale === "ar" ? "تم تحديث المختبر" : "Laboratory updated");
@@ -340,7 +359,7 @@ export default function TenantsPage() {
       </div>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {locale === "ar" ? "تعديل المختبر" : "Edit Laboratory"}
@@ -435,6 +454,17 @@ export default function TenantsPage() {
                   ? "اترك الحقل فارغاً لاستخدام حدود الباقة الافتراضية"
                   : "Leave blank to use subscription plan defaults"}
               </p>
+            </div>
+
+            <div className="border-t border-border/60 pt-4">
+              <ModuleToggles
+                locale={locale}
+                catalog={moduleCatalog}
+                states={moduleStates}
+                onChange={(key, enabled) =>
+                  setModuleStates((prev) => ({ ...prev, [key]: enabled }))
+                }
+              />
             </div>
 
             <div className="border-t border-border/60 pt-4">

@@ -134,6 +134,39 @@ def require_permission(permission_code: str):
     return _checker
 
 
+def require_module(module_key: str):
+    async def _checker(
+        tenant: Annotated[Tenant, Depends(get_current_tenant)],
+        platform_db: Annotated[AsyncSession, Depends(get_platform_db)],
+    ) -> None:
+        from app.services.tenant_feature_service import TenantFeatureService
+
+        if not await TenantFeatureService(platform_db).is_module_enabled(tenant.id, module_key):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This feature is not enabled for your laboratory",
+            )
+
+    return Depends(_checker)
+
+
+def require_any_module(*module_keys: str):
+    async def _checker(
+        tenant: Annotated[Tenant, Depends(get_current_tenant)],
+        platform_db: Annotated[AsyncSession, Depends(get_platform_db)],
+    ) -> None:
+        from app.services.tenant_feature_service import TenantFeatureService
+
+        svc = TenantFeatureService(platform_db)
+        if not await svc.is_any_module_enabled(tenant.id, list(module_keys)):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This feature is not enabled for your laboratory",
+            )
+
+    return Depends(_checker)
+
+
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentTenant = Annotated[Tenant, Depends(get_current_tenant)]
 PlatformDbSession = Annotated[AsyncSession, Depends(get_platform_db)]

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useFeaturesStore } from "@/stores/features-store";
 import { t } from "@/lib/i18n";
 import { AppBrand } from "./app-brand";
 
@@ -49,7 +50,12 @@ interface AppSidebarProps {
 export function AppSidebar({ variant = "lab", onNavigate }: AppSidebarProps) {
   const pathname = usePathname();
   const locale = useAuthStore((s) => s.locale);
-  const modules = variant === "platform" ? platformModules : labModules;
+  const isModuleEnabled = useFeaturesStore((s) => s.isModuleEnabled);
+  const featuresLoaded = useFeaturesStore((s) => s.loaded);
+  const modules =
+    variant === "platform"
+      ? platformModules
+      : labModules.filter((m) => !featuresLoaded || isModuleEnabled(m.key));
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-e border-sidebar-border bg-sidebar">

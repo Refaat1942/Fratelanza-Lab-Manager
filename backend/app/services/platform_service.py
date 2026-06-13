@@ -31,6 +31,7 @@ from app.schemas.platform import (
 from app.db.manager import get_database_manager, tenant_database_name
 from app.services.auth_service import AuthService
 from app.services.tenant_access_service import BLOCKED_STATUSES, TenantAccessService
+from app.services.tenant_feature_service import TenantFeatureService
 from app.services.tenant_provisioning_service import TenantProvisioningService
 
 settings = get_settings()
@@ -125,6 +126,8 @@ class PlatformService:
             )
         )
         await self.db.flush()
+
+        await TenantFeatureService(self.db).seed_from_plan(tenant.id, plan)
 
         db_name = await TenantProvisioningService(self.db).provision_new_tenant(tenant)
         factory = await manager.get_tenant_session_factory(db_name)
@@ -397,7 +400,11 @@ class PlatformService:
         )
 
     async def update_feature_flags(self, tenant_id: UUID, flags: list, admin_id: UUID) -> None:
+        from app.core.modules import ALWAYS_ENABLED_MODULES
+
         for flag in flags:
+            if flag.feature_key in ALWAYS_ENABLED_MODULES:
+                continue
             result = await self.db.execute(
                 select(TenantFeatureFlag).where(
                     TenantFeatureFlag.tenant_id == tenant_id,
