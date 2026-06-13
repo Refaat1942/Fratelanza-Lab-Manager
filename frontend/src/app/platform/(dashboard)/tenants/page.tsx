@@ -98,6 +98,8 @@ export default function TenantsPage() {
   const [editLimits, setEditLimits] = useState<TenantLimits | null>(null);
   const [moduleCatalog, setModuleCatalog] = useState<ModuleCatalogItem[]>([]);
   const [moduleStates, setModuleStates] = useState<Record<string, boolean>>({});
+  const [initialModuleStates, setInitialModuleStates] = useState<Record<string, boolean>>({});
+  const [initialAdmin, setInitialAdmin] = useState({ username: "", name: "", name_ar: "" });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -154,10 +156,16 @@ export default function TenantsPage() {
       setEditId(tenant.id);
       setEditCode(data.code);
       setEditLimits(data.limits || null);
-      setModuleStates(
+      const modules =
         data.features?.modules ||
-          Object.fromEntries(moduleCatalog.map((m) => [m.key, true]))
-      );
+        Object.fromEntries(moduleCatalog.map((m) => [m.key, true]));
+      setModuleStates(modules);
+      setInitialModuleStates(modules);
+      setInitialAdmin({
+        username: data.admin?.username || "",
+        name: data.admin?.full_name || "",
+        name_ar: data.admin?.full_name_ar || "",
+      });
       setEditForm({
         name: data.name || "",
         name_ar: data.name_ar || "",
@@ -183,6 +191,18 @@ export default function TenantsPage() {
     if (!editId) return;
     setSaving(true);
     try {
+      const flags = moduleCatalog.map((item) => ({
+        feature_key: item.key,
+        is_enabled: moduleStates[item.key] ?? true,
+        config: {},
+      }));
+      const featuresChanged = flags.some(
+        (f) => (initialModuleStates[f.feature_key] ?? true) !== f.is_enabled
+      );
+      if (flags.length > 0 && featuresChanged) {
+        await api.put(`/platform/tenants/${editId}/features`, flags);
+      }
+
       await api.patch(`/platform/tenants/${editId}`, {
         name: editForm.name,
         name_ar: editForm.name_ar || null,
@@ -194,23 +214,21 @@ export default function TenantsPage() {
         max_branches_override: editForm.max_branches_override ? Number(editForm.max_branches_override) : null,
       });
 
-      const adminPayload: Record<string, string> = {};
-      if (editForm.admin_username.trim()) adminPayload.username = editForm.admin_username.trim();
-      if (editForm.admin_password) adminPayload.password = editForm.admin_password;
-      if (editForm.admin_name.trim()) adminPayload.full_name = editForm.admin_name.trim();
-      if (editForm.admin_name_ar.trim()) adminPayload.full_name_ar = editForm.admin_name_ar.trim();
+      const adminChanged =
+        editForm.admin_password ||
+        editForm.admin_username.trim() !== initialAdmin.username ||
+        editForm.admin_name.trim() !== initialAdmin.name ||
+        editForm.admin_name_ar.trim() !== initialAdmin.name_ar;
 
-      if (Object.keys(adminPayload).length > 0) {
-        await api.patch(`/platform/tenants/${editId}/admin`, adminPayload);
-      }
-
-      const flags = moduleCatalog.map((item) => ({
-        feature_key: item.key,
-        is_enabled: moduleStates[item.key] ?? true,
-        config: {},
-      }));
-      if (flags.length > 0) {
-        await api.put(`/platform/tenants/${editId}/features`, flags);
+      if (adminChanged) {
+        const adminPayload: Record<string, string> = {};
+        if (editForm.admin_username.trim()) adminPayload.username = editForm.admin_username.trim();
+        if (editForm.admin_password) adminPayload.password = editForm.admin_password;
+        if (editForm.admin_name.trim()) adminPayload.full_name = editForm.admin_name.trim();
+        if (editForm.admin_name_ar.trim()) adminPayload.full_name_ar = editForm.admin_name_ar.trim();
+        if (Object.keys(adminPayload).length > 0) {
+          await api.patch(`/platform/tenants/${editId}/admin`, adminPayload);
+        }
       }
 
       toast.success(locale === "ar" ? "تم تحديث المختبر" : "Laboratory updated");

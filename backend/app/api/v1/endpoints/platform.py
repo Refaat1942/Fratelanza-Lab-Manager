@@ -185,12 +185,12 @@ async def update_tenant_admin(
     tenant_id: UUID, data: TenantAdminUpdate, db: PlatformDbSession, admin: PlatformAdmin
 ):
     try:
-        user = await PlatformService(db).update_tenant_admin(tenant_id, data, admin.id)
+        admin = await PlatformService(db).update_tenant_admin(tenant_id, data, admin.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    if not user:
+    if not admin:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    return TenantAdminResponse.model_validate(user)
+    return admin
 
 
 @router.delete("/tenants/{tenant_id}", response_model=MessageResponse)
@@ -255,7 +255,10 @@ async def update_feature_flags(tenant_id: UUID, flags: list[FeatureFlagUpdate], 
     tenant = await PlatformService(db).get_tenant(tenant_id)
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
-    await PlatformService(db).update_feature_flags(tenant_id, flags, admin.id)
+    try:
+        await PlatformService(db).update_feature_flags(tenant_id, flags, admin.id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update features: {e}") from e
     return MessageResponse(message="Feature flags updated", message_ar="تم تحديث الميزات")
 
 

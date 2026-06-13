@@ -23,6 +23,7 @@ from app.models.tenant_config import Branch, TenantBranding
 from app.schemas.auth import UserCreate
 from app.schemas.platform import (
     SubscriptionRenewRequest,
+    TenantAdminResponse,
     TenantAdminUpdate,
     TenantChangePlanRequest,
     TenantCreate,
@@ -203,7 +204,7 @@ class PlatformService:
 
     async def update_tenant_admin(
         self, tenant_id: UUID, data: TenantAdminUpdate, admin_id: UUID
-    ) -> Optional[User]:
+    ) -> Optional[TenantAdminResponse]:
         tenant = await self.get_tenant(tenant_id)
         if not tenant:
             return None
@@ -241,7 +242,14 @@ class PlatformService:
                     str(user.id),
                     {"username": user.username},
                 )
-                return user
+                return TenantAdminResponse(
+                    id=user.id,
+                    username=user.username,
+                    full_name=user.full_name,
+                    full_name_ar=user.full_name_ar,
+                    is_active=user.is_active,
+                    is_tenant_admin=user.is_tenant_admin,
+                )
 
             if not user:
                 raise ValueError("Tenant admin user not found")
@@ -272,12 +280,14 @@ class PlatformService:
 
             await tenant_db.commit()
             saved_id = user.id
-            saved_username = user.username
-
-        async with factory() as tenant_db:
-            user = await tenant_db.get(User, saved_id)
-            if not user:
-                raise ValueError("Tenant admin user not found after save")
+            admin_response = TenantAdminResponse(
+                id=user.id,
+                username=user.username,
+                full_name=user.full_name,
+                full_name_ar=user.full_name_ar,
+                is_active=user.is_active,
+                is_tenant_admin=user.is_tenant_admin,
+            )
 
         await self.log_action(
             admin_id,
@@ -285,9 +295,9 @@ class PlatformService:
             "user",
             tenant.id,
             str(saved_id),
-            {"username": saved_username},
+            {"username": admin_response.username},
         )
-        return user
+        return admin_response
 
     async def delete_tenant(self, tenant_id: UUID, admin_id: UUID) -> bool:
         tenant = await self.get_tenant(tenant_id)
@@ -402,6 +412,7 @@ class PlatformService:
     async def update_feature_flags(self, tenant_id: UUID, flags: list, admin_id: UUID) -> None:
         from app.core.modules import ALWAYS_ENABLED_MODULES
 
+        updated_keys: list[str] = []
         for flag in flags:
             if flag.feature_key in ALWAYS_ENABLED_MODULES:
                 continue
@@ -411,16 +422,29 @@ class PlatformService:
                     TenantFeatureFlag.feature_key == flag.feature_key,
                 )
             )
-            existing = result.scalar_one_or_none()
+            existing = result.scalars().first()
             if existing:
                 existing.is_enabled = flag.is_enabled
-                existing.config = flag.config
+                existing.config = flag.config or {}
             else:
-                self.db.add(TenantFeatureFlag(
-                    tenant_id=tenant_id, feature_key=flag.feature_key,
-                    is_enabled=flag.is_enabled, config=flag.config,
-                ))
-        await self.log_action(admin_id, "feature_flags_updated", "tenant", tenant_id, str(tenant_id))
+                self.db.add(
+                    TenantFeatureFlag(
+                        tenant_id=tenant_id,
+                        feature_key=flag.feature_key,
+                        is_enabled=flag.is_enabled,
+                        config=flag.config or {},
+                    )
+                )
+            updated_keys.append(flag.feature_key)
+        await self.db.flush()
+        await self.log_action(
+            admin_id,
+            "feature_flags_updated",
+            "tenant",
+            tenant_id,
+            str(tenant_id),
+            {"modules": updated_keys},
+        )
 
     async def list_audit_logs(self, limit: int = 100) -> list[PlatformAuditLog]:
         result = await self.db.execute(
