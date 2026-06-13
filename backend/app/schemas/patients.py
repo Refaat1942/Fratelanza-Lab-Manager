@@ -99,9 +99,9 @@ class PatientVisitResponse(BaseModel):
 
 
 class PatientQuickVisitCreate(BaseModel):
-    """Register patient with tests in one step (name, phone, age + test list)."""
+    """Register patient with tests in one step (name, optional phone, age + test list)."""
     full_name: str = Field(min_length=2, max_length=255)
-    phone: str = Field(min_length=6, max_length=50)
+    phone: Optional[str] = Field(None, max_length=50)
     age: Optional[int] = Field(None, ge=0, le=150)
     patient_id: Optional[UUID] = None
     test_ids: list[UUID] = Field(min_length=1)

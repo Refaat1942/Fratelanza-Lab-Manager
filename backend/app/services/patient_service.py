@@ -171,7 +171,7 @@ class PatientService:
             if not patient:
                 raise ValueError("Patient not found")
             patient.full_name = data.full_name.strip()
-            patient.phone = data.phone.strip()
+            patient.phone = data.phone.strip() if data.phone and data.phone.strip() else None
             if data.age is not None:
                 patient.notes = format_patient_age_note(data.age)
             await self.db.flush()
@@ -180,7 +180,7 @@ class PatientService:
                 tenant_id,
                 PatientCreate(
                     full_name=data.full_name.strip(),
-                    phone=data.phone.strip(),
+                    phone=data.phone.strip() if data.phone and data.phone.strip() else None,
                     notes=format_patient_age_note(data.age),
                 ),
                 user_id,
