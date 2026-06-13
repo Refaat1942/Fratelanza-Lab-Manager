@@ -17,6 +17,8 @@ class InvoiceItemCreate(BaseModel):
 class InvoiceCreate(BaseModel):
     patient_id: UUID
     branch_id: Optional[UUID] = None
+    visit_id: Optional[UUID] = None
+    order_id: Optional[UUID] = None
     items: list[InvoiceItemCreate] = Field(min_length=1)
     discount: float = Field(default=0, ge=0)
     notes: Optional[str] = None

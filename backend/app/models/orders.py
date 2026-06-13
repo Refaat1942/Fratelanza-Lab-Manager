@@ -50,6 +50,7 @@ class LabOrderItem(Base, UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin):
     order_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("lab_orders.id", ondelete="CASCADE"), index=True)
     test_id: Mapped[str] = mapped_column(UUID(as_uuid=True), ForeignKey("tests.id"), index=True)
     price: Mapped[float] = mapped_column(Numeric(12, 2))
+    cost: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
     discount: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
     status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), default=OrderStatus.PENDING)
 

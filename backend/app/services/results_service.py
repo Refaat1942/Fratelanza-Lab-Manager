@@ -149,6 +149,7 @@ class ResultsService:
                 order_id=order.id,
                 test_id=test.id,
                 price=float(test.price),
+                cost=float(test.cost or 0),
             )
             self.db.add(item)
             await self.db.flush()

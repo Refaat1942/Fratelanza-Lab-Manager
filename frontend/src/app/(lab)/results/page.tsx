@@ -14,6 +14,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
 import { DateRangeFilter } from "@/components/filters/date-range-filter";
 import { useDateRange } from "@/hooks/use-date-range";
+import { TestLinesPicker, validTestIds, type TestCatalogItem, type TestLine } from "@/components/tests/test-lines-picker";
 import { api, getApiError } from "@/lib/api";
 import { exportModuleExcel } from "@/lib/export";
 import { toast } from "sonner";
@@ -33,11 +34,11 @@ export default function ResultsPage() {
   const locale = useAuthStore((s) => s.locale);
   const [results, setResults] = useState<Result[]>([]);
   const [patients, setPatients] = useState<{ id: string; full_name: string }[]>([]);
-  const [tests, setTests] = useState<{ id: string; name: string }[]>([]);
+  const [tests, setTests] = useState<TestCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [patientId, setPatientId] = useState("");
-  const [testId, setTestId] = useState("");
+  const [testLines, setTestLines] = useState<TestLine[]>([{ testId: "" }]);
   const [saving, setSaving] = useState(false);
   const [enterId, setEnterId] = useState<string | null>(null);
   const [formMeta, setFormMeta] = useState<{ patient_name: string; test_name: string; order_number: string } | null>(null);
@@ -53,7 +54,14 @@ export default function ResultsPage() {
       .then(([res, pat, tst]) => {
         setResults(res.data.items || []);
         setPatients(pat.data.items || []);
-        setTests(tst.data.items || []);
+        setTests(
+          (tst.data.items || []).map((t: { id: string; name: string; price: number; cost: number }) => ({
+            id: t.id,
+            name: t.name,
+            price: t.price,
+            cost: t.cost ?? 0,
+          }))
+        );
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
@@ -63,11 +71,14 @@ export default function ResultsPage() {
 
   const createOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    const testIds = validTestIds(testLines);
+    if (!patientId || testIds.length === 0) return;
     setSaving(true);
     try {
-      await api.post("/results/orders", { patient_id: patientId, test_ids: [testId] });
+      await api.post("/results/orders", { patient_id: patientId, test_ids: testIds });
       toast.success(locale === "ar" ? "تم إنشاء الطلب" : "Order created");
       setOpen(false);
+      setTestLines([{ testId: "" }]);
       load();
     } catch (err) {
       toast.error(getApiError(err));
@@ -211,14 +222,20 @@ export default function ResultsPage() {
                     <SelectContent>{patients.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>{locale === "ar" ? "التحليل" : "Test"}</Label>
-                  <Select value={testId} onValueChange={(v) => v && setTestId(v)}>
-                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                    <SelectContent>{tests.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <Button type="submit" className="w-full" disabled={saving || !patientId || !testId}>{t(locale, "save")}</Button>
+                <TestLinesPicker
+                  locale={locale}
+                  tests={tests}
+                  lines={testLines}
+                  onChange={setTestLines}
+                  showLabCost
+                />
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={saving || !patientId || validTestIds(testLines).length === 0}
+                >
+                  {t(locale, "save")}
+                </Button>
               </form>
             </DialogContent>
           </Dialog>

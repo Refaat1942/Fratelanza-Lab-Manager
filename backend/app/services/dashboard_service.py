@@ -8,7 +8,7 @@ from app.models.billing import Invoice, InvoiceStatus
 from app.models.doctors import Doctor
 from app.models.expenses import Expense
 from app.models.inventory import InventoryBatch, InventoryItem
-from app.models.orders import LabOrder, OrderStatus
+from app.models.orders import LabOrder, LabOrderItem, OrderStatus
 from app.models.patients import Patient
 from app.models.tests import Test
 from app.services.billing_service import BillingService
@@ -52,6 +52,7 @@ class DashboardService:
         low_stock = await self._low_stock_items(tenant_id)
 
         net_profit = float(financial["total_collected"]) - float(expenses["total_expenses"])
+        laboratory = await self._laboratory_totals(tenant_id, date_from, date_to)
 
         return {
             "stats": stats,
@@ -62,10 +63,36 @@ class DashboardService:
                 "in_lab_orders": in_lab,
                 "completed_orders": completed,
             },
+            "laboratory": laboratory,
             "recent_patients": recent_patients,
             "recent_invoices": recent_invoices,
             "low_stock": low_stock,
             "net_profit": net_profit,
+        }
+
+    async def _laboratory_totals(
+        self, tenant_id: UUID, date_from: date | None = None, date_to: date | None = None
+    ) -> dict:
+        q = (
+            select(
+                func.coalesce(func.sum(LabOrderItem.price), 0),
+                func.coalesce(func.sum(LabOrderItem.cost), 0),
+                func.count(LabOrderItem.id),
+            )
+            .select_from(LabOrderItem)
+            .join(LabOrder, LabOrderItem.order_id == LabOrder.id)
+            .where(LabOrder.tenant_id == tenant_id, LabOrder.deleted_at.is_(None))
+        )
+        for clause in apply_date_range(LabOrder.ordered_at, date_from, date_to):
+            q = q.where(clause)
+        sales, cost, test_count = (await self.db.execute(q)).one()
+        sales_f = float(sales or 0)
+        cost_f = float(cost or 0)
+        return {
+            "tests_ordered": int(test_count or 0),
+            "sales_total": sales_f,
+            "cost_total": cost_f,
+            "margin": sales_f - cost_f,
         }
 
     async def _count(self, model, tenant_id: UUID, date_from: date | None = None, date_to: date | None = None) -> int:

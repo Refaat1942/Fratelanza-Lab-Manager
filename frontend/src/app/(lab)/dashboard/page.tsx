@@ -39,6 +39,12 @@ interface Insights {
   };
   expenses: { total_expenses: number; expense_count: number };
   orders: { pending_orders: number; in_lab_orders: number; completed_orders: number };
+  laboratory: {
+    tests_ordered: number;
+    sales_total: number;
+    cost_total: number;
+    margin: number;
+  };
   recent_patients: { id: string; full_name: string; patient_code: string; created_at: string }[];
   recent_invoices: { id: string; invoice_number: string; patient_name: string; total: number; status: string }[];
   low_stock: { id: string; sku: string; name: string; total_quantity: number; reorder_level: number }[];
@@ -203,6 +209,61 @@ export default function DashboardPage() {
           </Card>
         </AnimatedItem>
       </AnimatedStagger>
+
+      {/* Laboratory sales vs cost (internal) */}
+      {data?.laboratory && (
+        <AnimatedStagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <AnimatedItem>
+            <Card className="border-violet-200/60 bg-gradient-to-br from-violet-500/10 to-transparent shadow-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <FlaskConical className="h-4 w-4 text-violet-600" />
+                  {locale === "ar" ? "تحاليل مُطلَبة" : "Tests Ordered"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-violet-700">{data.laboratory.tests_ordered}</p>
+              </CardContent>
+            </Card>
+          </AnimatedItem>
+          <AnimatedItem>
+            <Card className="border-emerald-200/60 bg-gradient-to-br from-emerald-500/10 to-transparent shadow-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {locale === "ar" ? "مبيعات التحاليل (للعميل)" : "Test Sales (customer)"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-emerald-700">EGP {data.laboratory.sales_total.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+          </AnimatedItem>
+          <AnimatedItem>
+            <Card className="border-slate-200/60 bg-gradient-to-br from-slate-500/10 to-transparent shadow-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {locale === "ar" ? "تكلفة المختبر (داخلي)" : "Lab Cost (internal)"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-slate-700">EGP {data.laboratory.cost_total.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+          </AnimatedItem>
+          <AnimatedItem>
+            <Card className="border-teal-200/60 bg-gradient-to-br from-teal-500/10 to-transparent shadow-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {locale === "ar" ? "هامش التحاليل" : "Test Margin"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-teal-700">EGP {data.laboratory.margin.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+          </AnimatedItem>
+        </AnimatedStagger>
+      )}
 
       {/* Entity stats */}
       <AnimatedStagger className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
