@@ -130,6 +130,63 @@ class TenantProvisioningService:
         await self._copy_tenant_data_from_platform(tenant, db_name)
         return db_name
 
+    async def sync_missing_data_from_platform(self, tenant: Tenant, db_name: str) -> int:
+        """Copy rows that exist in platform DB but are missing from the dedicated tenant DB."""
+        platform_name = self.manager.platform_database_name
+        if db_name == platform_name:
+            return 0
+
+        skip_tables = {
+            "platform_users",
+            "subscription_plans",
+            "tenant_subscriptions",
+            "tenant_feature_flags",
+            "platform_audit_logs",
+            "alembic_version",
+            "refresh_tokens",
+        }
+        copied = 0
+        tenant_factory = await self.manager.get_tenant_session_factory(db_name)
+        async with tenant_factory() as tenant_db:
+            try:
+                for table in Base.metadata.sorted_tables:
+                    if table.name in skip_tables or "tenant_id" not in table.c:
+                        continue
+                    pk_cols = list(table.primary_key.columns)
+                    if len(pk_cols) != 1:
+                        continue
+                    pk_col = pk_cols[0]
+
+                    platform_rows = (
+                        await self.platform_db.execute(
+                            select(table).where(table.c.tenant_id == tenant.id)
+                        )
+                    ).mappings().all()
+                    if not platform_rows:
+                        continue
+
+                    existing_ids = {
+                        row[0]
+                        for row in (
+                            await tenant_db.execute(
+                                select(pk_col).where(table.c.tenant_id == tenant.id)
+                            )
+                        ).all()
+                    }
+
+                    for row in platform_rows:
+                        row_dict = dict(row)
+                        if row_dict[pk_col.name] in existing_ids:
+                            continue
+                        await tenant_db.execute(table.insert().values(**row_dict))
+                        copied += 1
+                if copied:
+                    await tenant_db.commit()
+            except Exception:
+                await tenant_db.rollback()
+                raise
+        return copied
+
     async def _copy_tenant_data_from_platform(self, tenant: Tenant, db_name: str) -> None:
         """Copy rows for one tenant from shared platform DB into dedicated tenant DB."""
         platform_name = self.manager.platform_database_name

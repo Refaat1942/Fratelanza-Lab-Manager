@@ -46,7 +46,7 @@ export default function TestsPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyTest);
   const [saving, setSaving] = useState(false);
-  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
+  const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange(null);
 
   const load = useCallback(() => {
     setLoading(true);

@@ -24,11 +24,16 @@ function defaultRange(defaultFromDays: number) {
 }
 
 /**
- * @param defaultFromDays Days before today for the start date. Use 0 for "today only" (dashboard).
+ * @param defaultFromDays Days before today for the start date. Use 0 for "today only".
+ *   Pass `null` to leave dates empty (no server-side date filter until the user picks one).
  */
-export function useDateRange(defaultFromDays = 30) {
-  const [dateFrom, setDateFrom] = useState(() => defaultRange(defaultFromDays).from);
-  const [dateTo, setDateTo] = useState(() => defaultRange(defaultFromDays).to);
+export function useDateRange(defaultFromDays: number | null = 30) {
+  const [dateFrom, setDateFrom] = useState(() =>
+    defaultFromDays === null ? "" : defaultRange(defaultFromDays).from
+  );
+  const [dateTo, setDateTo] = useState(() =>
+    defaultFromDays === null ? "" : defaultRange(defaultFromDays).to
+  );
 
   const queryParams = useMemo(() => {
     const p = new URLSearchParams();
@@ -39,6 +44,11 @@ export function useDateRange(defaultFromDays = 30) {
   }, [dateFrom, dateTo]);
 
   const reset = () => {
+    if (defaultFromDays === null) {
+      setDateFrom("");
+      setDateTo("");
+      return;
+    }
     const { from, to } = defaultRange(defaultFromDays);
     setDateFrom(from);
     setDateTo(to);

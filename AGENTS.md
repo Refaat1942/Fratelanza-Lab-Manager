@@ -29,3 +29,6 @@ Full stack: `docker compose up -d` from repo root (frontend :3000, API :8000).
 - After dependency installs, restart dev servers if hot reload does not pick up new packages.
 - Production deploy on VPS: `docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build` plus `alembic upgrade head` in the backend container.
 - Platform tenant feature saves can 500 if admin password fields are sent unchanged; tenants edit flow uses `passwordDirty` to avoid that.
+- **Data “missing” after re-login:** usually wrong tenant DB routing or data left in platform DB. On login, missing rows are synced from platform → dedicated DB. Manual repair: `docker compose ... exec backend python scripts/sync_tenant_data_from_platform.py <lab-code>`.
+- Login screen pre-fills last laboratory code from `labmaster-auth` — customer must use the same code every time.
+- Tests catalog list has **no default date filter**; transactional pages (patients, billing) still filter by date range.

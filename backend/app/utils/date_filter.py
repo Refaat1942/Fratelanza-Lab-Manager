@@ -1,6 +1,10 @@
 from datetime import date, datetime, time, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import ColumnElement
+
+# Laboratory customers operate in Egypt — interpret UI date filters in local time.
+LAB_TIMEZONE = ZoneInfo("Africa/Cairo")
 
 
 def parse_date_param(value: str | None) -> date | None:
@@ -10,11 +14,13 @@ def parse_date_param(value: str | None) -> date | None:
 
 
 def date_start(d: date) -> datetime:
-    return datetime.combine(d, time.min, tzinfo=timezone.utc)
+    local_start = datetime.combine(d, time.min, tzinfo=LAB_TIMEZONE)
+    return local_start.astimezone(timezone.utc)
 
 
 def date_end(d: date) -> datetime:
-    return datetime.combine(d, time.max, tzinfo=timezone.utc)
+    local_end = datetime.combine(d, time.max, tzinfo=LAB_TIMEZONE)
+    return local_end.astimezone(timezone.utc)
 
 
 def apply_date_range(column: ColumnElement, date_from: date | None, date_to: date | None) -> list:

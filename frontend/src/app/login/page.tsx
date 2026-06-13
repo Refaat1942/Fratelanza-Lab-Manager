@@ -17,9 +17,10 @@ import { toast } from "sonner";
 
 function LoginPageContent() {
   const locale = useAuthStore((s) => s.locale);
+  const storedTenantCode = useAuthStore((s) => s.tenantCode);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [tenantCode, setTenantCode] = useState("");
+  const [tenantCode, setTenantCode] = useState(storedTenantCode || "");
   const [loading, setLoading] = useState(false);
   const [branding, setBranding] = useState<TenantBranding>(DEFAULT_BRANDING);
   const [loadingBrand, setLoadingBrand] = useState(false);

@@ -61,19 +61,27 @@ class AuthService:
         async with factory() as tenant_db:
             service = cls(platform_db, tenant_db)
             try:
-                return await service._authenticate_lab_user(username, data.password, tenant, database_name)
+                tokens = await service._authenticate_lab_user(username, data.password, tenant, database_name)
             except ValueError as exc:
                 if str(exc) != "Invalid credentials":
                     raise
+                tokens = None
 
-        # User may still exist in the shared platform DB from an older create path — copy then retry once.
+        if tokens is None:
+            # User may still exist in the shared platform DB from an older create path — copy then retry once.
+            if settings.TENANT_DATABASE_PER_CUSTOMER and database_name != manager.platform_database_name:
+                await TenantProvisioningService(platform_db).migrate_existing_tenant(tenant.id)
+                await platform_db.commit()
+                async with factory() as tenant_db:
+                    service = cls(platform_db, tenant_db)
+                    tokens = await service._authenticate_lab_user(username, data.password, tenant, database_name)
+            else:
+                raise ValueError("Invalid credentials")
+
         if settings.TENANT_DATABASE_PER_CUSTOMER and database_name != manager.platform_database_name:
-            await TenantProvisioningService(platform_db).migrate_existing_tenant(tenant.id)
+            await TenantProvisioningService(platform_db).sync_missing_data_from_platform(tenant, database_name)
             await platform_db.commit()
-            async with factory() as tenant_db:
-                service = cls(platform_db, tenant_db)
-                return await service._authenticate_lab_user(username, data.password, tenant, database_name)
-        raise ValueError("Invalid credentials")
+        return tokens
 
     async def _find_lab_user(self, username: str, tenant_id: UUID) -> User | None:
         result = await self.tenant_db.execute(
@@ -208,7 +216,14 @@ class AuthService:
         if not payload:
             raise ValueError("Invalid refresh token")
 
-        database_name = payload.get("database_name") or manager.platform_database_name
+        database_name = payload.get("database_name")
+        tenant_id = payload.get("tenant_id")
+        if not database_name and tenant_id:
+            tenant = await platform_db.get(Tenant, UUID(tenant_id))
+            if tenant:
+                database_name = manager.resolve_tenant_database(tenant.code, tenant.database_name)
+        if not database_name:
+            database_name = manager.platform_database_name
         factory = await manager.get_tenant_session_factory(database_name)
         async with factory() as tenant_db:
             service = cls(platform_db, tenant_db)

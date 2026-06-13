@@ -31,8 +31,8 @@ async def _resolve_database_name(
             return payload["database_name"]
         if payload and payload.get("tenant_id"):
             tenant = await platform_db.get(Tenant, UUID(payload["tenant_id"]))
-            if tenant and tenant.database_name:
-                return tenant.database_name
+            if tenant:
+                return manager.resolve_tenant_database(tenant.code, tenant.database_name)
     return manager.platform_database_name
 
 
