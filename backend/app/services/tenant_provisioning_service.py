@@ -38,8 +38,33 @@ class TenantProvisioningService:
         await self._sync_tenant_registry_row(tenant)
         return db_name
 
+    async def _registry_id_conflict(self, tenant: Tenant) -> bool:
+        factory = await self.manager.get_tenant_session_factory(tenant.database_name)
+        async with factory() as tenant_db:
+            if await tenant_db.get(Tenant, tenant.id):
+                return False
+            by_code = (
+                await tenant_db.execute(select(Tenant).where(Tenant.code == tenant.code))
+            ).scalar_one_or_none()
+            return bool(by_code and by_code.id != tenant.id)
+
+    async def _rebuild_tenant_database(self, tenant: Tenant) -> None:
+        """Safe repair: dedicated DB only. All laboratory data is re-copied from platform DB."""
+        db_name = tenant.database_name
+        if not db_name:
+            raise ValueError("Tenant has no database_name")
+        print(
+            f"  repair: resetting {db_name} (partial setup removed; "
+            f"data will be copied from platform DB '{self.manager.platform_database_name}')"
+        )
+        await self.manager.dispose_tenant_engine(db_name)
+        self.manager.rebuild_tenant_database(db_name)
+
     async def _sync_tenant_registry_row(self, tenant: Tenant) -> None:
         """Ensure tenant DB has a tenants row (FK target for users, branches, etc.)."""
+        if await self._registry_id_conflict(tenant):
+            await self._rebuild_tenant_database(tenant)
+
         factory = await self.manager.get_tenant_session_factory(tenant.database_name)
         async with factory() as tenant_db:
             try:
@@ -51,13 +76,7 @@ class TenantProvisioningService:
                     if by_code:
                         if by_code.id == tenant.id:
                             existing = by_code
-                        elif await self._tenant_registry_has_linked_data(tenant_db, by_code.id):
-                            raise ValueError(
-                                f"Database {tenant.database_name} already has laboratory "
-                                f"'{tenant.code}' with a different id. Manual review required."
-                            )
                         else:
-                            # Stale or soft-deleted registry row from a partial provision
                             await tenant_db.delete(by_code)
                             await tenant_db.flush()
 
@@ -100,16 +119,6 @@ class TenantProvisioningService:
             database_name=tenant.database_name,
         )
 
-    async def _tenant_registry_has_linked_data(
-        self, tenant_db: AsyncSession, tenant_id: UUID
-    ) -> bool:
-        from app.models.auth import User
-
-        count = await tenant_db.scalar(
-            select(func.count()).select_from(User).where(User.tenant_id == tenant_id)
-        )
-        return (count or 0) > 0
-
     async def provision_new_tenant(self, tenant: Tenant) -> str:
         return await self.ensure_tenant_database(tenant)
 
@@ -147,6 +156,7 @@ class TenantProvisioningService:
                     .where(Patient.tenant_id == tenant.id)
                 )
                 if existing_patients:
+                    print(f"  skip copy: {existing_patients} patient(s) already in tenant DB")
                     return
 
                 tables_to_copy: list[tuple] = []

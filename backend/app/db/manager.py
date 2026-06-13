@@ -100,6 +100,37 @@ class DatabaseManager:
             if not exists:
                 conn.execute(text(f'CREATE DATABASE "{database_name}"'))
 
+    def drop_database_if_exists(self, database_name: str) -> None:
+        """Drop a tenant database only (never the platform registry DB)."""
+        if database_name == self.platform_database_name:
+            raise ValueError(f"Refusing to drop platform database {database_name}")
+        with self._platform_sync_engine.connect() as conn:
+            conn = conn.execution_options(isolation_level="AUTOCOMMIT")
+            conn.execute(
+                text(
+                    """
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE datname = :dbname AND pid <> pg_backend_pid()
+                    """
+                ),
+                {"dbname": database_name},
+            )
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{database_name}"'))
+
+    async def dispose_tenant_engine(self, database_name: str) -> None:
+        async with self._lock:
+            engine = self._tenant_engines.pop(database_name, None)
+            self._tenant_session_factories.pop(database_name, None)
+        if engine is not None:
+            await engine.dispose()
+
+    def rebuild_tenant_database(self, database_name: str) -> None:
+        """Drop and recreate a tenant DB with a fresh schema (platform DB untouched)."""
+        self.drop_database_if_exists(database_name)
+        self.create_database_if_not_exists(database_name)
+        self.run_migrations(database_name)
+
     def run_migrations(self, database_name: str) -> None:
         async_url, sync_url = self.build_tenant_urls(database_name)
         backend_dir = Path(__file__).resolve().parents[2]
