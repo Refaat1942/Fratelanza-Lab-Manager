@@ -78,15 +78,16 @@ export default function PatientsPage() {
   const saveVisit = async (e: React.FormEvent) => {
     e.preventDefault();
     const testIds = validTestIds(testLines);
-    if (!visitForm.full_name.trim() || !visitForm.phone.trim() || testIds.length === 0) {
-      toast.error(locale === "ar" ? "أكمل الاسم والهاتف واختر تحليلاً واحداً على الأقل" : "Enter name, phone, and at least one test");
+    if (!visitForm.full_name.trim() || testIds.length === 0) {
+      toast.error(locale === "ar" ? "أكمل الاسم واختر تحليلاً واحداً على الأقل" : "Enter name and at least one test");
       return;
     }
     setSaving(true);
     try {
+      const phone = visitForm.phone.trim();
       const { data } = await api.post("/patients/quick-visit", {
         full_name: visitForm.full_name.trim(),
-        phone: visitForm.phone.trim(),
+        phone: phone || null,
         age: visitForm.age ? parseInt(visitForm.age, 10) : null,
         test_ids: testIds,
         discount: parseFloat(discount) || 0,
@@ -128,7 +129,7 @@ export default function PatientsPage() {
     try {
       await api.put(`/patients/${editId}`, {
         full_name: editForm.full_name.trim(),
-        phone: editForm.phone.trim(),
+        phone: editForm.phone.trim() || null,
         notes: editForm.age ? `Age: ${editForm.age}` : null,
       });
       toast.success(locale === "ar" ? "تم تحديث المريض" : "Patient updated");
@@ -220,11 +221,11 @@ export default function PatientsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>{locale === "ar" ? "الهاتف" : "Phone"} *</Label>
+                  <Label>{locale === "ar" ? "الهاتف" : "Phone"}</Label>
                   <Input
                     value={visitForm.phone}
                     onChange={(e) => setVisitForm({ ...visitForm, phone: e.target.value })}
-                    required
+                    placeholder={locale === "ar" ? "اختياري" : "Optional"}
                   />
                 </div>
                 <div className="space-y-2">
