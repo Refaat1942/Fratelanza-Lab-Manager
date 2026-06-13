@@ -13,9 +13,6 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
@@ -37,21 +34,13 @@ interface Test {
   category_id: string;
 }
 
-interface Category {
-  id: string;
-  code: string;
-  name: string;
-  name_ar: string;
-}
-
 const emptyTest = {
-  category_id: "", name: "", name_ar: "", price: "", cost: "", turnaround_hours: "24",
+  name: "", name_ar: "", price: "", cost: "", turnaround_hours: "24",
 };
 
 export default function TestsPage() {
   const locale = useAuthStore((s) => s.locale);
   const [tests, setTests] = useState<Test[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -61,10 +50,9 @@ export default function TestsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([api.get(`/tests?page_size=100${queryParams}`), api.get("/tests/categories")])
-      .then(([testsRes, catRes]) => {
+    api.get(`/tests?page_size=100${queryParams}`)
+      .then((testsRes) => {
         setTests(testsRes.data.items || []);
-        setCategories(catRes.data || []);
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
@@ -76,7 +64,6 @@ export default function TestsPage() {
     e.preventDefault();
     setSaving(true);
     const payload = {
-      category_id: form.category_id,
       name: form.name,
       name_ar: form.name_ar,
       price: parseFloat(form.price) || 0,
@@ -105,7 +92,6 @@ export default function TestsPage() {
   const openEdit = (test: Test) => {
     setEditId(test.id);
     setForm({
-      category_id: test.category_id,
       name: test.name,
       name_ar: test.name_ar,
       price: String(test.price),
@@ -192,19 +178,6 @@ export default function TestsPage() {
               <DialogTitle>{editId ? (locale === "ar" ? "تعديل تحليل" : "Edit Test") : (locale === "ar" ? "تحليل جديد" : "New Test")}</DialogTitle>
             </DialogHeader>
             <form onSubmit={saveTest} className="space-y-4">
-              <div className="space-y-2">
-                <Label>{locale === "ar" ? "الفئة" : "Category"} *</Label>
-                <Select value={form.category_id} onValueChange={(v) => v && setForm({ ...form, category_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                  <SelectContent>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {locale === "ar" ? c.name_ar : c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>
@@ -229,7 +202,7 @@ export default function TestsPage() {
                   <Input type="number" min="1" value={form.turnaround_hours} onChange={(e) => setForm({ ...form, turnaround_hours: e.target.value })} />
                 </div>
               </div>
-              <Button type="submit" className="w-full" disabled={saving || !form.category_id}>
+              <Button type="submit" className="w-full" disabled={saving || !form.name.trim() || !form.name_ar.trim()}>
                 {saving ? "Saving..." : t(locale, "save")}
               </Button>
             </form>
