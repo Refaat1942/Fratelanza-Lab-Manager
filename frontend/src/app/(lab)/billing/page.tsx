@@ -29,6 +29,7 @@ interface Invoice {
   discount?: number;
   total: number;
   paid_amount: number;
+  balance?: number;
   status: string;
   issued_at?: string;
 }
@@ -162,6 +163,14 @@ export default function BillingPage() {
     { accessorKey: "total", header: locale === "ar" ? "الإجمالي" : "Total", cell: ({ row }) => `EGP ${row.original.total.toLocaleString()}` },
     { accessorKey: "paid_amount", header: locale === "ar" ? "المدفوع" : "Paid", cell: ({ row }) => `EGP ${row.original.paid_amount.toLocaleString()}` },
     {
+      accessorKey: "balance",
+      header: locale === "ar" ? "المتبقي" : "Due",
+      cell: ({ row }) => {
+        const due = row.original.balance ?? row.original.total - row.original.paid_amount;
+        return `EGP ${due.toLocaleString()}`;
+      },
+    },
+    {
       accessorKey: "status",
       header: locale === "ar" ? "الحالة" : "Status",
       cell: ({ row }) => <Badge variant="outline">{row.original.status}</Badge>,
@@ -179,14 +188,14 @@ export default function BillingPage() {
             </DropdownMenuItem>
             {row.original.status !== "paid" && (
               <DropdownMenuItem onClick={async () => {
-                const due = row.original.total - row.original.paid_amount;
+                const due = row.original.balance ?? row.original.total - row.original.paid_amount;
                 try {
                   await api.post(`/billing/invoices/${row.original.id}/payments`, { amount: due });
-                  toast.success("Payment recorded");
+                  toast.success(locale === "ar" ? "تم إغلاق المتبقي" : "Remaining balance closed");
                   load();
                 } catch (err) { toast.error(getApiError(err)); }
               }}>
-                {locale === "ar" ? "دفع كامل" : "Pay full"}
+                {locale === "ar" ? "إغلاق المتبقي" : "Close remaining"}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem className="text-destructive" onClick={() => deleteInvoice(row.original.id)}>

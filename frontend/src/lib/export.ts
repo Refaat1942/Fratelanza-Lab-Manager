@@ -26,7 +26,7 @@ export async function exportReportExcel(
 
 export async function downloadDailyOperationsPdf(dateFrom: string, dateTo: string) {
   const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
-  await downloadApiFile(`/reports/daily-operations/pdf?${params}`, "daily_operations.pdf");
+  await downloadApiFile(`/reports/daily-operations/pdf?${params}`, "daily_operations_ar.pdf");
 }
 
 export async function downloadInvoiceReceipt(invoiceId: string) {

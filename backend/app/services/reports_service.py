@@ -16,6 +16,7 @@ from app.models.patients import Patient
 from app.models.tests import Test
 from app.models.tenant_config import Branch
 from app.services.billing_service import BillingService
+from app.services.daily_operations_labels import DAILY_OPERATIONS_LABELS_AR
 from app.services.expense_service import ExpenseService
 from app.utils.date_filter import apply_date_range, date_end, date_start
 
@@ -37,10 +38,13 @@ class ReportsService:
         if report_type not in REPORT_TYPES:
             raise ValueError(f"Unknown report type: {report_type}")
 
+        filename = f"{report_type}_report.xlsx"
         if report_type == "daily":
             headers, rows = await self._daily_report(tenant_id, date_from, date_to)
+            filename = "daily_operations_ar.xlsx"
         elif report_type == "monthly":
             headers, rows = await self._monthly_report(tenant_id, date_from, date_to)
+            filename = "monthly_operations_ar.xlsx"
         elif report_type == "profitability":
             headers, rows = await self._profitability_report(tenant_id, date_from, date_to)
         elif report_type == "inventory":
@@ -54,7 +58,7 @@ class ReportsService:
         else:
             headers, rows = await self._branches_report(tenant_id, date_from, date_to)
 
-        return self._to_xlsx(headers, rows), f"{report_type}_report.xlsx"
+        return self._to_xlsx(headers, rows), filename
 
     def _to_xlsx(self, headers: list[str], rows: list[list]) -> bytes:
         wb = Workbook()
@@ -70,18 +74,22 @@ class ReportsService:
         wb.save(buf)
         return buf.getvalue()
 
-    async def _daily_report(self, tenant_id: UUID, date_from, date_to):
+    async def _daily_operations_metrics(
+        self, tenant_id: UUID, date_from: date | None, date_to: date | None
+    ) -> dict:
         today = datetime.now(timezone.utc).date()
         d_from = date_from or today
         d_to = date_to or today
+        date_col = func.coalesce(Invoice.issued_at, Invoice.created_at)
 
-        inv_q = select(func.count(), func.coalesce(func.sum(Invoice.total), 0)).where(
-            Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None)
-        )
-        for clause in apply_date_range(func.coalesce(Invoice.issued_at, Invoice.created_at), d_from, d_to):
+        inv_q = select(
+            func.count(Invoice.id),
+            func.coalesce(func.sum(Invoice.total), 0),
+            func.coalesce(func.sum(Invoice.paid_amount), 0),
+        ).where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
+        for clause in apply_date_range(date_col, d_from, d_to):
             inv_q = inv_q.where(clause)
-        inv_result = await self.db.execute(inv_q)
-        inv_count, inv_total = inv_result.one()
+        inv_count, inv_gross, inv_paid_on_invoices = (await self.db.execute(inv_q)).one()
 
         pay_q = select(func.coalesce(func.sum(Payment.amount), 0)).join(
             Invoice, Payment.invoice_id == Invoice.id
@@ -111,19 +119,45 @@ class ReportsService:
             ord_q = ord_q.where(clause)
         orders = (await self.db.execute(ord_q)).scalar() or 0
 
-        headers = ["Metric", "Value"]
+        gross = float(inv_gross or 0)
+        paid_on_invoices = float(inv_paid_on_invoices or 0)
+        remaining = max(gross - paid_on_invoices, 0)
+        collected_f = float(collected)
+        expenses_f = float(expenses)
+
+        return {
+            "period_from": d_from.isoformat(),
+            "period_to": d_to.isoformat(),
+            "invoice_count": int(inv_count or 0),
+            "gross_amount": gross,
+            "collected": collected_f,
+            "remaining": remaining,
+            "expenses": expenses_f,
+            "net": collected_f - expenses_f,
+            "new_patients": int(new_patients or 0),
+            "lab_orders": int(orders or 0),
+        }
+
+    def _daily_report_rows_ar(self, metrics: dict) -> tuple[list[str], list[list]]:
+        labels = DAILY_OPERATIONS_LABELS_AR
+        headers = ["البند", "القيمة"]
         rows = [
-            ["Period From", d_from.isoformat()],
-            ["Period To", d_to.isoformat()],
-            ["Invoices", int(inv_count or 0)],
-            ["Invoiced Amount (EGP)", float(inv_total or 0)],
-            ["Collected (EGP)", float(collected)],
-            ["Expenses (EGP)", float(expenses)],
-            ["Net (EGP)", float(collected) - float(expenses)],
-            ["New Patients", int(new_patients)],
-            ["Lab Orders", int(orders)],
+            [labels["period_from"], metrics["period_from"]],
+            [labels["period_to"], metrics["period_to"]],
+            [labels["invoice_count"], metrics["invoice_count"]],
+            [labels["gross_amount"], metrics["gross_amount"]],
+            [labels["collected"], metrics["collected"]],
+            [labels["remaining"], metrics["remaining"]],
+            [labels["expenses"], metrics["expenses"]],
+            [labels["net"], metrics["net"]],
+            [labels["new_patients"], metrics["new_patients"]],
+            [labels["lab_orders"], metrics["lab_orders"]],
         ]
         return headers, rows
+
+    async def _daily_report(self, tenant_id: UUID, date_from, date_to):
+        metrics = await self._daily_operations_metrics(tenant_id, date_from, date_to)
+        return self._daily_report_rows_ar(metrics)
 
     async def _monthly_report(self, tenant_id: UUID, date_from, date_to):
         return await self._daily_report(tenant_id, date_from, date_to)
@@ -193,8 +227,9 @@ class ReportsService:
         result = await self.db.execute(q.order_by(LabOrder.ordered_at.desc()))
 
         headers = [
-            "Order #", "Patient", "Phone", "Doctor", "Tests", "Status",
-            "Ordered", "Completed", "Invoice #", "Amount (EGP)",
+            "رقم الطلب", "المريض", "الهاتف", "الطبيب", "التحاليل", "الحالة",
+            "تاريخ الطلب", "تاريخ الإنجاز", "رقم الفاتورة", "الإجمالي (جنيه)",
+            "المحصّل (جنيه)", "المتبقي (جنيه)",
         ]
         rows = []
         for order, patient, doctor in result.all():
@@ -206,11 +241,13 @@ class ReportsService:
             test_names = ", ".join(t[0] for t in items_result.all())
 
             inv_result = await self.db.execute(
-                select(Invoice.invoice_number, Invoice.total)
+                select(Invoice.invoice_number, Invoice.total, Invoice.paid_amount)
                 .where(Invoice.order_id == order.id, Invoice.deleted_at.is_(None))
                 .limit(1)
             )
             inv_row = inv_result.first()
+            inv_total = float(inv_row[1]) if inv_row else 0
+            inv_paid = float(inv_row[2]) if inv_row else 0
 
             rows.append([
                 order.order_number,
@@ -222,7 +259,9 @@ class ReportsService:
                 order.ordered_at.strftime("%Y-%m-%d %H:%M") if order.ordered_at else "",
                 order.completed_at.strftime("%Y-%m-%d %H:%M") if order.completed_at else "",
                 inv_row[0] if inv_row else "",
-                float(inv_row[1]) if inv_row else 0,
+                inv_total,
+                inv_paid,
+                max(inv_total - inv_paid, 0),
             ])
         return headers, rows
 
@@ -303,5 +342,11 @@ class ReportsService:
         return headers, rows
 
     async def get_daily_operations_data(self, tenant_id: UUID, date_from: date, date_to: date) -> dict:
-        headers, rows = await self._daily_report(tenant_id, date_from, date_to)
-        return {"headers": headers, "rows": [[str(c) for c in row] for row in rows]}
+        metrics = await self._daily_operations_metrics(tenant_id, date_from, date_to)
+        headers, rows = self._daily_report_rows_ar(metrics)
+        return {
+            "title": DAILY_OPERATIONS_LABELS_AR["title"],
+            "metrics": metrics,
+            "headers": headers,
+            "rows": [[str(c) for c in row] for row in rows],
+        }

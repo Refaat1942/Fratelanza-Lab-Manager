@@ -14,7 +14,7 @@ from app.schemas.patients import (
     format_patient_age_note,
 )
 from app.schemas.results import LabOrderCreate
-from app.schemas.billing import InvoiceCreate, InvoiceItemCreate
+from app.schemas.billing import InvoiceCreate, InvoiceItemCreate, PaymentCreate
 from app.services.results_service import ResultsService
 from app.services.billing_service import BillingService
 from app.models.tests import Test
@@ -234,6 +234,26 @@ class PatientService:
             user_id,
         )
 
+        invoice_total = float(invoice.total)
+        paid_amount = 0.0
+        if data.close_remaining:
+            pay_amount = invoice_total
+        elif data.amount_paid and data.amount_paid > 0:
+            pay_amount = min(float(data.amount_paid), invoice_total)
+        else:
+            pay_amount = 0.0
+
+        if pay_amount > 0:
+            invoice = await BillingService(self.db).add_payment(
+                tenant_id,
+                invoice.id,
+                PaymentCreate(amount=pay_amount),
+                user_id,
+            )
+            paid_amount = float(invoice.paid_amount)
+
+        balance = max(invoice_total - paid_amount, 0)
+
         await self.audit.log(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -245,7 +265,9 @@ class PatientService:
                 "order_id": str(order.id),
                 "invoice_id": str(invoice.id),
                 "test_count": len(order_items),
-                "total_price": total_price,
+                "total_price": invoice_total,
+                "paid_amount": paid_amount,
+                "balance": balance,
             },
         )
 
@@ -256,8 +278,10 @@ class PatientService:
             order_number=order.order_number,
             invoice_id=invoice.id,
             invoice_number=invoice.invoice_number,
-            total_price=total_price - discount_amount,
+            total_price=invoice_total,
+            paid_amount=paid_amount,
+            balance=balance,
             total_cost=total_cost,
-            margin=total_price - discount_amount - total_cost,
+            margin=invoice_total - total_cost,
             test_count=len(order_items),
         )

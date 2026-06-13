@@ -153,10 +153,11 @@ class ExportService:
         for clause in apply_date_range(col, date_from, date_to):
             q = q.where(clause)
         result = await self.db.execute(q.order_by(Invoice.created_at.desc()))
-        headers = ["Invoice #", "Patient", "Subtotal", "Discount", "Total", "Paid", "Status", "Issued"]
+        headers = ["Invoice #", "Patient", "Subtotal", "Discount", "Total", "Paid", "Remaining", "Status", "Issued"]
         rows = [
             [inv.invoice_number, patient.full_name, float(inv.subtotal), float(inv.discount),
-             float(inv.total), float(inv.paid_amount), inv.status.value,
+             float(inv.total), float(inv.paid_amount), max(float(inv.total) - float(inv.paid_amount), 0),
+             inv.status.value,
              (inv.issued_at or inv.created_at).strftime("%Y-%m-%d") if (inv.issued_at or inv.created_at) else ""]
             for inv, patient in result.all()
         ]

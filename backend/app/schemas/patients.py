@@ -107,6 +107,8 @@ class PatientQuickVisitCreate(BaseModel):
     test_ids: list[UUID] = Field(min_length=1)
     discount: float = Field(default=0, ge=0)
     discount_percent: Optional[float] = Field(None, ge=0, le=100)
+    amount_paid: Optional[float] = Field(None, ge=0)
+    close_remaining: bool = False
 
 
 class PatientQuickVisitResponse(BaseModel):
@@ -117,6 +119,8 @@ class PatientQuickVisitResponse(BaseModel):
     invoice_id: UUID
     invoice_number: str
     total_price: float
+    paid_amount: float = 0
+    balance: float = 0
     total_cost: float
     margin: float
     test_count: int

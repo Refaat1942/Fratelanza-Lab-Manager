@@ -39,6 +39,8 @@ class BillingService:
         result = await self.db.execute(query)
         items = []
         for inv, patient in result.all():
+            total = float(inv.total)
+            paid = float(inv.paid_amount)
             items.append({
                 "id": inv.id,
                 "invoice_number": inv.invoice_number,
@@ -47,8 +49,9 @@ class BillingService:
                 "status": inv.status,
                 "subtotal": float(inv.subtotal),
                 "discount": float(inv.discount),
-                "total": float(inv.total),
-                "paid_amount": float(inv.paid_amount),
+                "total": total,
+                "paid_amount": paid,
+                "balance": max(total - paid, 0),
                 "issued_at": inv.issued_at,
                 "created_at": inv.created_at,
             })
@@ -122,12 +125,17 @@ class BillingService:
         if not invoice:
             raise ValueError("Invoice not found")
 
+        balance = max(float(invoice.total) - float(invoice.paid_amount or 0), 0)
+        amount = min(float(data.amount), balance)
+        if amount <= 0:
+            raise ValueError("Invoice is already fully paid")
+
         self.db.add(
             Payment(
                 tenant_id=tenant_id,
                 invoice_id=invoice.id,
                 branch_id=invoice.branch_id,
-                amount=data.amount,
+                amount=amount,
                 method=data.method,
                 reference=data.reference,
                 paid_at=datetime.now(timezone.utc),
@@ -135,7 +143,7 @@ class BillingService:
                 notes=data.notes,
             )
         )
-        invoice.paid_amount = float(invoice.paid_amount or 0) + data.amount
+        invoice.paid_amount = float(invoice.paid_amount or 0) + amount
         if invoice.paid_amount >= float(invoice.total):
             invoice.status = InvoiceStatus.PAID
         elif invoice.paid_amount > 0:

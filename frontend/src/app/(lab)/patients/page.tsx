@@ -6,6 +6,7 @@ import { Plus, MoreHorizontal, Pencil, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
@@ -47,6 +48,8 @@ export default function PatientsPage() {
   const [testLines, setTestLines] = useState<TestLine[]>([{ testId: "" }]);
   const [discountType, setDiscountType] = useState<"amount" | "percent">("amount");
   const [discountValue, setDiscountValue] = useState("0");
+  const [amountPaid, setAmountPaid] = useState("0");
+  const [closeRemaining, setCloseRemaining] = useState(false);
   const [saving, setSaving] = useState(false);
   const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
@@ -90,11 +93,19 @@ export default function PatientsPage() {
 
   const finalTotal = Math.max(0, subtotal - discountAmount);
 
+  const remainingAmount = useMemo(() => {
+    if (closeRemaining) return 0;
+    const paid = parseFloat(amountPaid) || 0;
+    return Math.max(finalTotal - paid, 0);
+  }, [closeRemaining, amountPaid, finalTotal]);
+
   const resetVisitForm = () => {
     setVisitForm(emptyVisit);
     setTestLines([{ testId: "" }]);
     setDiscountType("amount");
     setDiscountValue("0");
+    setAmountPaid("0");
+    setCloseRemaining(false);
   };
 
   const saveVisit = async (e: React.FormEvent) => {
@@ -120,11 +131,17 @@ export default function PatientsPage() {
       } else {
         payload.discount = parsedDiscount;
       }
+      const paid = parseFloat(amountPaid) || 0;
+      if (closeRemaining) {
+        payload.close_remaining = true;
+      } else if (paid > 0) {
+        payload.amount_paid = paid;
+      }
       const { data } = await api.post("/patients/quick-visit", payload);
       toast.success(
         locale === "ar"
-          ? `تم التسجيل — ${data.test_count} تحليل — EGP ${data.total_price.toLocaleString()}`
-          : `Registered — ${data.test_count} test(s) — EGP ${data.total_price.toLocaleString()}`
+          ? `تم التسجيل — ${data.test_count} تحليل — الإجمالي EGP ${data.total_price.toLocaleString()} — المحصّل EGP ${data.paid_amount.toLocaleString()} — المتبقي EGP ${data.balance.toLocaleString()}`
+          : `Registered — ${data.test_count} test(s) — Total EGP ${data.total_price.toLocaleString()} — Paid EGP ${data.paid_amount.toLocaleString()} — Due EGP ${data.balance.toLocaleString()}`
       );
       setOpen(false);
       resetVisitForm();
@@ -311,6 +328,53 @@ export default function PatientsPage() {
                       : `Discount: EGP ${discountAmount.toLocaleString()} — Total after discount: EGP ${finalTotal.toLocaleString()}`}
                   </p>
                 )}
+              </div>
+              <div className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>{locale === "ar" ? "المدفوع (جنيه)" : "Paid (EGP)"}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={closeRemaining ? String(finalTotal) : amountPaid}
+                      onChange={(e) => {
+                        setCloseRemaining(false);
+                        setAmountPaid(e.target.value);
+                      }}
+                      disabled={closeRemaining || finalTotal <= 0}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{locale === "ar" ? "المتبقي (جنيه)" : "Remaining (EGP)"}</Label>
+                    <Input
+                      type="number"
+                      value={remainingAmount.toFixed(2)}
+                      readOnly
+                      className="bg-muted/40"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-base">
+                      {locale === "ar" ? "إغلاق المتبقي (دفع كامل)" : "Close remaining (pay in full)"}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      {locale === "ar"
+                        ? "تسجيل دفع المبلغ بالكامل الآن"
+                        : "Record full payment now"}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={closeRemaining}
+                    onCheckedChange={(v) => {
+                      setCloseRemaining(v);
+                      if (v) setAmountPaid(String(finalTotal));
+                    }}
+                    disabled={finalTotal <= 0}
+                  />
+                </div>
               </div>
               <Button type="submit" className="w-full" disabled={saving}>
                 {saving

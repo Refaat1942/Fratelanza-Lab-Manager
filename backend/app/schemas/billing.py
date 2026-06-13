@@ -41,6 +41,7 @@ class InvoiceListItem(BaseModel):
     discount: float
     total: float
     paid_amount: float
+    balance: float
     issued_at: Optional[datetime] = None
     created_at: datetime
 
