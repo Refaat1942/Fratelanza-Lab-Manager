@@ -1,22 +1,41 @@
 #!/bin/bash
-# LabMaster — daily backup: platform DB, each customer DB, and uploads volume.
+# LabMaster — one-shot backup: platform DB, each customer DB, and uploads volume.
 #
-# Usage (on VPS):
-#   cd /opt/labmaster && bash deploy/hostinger/backup-all-tenants.sh
+# Run on the VPS host (recommended):
+#   cd /opt/labmaster && sudo bash deploy/hostinger/run-backup.sh
+#   cd /opt/labmaster && sudo bash deploy/hostinger/backup-all-tenants.sh
 #
-# Optional env (or export before running):
-#   LABMASTER_BACKUP_DIR=/opt/labmaster-backups
+# Scheduled daily at 02:00 by deploy/hostinger/install-backup-cron.sh (host cron).
+#
+# Optional env:
+#   LABMASTER_INSTALL_DIR=/opt/labmaster
+#   LABMASTER_BACKUP_DIR=/path/to/backups   (default: Docker volume labmaster_backups)
 #   LABMASTER_BACKUP_RETENTION_DAYS=14
 
 set -euo pipefail
 
 INSTALL_DIR="${LABMASTER_INSTALL_DIR:-/opt/labmaster}"
-BACKUP_ROOT="${LABMASTER_BACKUP_DIR:-/opt/labmaster-backups}"
 RETENTION_DAYS="${LABMASTER_BACKUP_RETENTION_DAYS:-14}"
 DATE_TAG="$(date +%Y-%m-%d_%H%M%S)"
-DAY_DIR="$BACKUP_ROOT/$DATE_TAG"
 ENV_FILE="${INSTALL_DIR}/.env.production"
 COMPOSE_FILE="${INSTALL_DIR}/docker-compose.prod.yml"
+
+log() { echo "[$(date -Iseconds)] $*"; }
+
+resolve_backup_root() {
+  if [ -n "${LABMASTER_BACKUP_DIR:-}" ]; then
+    echo "$LABMASTER_BACKUP_DIR"
+    return
+  fi
+  if docker volume inspect labmaster_backups >/dev/null 2>&1; then
+    docker volume inspect labmaster_backups --format '{{.Mountpoint}}'
+    return
+  fi
+  echo "/opt/labmaster-backups"
+}
+
+BACKUP_ROOT="$(resolve_backup_root)"
+DAY_DIR="$BACKUP_ROOT/$DATE_TAG"
 
 log() { echo "[$(date -Iseconds)] $*"; }
 
@@ -39,7 +58,7 @@ POSTGRES_USER="${POSTGRES_USER:-labmaster}"
 POSTGRES_DB="${POSTGRES_DB:-labmaster}"
 TENANT_PREFIX="${TENANT_DATABASE_PREFIX:-labmaster_tenant_}"
 
-mkdir -p "$DAY_DIR"
+mkdir -p "$BACKUP_ROOT" "$DAY_DIR"
 
 compose() {
   docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" "$@"

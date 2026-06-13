@@ -64,11 +64,19 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec backen
 - **Every** customer database (`labmaster_tenant_*` from `tenants.database_name` and matching DB names)
 - Uploads volume (`labmaster_uploads` — logos, files)
 
-Backups are stored under `/opt/labmaster-backups/YYYY-MM-DD_HHMMSS/` as `.sql.gz` files.
+Backups are stored in the Docker volume **`labmaster_backups`** (default retention **14 days**).
 
-Default retention: **14 days** (configurable).
+Each run creates `YYYY-MM-DD_HHMMSS/` with `.sql.gz` files and `uploads.tar.gz`.
+
+To see the on-disk path on the VPS:
+
+```bash
+docker volume inspect labmaster_backups --format '{{.Mountpoint}}'
+```
 
 ### Install automatic daily backup (02:00 server time)
+
+Backups are scheduled on the **host** with cron (no cron daemon inside Docker):
 
 ```bash
 cd /opt/labmaster
@@ -79,15 +87,15 @@ sudo bash deploy/hostinger/install-backup-cron.sh
 
 ```bash
 cd /opt/labmaster
-bash deploy/hostinger/backup-all-tenants.sh
+sudo bash deploy/hostinger/run-backup.sh
 ```
 
-Optional:
+Optional overrides:
 
 ```bash
 export LABMASTER_BACKUP_DIR=/mnt/backups/labmaster
 export LABMASTER_BACKUP_RETENTION_DAYS=30
-bash deploy/hostinger/backup-all-tenants.sh
+sudo -E bash deploy/hostinger/run-backup.sh
 ```
 
 ### Restore a customer database (example)
@@ -96,11 +104,13 @@ bash deploy/hostinger/backup-all-tenants.sh
 # Stop backend to avoid writes (optional but safer)
 docker compose -f docker-compose.prod.yml --env-file .env.production stop backend
 
-gunzip -c /opt/labmaster-backups/2026-06-10_020001/labmaster_tenant_ahram_lab.sql.gz | \
+BACKUP_DIR="$(docker volume inspect labmaster_backups --format '{{.Mountpoint}}')"
+
+gunzip -c "$BACKUP_DIR/2026-06-10_020001/labmaster_tenant_ahram_lab.sql.gz" | \
   docker compose -f docker-compose.prod.yml --env-file .env.production exec -T postgres \
   psql -U labmaster -d labmaster_tenant_ahram_lab
 
 docker compose -f docker-compose.prod.yml --env-file .env.production start backend
 ```
 
-**Important:** Copy `/opt/labmaster-backups` off the VPS regularly (S3, Google Drive, another server). Local backups alone do not protect against full VPS loss.
+**Important:** Copy the `labmaster_backups` volume off the VPS regularly (S3, Google Drive, another server). Local backups alone do not protect against full VPS loss.

@@ -13,5 +13,8 @@ if ! crontab -l 2>/dev/null | grep -q labmaster-daily-backup; then
   sudo bash deploy/hostinger/install-backup-cron.sh || bash deploy/hostinger/install-backup-cron.sh
 fi
 
+echo "Removing legacy in-container backup service if present..."
+docker rm -f labmaster-backup 2>/dev/null || true
+
 echo "Stack status:"
 docker compose -f docker-compose.prod.yml --env-file .env.production ps
