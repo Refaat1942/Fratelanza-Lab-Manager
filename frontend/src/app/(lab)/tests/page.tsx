@@ -35,7 +35,7 @@ interface Test {
 }
 
 const emptyTest = {
-  name: "", name_ar: "", price: "", cost: "", turnaround_hours: "24",
+  name: "", price: "", cost: "", turnaround_hours: "24",
 };
 
 export default function TestsPage() {
@@ -62,10 +62,11 @@ export default function TestsPage() {
 
   const saveTest = async (e: React.FormEvent) => {
     e.preventDefault();
+    const name = form.name.trim();
+    if (!name) return;
     setSaving(true);
     const payload = {
-      name: form.name,
-      name_ar: form.name_ar,
+      name,
       price: parseFloat(form.price) || 0,
       cost: parseFloat(form.cost) || 0,
       turnaround_hours: parseInt(form.turnaround_hours, 10) || 24,
@@ -93,7 +94,6 @@ export default function TestsPage() {
     setEditId(test.id);
     setForm({
       name: test.name,
-      name_ar: test.name_ar,
       price: String(test.price),
       cost: String(test.cost),
       turnaround_hours: String(test.turnaround_hours),
@@ -117,7 +117,7 @@ export default function TestsPage() {
     {
       accessorKey: "name",
       header: locale === "ar" ? "الاسم" : "Name",
-      cell: ({ row }) => locale === "ar" ? row.original.name_ar : row.original.name,
+      cell: ({ row }) => row.original.name,
     },
     {
       accessorKey: "price",
@@ -165,7 +165,9 @@ export default function TestsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t(locale, "tests")}</h1>
           <p className="text-muted-foreground">
-            {locale === "ar" ? "كتالوج التحاليل بالعربية والإنجليزية" : "Test catalog with Arabic/English names and prices"}
+            {locale === "ar"
+              ? "كتالوج التحاليل — الاسم والسعر ووقت التسليم"
+              : "Test catalog — name, price, and turnaround time"}
           </p>
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyTest); } }}>
@@ -178,15 +180,9 @@ export default function TestsPage() {
               <DialogTitle>{editId ? (locale === "ar" ? "تعديل تحليل" : "Edit Test") : (locale === "ar" ? "تحليل جديد" : "New Test")}</DialogTitle>
             </DialogHeader>
             <form onSubmit={saveTest} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>{locale === "ar" ? "الاسم (عربي)" : "Name (AR)"} *</Label>
-                  <Input value={form.name_ar} onChange={(e) => setForm({ ...form, name_ar: e.target.value })} required />
-                </div>
+              <div className="space-y-2">
+                <Label>{locale === "ar" ? "اسم التحليل" : "Test name"} *</Label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required minLength={2} />
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -202,7 +198,7 @@ export default function TestsPage() {
                   <Input type="number" min="1" value={form.turnaround_hours} onChange={(e) => setForm({ ...form, turnaround_hours: e.target.value })} />
                 </div>
               </div>
-              <Button type="submit" className="w-full" disabled={saving || !form.name.trim() || !form.name_ar.trim()}>
+              <Button type="submit" className="w-full" disabled={saving || form.name.trim().length < 2}>
                 {saving ? "Saving..." : t(locale, "save")}
               </Button>
             </form>

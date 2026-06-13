@@ -145,17 +145,33 @@ class TestService:
         )
         return test
 
+    @staticmethod
+    def _sync_display_name(updates: dict, current_name: str) -> dict:
+        """Keep name_ar in sync when labs only maintain the English name."""
+        if "name" in updates and "name_ar" not in updates:
+            updates["name_ar"] = updates["name"].strip()
+        elif "name_ar" in updates and not (updates.get("name_ar") or "").strip():
+            updates["name_ar"] = (updates.get("name") or current_name).strip()
+        if "name" in updates:
+            updates["name"] = updates["name"].strip()
+        return updates
+
     async def update_test(self, tenant_id: UUID, test_id: UUID, data: TestUpdate, user_id: UUID) -> Optional[Test]:
         test = await self.get_test(tenant_id, test_id)
         if not test:
             return None
-        for key, value in data.model_dump(exclude_unset=True).items():
+        updates = self._sync_display_name(data.model_dump(exclude_unset=True), test.name)
+        for key, value in updates.items():
             setattr(test, key, value)
         await self.db.flush()
+        audit_values = {
+            k: str(v) if isinstance(v, UUID) else v
+            for k, v in updates.items()
+        }
         await self.audit.log(
             tenant_id=tenant_id, user_id=user_id, action="update", module="tests",
             entity_type="test", entity_id=str(test.id),
-            new_values=data.model_dump(exclude_unset=True, mode="json"),
+            new_values=audit_values,
         )
         return test
 

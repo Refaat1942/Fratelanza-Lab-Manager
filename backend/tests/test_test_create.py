@@ -10,10 +10,25 @@ from app.schemas.tests import TestCreate as TestCreateSchema
 
 def test_create_audit_values_are_json_serializable():
     category_id = uuid4()
-    data = TestCreateSchema(name="CBC", name_ar="صورة دم", price=50, cost=10)
+    data = TestCreateSchema(name="CBC", price=50, cost=10)
+    assert data.name_ar == "CBC"
     audit_values = data.model_dump(mode="json")
     audit_values["category_id"] = str(category_id)
     json.dumps(audit_values)
+
+
+def test_create_without_arabic_name_uses_english():
+    data = TestCreateSchema(name="Glucose", price=25, cost=5)
+    assert data.name == "Glucose"
+    assert data.name_ar == "Glucose"
+
+
+def test_sync_display_name_on_update():
+    from app.services.test_service import TestService
+
+    updates = TestService._sync_display_name({"name": "  Hemoglobin  "}, "Old Name")
+    assert updates["name"] == "Hemoglobin"
+    assert updates["name_ar"] == "Hemoglobin"
 
 
 @pytest.mark.parametrize(

@@ -2,19 +2,27 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class TestCreate(BaseModel):
     category_id: Optional[UUID] = None
     name: str = Field(min_length=2, max_length=255)
-    name_ar: str
+    name_ar: Optional[str] = None
     description: Optional[str] = None
     price: float = Field(ge=0)
     cost: float = Field(ge=0, default=0)
     turnaround_hours: int = Field(default=24, ge=1)
     sample_type: Optional[str] = None
     requires_fasting: bool = False
+
+    @model_validator(mode="after")
+    def mirror_english_name_when_arabic_missing(self) -> "TestCreate":
+        name = self.name.strip()
+        self.name = name
+        ar = (self.name_ar or "").strip()
+        self.name_ar = ar if ar else name
+        return self
 
 
 class TestUpdate(BaseModel):
