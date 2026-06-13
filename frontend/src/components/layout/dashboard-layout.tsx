@@ -5,7 +5,7 @@ import { AppSidebar } from "./app-sidebar";
 import { AppHeader } from "./app-header";
 import { AnimatedPage } from "./animated-page";
 import { SmartAssistant } from "@/components/assistant/smart-assistant";
-import { useAuthStore } from "@/stores/auth-store";
+import { useLocale } from "@/hooks/use-locale";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
 export function DashboardLayout({
@@ -15,7 +15,7 @@ export function DashboardLayout({
   children: React.ReactNode;
   variant?: "lab" | "platform";
 }) {
-  const locale = useAuthStore((s) => s.locale);
+  const { locale } = useLocale(variant);
   const dir = locale === "ar" ? "rtl" : "ltr";
   const [mobileOpen, setMobileOpen] = useState(false);
 

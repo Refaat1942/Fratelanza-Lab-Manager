@@ -5,7 +5,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table/data-table";
-import { useAuthStore } from "@/stores/auth-store";
+import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -27,7 +27,7 @@ interface Subscription {
 }
 
 export default function SubscriptionsPage() {
-  const locale = useAuthStore((s) => s.locale);
+  const { locale } = useLocale("platform");
   const [items, setItems] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
 

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/stores/auth-store";
+import { useLocale } from "@/hooks/use-locale";
 import { useRouter, usePathname } from "next/navigation";
 import type { Locale } from "@/lib/i18n";
 import { AppBrand } from "./app-brand";
@@ -53,7 +54,8 @@ function resolveTitle(pathname: string): TranslationKey | null {
 }
 
 export function AppHeader({ onMenuClick, variant = "lab" }: AppHeaderProps) {
-  const { user, locale, setLocale, logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
+  const { locale, setLocale } = useLocale(variant);
   const router = useRouter();
   const pathname = usePathname();
   const pageKey = resolveTitle(pathname);

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { DataTable } from "@/components/data-table/data-table";
 import { ModuleToggles, type ModuleCatalogItem } from "@/components/platform/module-toggles";
-import { useAuthStore } from "@/stores/auth-store";
+import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
 import { api, getApiError } from "@/lib/api";
 import { toast } from "sonner";
@@ -86,7 +86,7 @@ const emptyEditForm = {
 };
 
 export default function TenantsPage() {
-  const locale = useAuthStore((s) => s.locale);
+  const { locale } = useLocale("platform");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [form, setForm] = useState(emptyForm);

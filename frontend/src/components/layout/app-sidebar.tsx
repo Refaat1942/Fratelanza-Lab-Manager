@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useFeaturesStore } from "@/stores/features-store";
+import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
 import { AppBrand } from "./app-brand";
 
@@ -49,7 +50,7 @@ interface AppSidebarProps {
 
 export function AppSidebar({ variant = "lab", onNavigate }: AppSidebarProps) {
   const pathname = usePathname();
-  const locale = useAuthStore((s) => s.locale);
+  const { locale } = useLocale(variant);
   const isModuleEnabled = useFeaturesStore((s) => s.isModuleEnabled);
   const featuresLoaded = useFeaturesStore((s) => s.loaded);
   const modules =

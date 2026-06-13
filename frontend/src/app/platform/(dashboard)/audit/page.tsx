@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/data-table/data-table";
-import { useAuthStore } from "@/stores/auth-store";
+import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
 import { api } from "@/lib/api";
 
@@ -18,7 +18,7 @@ interface AuditLog {
 }
 
 export default function AuditPage() {
-  const locale = useAuthStore((s) => s.locale);
+  const { locale } = useLocale("platform");
   const [logs, setLogs] = useState<AuditLog[]>([]);
 
   useEffect(() => {

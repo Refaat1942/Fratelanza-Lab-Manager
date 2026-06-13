@@ -18,9 +18,11 @@ interface AuthState {
   user: User | null;
   tenantCode: string | null;
   locale: Locale;
+  platformLocale: Locale;
   setUser: (user: User | null) => void;
   setTenantCode: (code: string | null) => void;
   setLocale: (locale: Locale) => void;
+  setPlatformLocale: (locale: Locale) => void;
   logout: () => void;
   hasPermission: (perm: string) => boolean;
 }
@@ -31,9 +33,11 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       tenantCode: null,
       locale: "ar",
+      platformLocale: "en",
       setUser: (user) => set({ user }),
       setTenantCode: (tenantCode) => set({ tenantCode }),
       setLocale: (locale) => set({ locale }),
+      setPlatformLocale: (platformLocale) => set({ platformLocale }),
       logout: () => {
         localStorage.removeItem("access_token");
         localStorage.removeItem("refresh_token");
@@ -49,6 +53,14 @@ export const useAuthStore = create<AuthState>()(
         return user.permissions.includes(perm);
       },
     }),
-    { name: "labmaster-auth" }
+    {
+      name: "labmaster-auth",
+      merge: (persisted, current) => ({
+        ...current,
+        ...(typeof persisted === "object" && persisted !== null ? persisted : {}),
+        platformLocale:
+          (persisted as Partial<AuthState>)?.platformLocale ?? current.platformLocale,
+      }),
+    }
   )
 );

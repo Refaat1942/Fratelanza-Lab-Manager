@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, CreditCard, AlertTriangle, TrendingUp } from "lucide-react";
 import { api } from "@/lib/api";
-import { useAuthStore } from "@/stores/auth-store";
+import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
 
 interface Dashboard {
@@ -17,7 +17,7 @@ interface Dashboard {
 }
 
 export default function PlatformDashboardPage() {
-  const locale = useAuthStore((s) => s.locale);
+  const { locale } = useLocale("platform");
   const [data, setData] = useState<Dashboard | null>(null);
 
   useEffect(() => {

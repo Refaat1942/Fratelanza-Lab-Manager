@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { DataTable } from "@/components/data-table/data-table";
-import { useAuthStore } from "@/stores/auth-store";
+import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
@@ -37,7 +37,7 @@ const emptyPlan = {
 };
 
 export default function PlansPage() {
-  const locale = useAuthStore((s) => s.locale);
+  const { locale } = useLocale("platform");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [form, setForm] = useState(emptyPlan);
   const [editId, setEditId] = useState<string | null>(null);
