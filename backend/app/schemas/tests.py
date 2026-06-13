@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class TestCreate(BaseModel):
-    category_id: UUID
+    category_id: Optional[UUID] = None
     name: str = Field(min_length=2, max_length=255)
     name_ar: str
     description: Optional[str] = None

@@ -17,13 +17,57 @@ class TestService:
         self.db = db
         self.audit = AuditService(db)
 
+    async def ensure_default_category(self, tenant_id: UUID) -> TestCategory:
+        """Every lab needs at least one category so tests can be saved."""
+        result = await self.db.execute(
+            select(TestCategory).where(
+                TestCategory.tenant_id == tenant_id,
+                TestCategory.deleted_at.is_(None),
+            ).order_by(TestCategory.sort_order)
+            .limit(1)
+        )
+        existing = result.scalar_one_or_none()
+        if existing:
+            return existing
+        category = TestCategory(
+            tenant_id=tenant_id,
+            code="GEN",
+            name="General",
+            name_ar="عام",
+            sort_order=0,
+        )
+        self.db.add(category)
+        await self.db.flush()
+        return category
+
     async def list_categories(self, tenant_id: UUID) -> list[TestCategory]:
+        categories = await self._list_categories_raw(tenant_id)
+        if not categories:
+            await self.ensure_default_category(tenant_id)
+            categories = await self._list_categories_raw(tenant_id)
+        return categories
+
+    async def _list_categories_raw(self, tenant_id: UUID) -> list[TestCategory]:
         result = await self.db.execute(
             select(TestCategory).where(
                 TestCategory.tenant_id == tenant_id, TestCategory.deleted_at.is_(None), TestCategory.is_active.is_(True)
             ).order_by(TestCategory.sort_order)
         )
         return list(result.scalars().all())
+
+    async def resolve_category_id(self, tenant_id: UUID, category_id: Optional[UUID]) -> UUID:
+        if category_id:
+            result = await self.db.execute(
+                select(TestCategory).where(
+                    TestCategory.id == category_id,
+                    TestCategory.tenant_id == tenant_id,
+                    TestCategory.deleted_at.is_(None),
+                )
+            )
+            if result.scalar_one_or_none():
+                return category_id
+        default = await self.ensure_default_category(tenant_id)
+        return default.id
 
     async def list_tests(
         self,
@@ -57,13 +101,15 @@ class TestService:
         return result.scalar_one_or_none()
 
     async def create_test(self, tenant_id: UUID, data: TestCreate, user_id: UUID) -> Test:
+        payload = data.model_dump()
+        payload["category_id"] = await self.resolve_category_id(tenant_id, data.category_id)
         count = (await self.db.execute(select(func.count()).where(Test.tenant_id == tenant_id))).scalar() or 0
-        test = Test(tenant_id=tenant_id, code=f"T{count + 1:04d}", **data.model_dump())
+        test = Test(tenant_id=tenant_id, code=f"T{count + 1:04d}", **payload)
         self.db.add(test)
         await self.db.flush()
         await self.audit.log(
             tenant_id=tenant_id, user_id=user_id, action="create", module="tests",
-            entity_type="test", entity_id=str(test.id), new_values=data.model_dump(mode="json"),
+            entity_type="test", entity_id=str(test.id), new_values=payload,
         )
         return test
 
