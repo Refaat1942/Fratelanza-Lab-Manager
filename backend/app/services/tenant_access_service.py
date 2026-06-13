@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.auth import RefreshToken, User
 from app.models.platform import Tenant, TenantStatus
 
-BLOCKED_STATUSES = (TenantStatus.SUSPENDED, TenantStatus.LOCKED, TenantStatus.EXPIRED)
+BLOCKED_STATUSES = (TenantStatus.SUSPENDED, TenantStatus.DELETED)
 
 
 class TenantAccessService:
@@ -24,6 +24,8 @@ class TenantAccessService:
         tenant = await self.get_tenant(tenant_id)
         if not tenant:
             raise ValueError("Tenant not found")
+        if tenant.deleted_at is not None:
+            raise ValueError("Tenant account is deleted")
         if tenant.status in BLOCKED_STATUSES:
             raise ValueError(f"Tenant account is {tenant.status.value}")
         return tenant

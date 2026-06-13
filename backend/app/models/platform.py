@@ -2,7 +2,7 @@ import enum
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -12,9 +12,7 @@ from app.db.base import Base, SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMix
 class TenantStatus(str, enum.Enum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
-    LOCKED = "locked"
-    TRIAL = "trial"
-    EXPIRED = "expired"
+    DELETED = "deleted"
 
 
 class BillingCycle(str, enum.Enum):
@@ -62,14 +60,24 @@ class SubscriptionPlan(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixi
 
 class Tenant(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "tenants"
+    __table_args__ = (
+        Index(
+            "uq_tenants_code_active",
+            "code",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 
-    code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(50), index=True)
     name: Mapped[str] = mapped_column(String(255))
     name_ar: Mapped[Optional[str]] = mapped_column(String(255))
     email: Mapped[str] = mapped_column(String(255), index=True)
     phone: Mapped[Optional[str]] = mapped_column(String(50))
     tax_number: Mapped[Optional[str]] = mapped_column(String(50))
-    status: Mapped[TenantStatus] = mapped_column(Enum(TenantStatus), default=TenantStatus.TRIAL, index=True)
+    status: Mapped[TenantStatus] = mapped_column(
+        Enum(TenantStatus), default=TenantStatus.ACTIVE, index=True
+    )
     locale: Mapped[str] = mapped_column(String(5), default="ar")
     timezone: Mapped[str] = mapped_column(String(50), default="Africa/Cairo")
     custom_domain: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)

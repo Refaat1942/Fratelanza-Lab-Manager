@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, MoreHorizontal, Lock, Unlock, Ban, CheckCircle, Trash2, RefreshCw, Pencil } from "lucide-react";
+import {
+  Plus, MoreHorizontal, Ban, CheckCircle, Trash2, RefreshCw, Pencil, RotateCcw, AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -22,12 +24,15 @@ import { t } from "@/lib/i18n";
 import { api, getApiError } from "@/lib/api";
 import { toast } from "sonner";
 
+type LifecycleFilter = "active" | "suspended" | "deleted";
+
 interface Tenant {
   id: string;
   code: string;
   name: string;
   email: string;
   status: string;
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -83,48 +88,96 @@ const emptyEditForm = {
   max_users_override: "", max_branches_override: "",
 };
 
+const FILTER_TABS: { key: LifecycleFilter; labelEn: string; labelAr: string }[] = [
+  { key: "active", labelEn: "Active", labelAr: "نشطة" },
+  { key: "suspended", labelEn: "Suspended", labelAr: "معلقة" },
+  { key: "deleted", labelEn: "Deleted", labelAr: "محذوفة" },
+];
+
 export default function TenantsPage() {
   const locale = useAuthStore((s) => s.locale);
+  const [lifecycle, setLifecycle] = useState<LifecycleFilter>("active");
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState(emptyEditForm);
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [purgeOpen, setPurgeOpen] = useState(false);
+  const [purgeTarget, setPurgeTarget] = useState<Tenant | null>(null);
+  const [purgeConfirm, setPurgeConfirm] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [editCode, setEditCode] = useState("");
   const [editLimits, setEditLimits] = useState<TenantLimits | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     Promise.all([
-      api.get("/platform/tenants"),
+      api.get(`/platform/tenants?lifecycle=${lifecycle}`),
       api.get("/platform/plans"),
     ]).then(([tRes, pRes]) => {
       setTenants(tRes.data);
       setPlans(pRes.data);
     }).catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
-  };
+  }, [lifecycle]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   const action = async (tenantId: string, endpoint: string, label: string) => {
     try {
       await api.post(`/platform/tenants/${tenantId}/${endpoint}`);
       toast.success(label);
       load();
-    } catch {
-      toast.error(`Failed: ${label}`);
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
+
+  const softDelete = async (tenant: Tenant) => {
+    const msg = locale === "ar"
+      ? `حذف المختبر "${tenant.code}"؟ يمكن استعادته أو إعادة استخدام الكود لاحقاً.`
+      : `Delete laboratory "${tenant.code}"? You can restore it or reuse the code later.`;
+    if (!confirm(msg)) return;
+    try {
+      await api.delete(`/platform/tenants/${tenant.id}`);
+      toast.success(locale === "ar" ? "تم الحذف" : "Moved to deleted");
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    }
+  };
+
+  const permanentDelete = async () => {
+    if (!purgeTarget) return;
+    try {
+      await api.post(`/platform/tenants/${purgeTarget.id}/permanent-delete`, {
+        confirm_code: purgeConfirm.trim(),
+      });
+      toast.success(locale === "ar" ? "تم الحذف النهائي" : "Permanently deleted");
+      setPurgeOpen(false);
+      setPurgeTarget(null);
+      setPurgeConfirm("");
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
     }
   };
 
   const createTenant = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.plan_id) {
+      toast.error(locale === "ar" ? "اختر الباقة" : "Select a plan");
+      return;
+    }
     try {
-      await api.post("/platform/tenants", form);
+      await api.post("/platform/tenants", {
+        ...form,
+        code: form.code.trim().toLowerCase(),
+        admin_username: form.admin_username.trim().toLowerCase(),
+      });
       toast.success(locale === "ar" ? "تم إنشاء المختبر" : "Laboratory created");
       setOpen(false);
       setForm(emptyForm);
@@ -146,7 +199,7 @@ export default function TenantsPage() {
         email: data.email || "",
         phone: data.phone || "",
         tax_number: data.tax_number || "",
-        status: data.status || "active",
+        status: data.status === "suspended" ? "suspended" : "active",
         admin_username: data.admin?.username || "",
         admin_password: "",
         admin_name: data.admin?.full_name || "",
@@ -197,18 +250,24 @@ export default function TenantsPage() {
     }
   };
 
+  const statusBadge = (tenant: Tenant) => {
+    if (tenant.deleted_at) {
+      return <Badge variant="destructive">{locale === "ar" ? "محذوف" : "deleted"}</Badge>;
+    }
+    if (tenant.status === "suspended") {
+      return <Badge variant="secondary">{locale === "ar" ? "معلق" : "suspended"}</Badge>;
+    }
+    return <Badge variant="default">{locale === "ar" ? "نشط" : "active"}</Badge>;
+  };
+
   const columns: ColumnDef<Tenant>[] = [
     { accessorKey: "code", header: locale === "ar" ? "الكود" : "Code" },
     { accessorKey: "name", header: locale === "ar" ? "الاسم" : "Name" },
     { accessorKey: "email", header: "Email" },
     {
-      accessorKey: "status",
+      id: "status",
       header: locale === "ar" ? "الحالة" : "Status",
-      cell: ({ row }) => {
-        const s = row.original.status;
-        const variant = s === "active" ? "default" : s === "trial" ? "secondary" : "destructive";
-        return <Badge variant={variant}>{s}</Badge>;
-      },
+      cell: ({ row }) => statusBadge(row.original),
     },
     {
       accessorKey: "created_at",
@@ -217,61 +276,80 @@ export default function TenantsPage() {
     },
     {
       id: "actions",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => openEdit(row.original)} title={locale === "ar" ? "تعديل" : "Edit"}>
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
-              <MoreHorizontal className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => action(row.original.id, "activate", "Activated")}>
-                <CheckCircle className="mr-2 h-4 w-4" /> {t(locale, "activate")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => action(row.original.id, "suspend", "Suspended")}>
-                <Ban className="mr-2 h-4 w-4" /> {t(locale, "suspend")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => action(row.original.id, "renew", "Renewed")}>
-                <RefreshCw className="mr-2 h-4 w-4" /> {t(locale, "renew")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => action(row.original.id, "lock", "Locked")}>
-                <Lock className="mr-2 h-4 w-4" /> {t(locale, "lock")}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => action(row.original.id, "unlock", "Unlocked")}>
-                <Unlock className="mr-2 h-4 w-4" /> {t(locale, "unlock")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className="text-destructive"
-                onClick={async () => {
-                  if (confirm(locale === "ar" ? "حذف هذا المختبر؟" : "Delete this laboratory?")) {
-                    await api.delete(`/platform/tenants/${row.original.id}`);
-                    toast.success(locale === "ar" ? "تم الحذف" : "Deleted");
-                    load();
-                  }
-                }}
-              >
-                <Trash2 className="mr-2 h-4 w-4" /> {t(locale, "delete")}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ),
+      cell: ({ row }) => {
+        const tenant = row.original;
+        const isDeleted = lifecycle === "deleted";
+
+        return (
+          <div className="flex items-center gap-1">
+            {!isDeleted && (
+              <Button variant="ghost" size="sm" onClick={() => openEdit(tenant)} title={locale === "ar" ? "تعديل" : "Edit"}>
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {isDeleted ? (
+                  <>
+                    <DropdownMenuItem onClick={() => action(tenant.id, "restore", locale === "ar" ? "تمت الاستعادة" : "Restored")}>
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      {locale === "ar" ? "استعادة" : "Restore"}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive"
+                      onClick={() => {
+                        setPurgeTarget(tenant);
+                        setPurgeConfirm("");
+                        setPurgeOpen(true);
+                      }}
+                    >
+                      <AlertTriangle className="mr-2 h-4 w-4" />
+                      {locale === "ar" ? "حذف نهائي" : "Permanent delete"}
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
+                    {lifecycle !== "active" && (
+                      <DropdownMenuItem onClick={() => action(tenant.id, "activate", locale === "ar" ? "تم التفعيل" : "Activated")}>
+                        <CheckCircle className="mr-2 h-4 w-4" /> {t(locale, "activate")}
+                      </DropdownMenuItem>
+                    )}
+                    {lifecycle !== "suspended" && (
+                      <DropdownMenuItem onClick={() => action(tenant.id, "suspend", locale === "ar" ? "تم التعليق" : "Suspended")}>
+                        <Ban className="mr-2 h-4 w-4" /> {t(locale, "suspend")}
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={() => action(tenant.id, "renew", locale === "ar" ? "تم التجديد" : "Renewed")}>
+                      <RefreshCw className="mr-2 h-4 w-4" /> {t(locale, "renew")}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive" onClick={() => softDelete(tenant)}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {locale === "ar" ? "حذف (ناعم)" : "Delete"}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      },
     },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">{t(locale, "tenants")}</h1>
           <p className="text-muted-foreground">
             {locale === "ar"
-              ? "إنشاء وتعديل المختبرات وبيانات دخول المدير"
-              : "Create, edit laboratories and manage admin login credentials"}
+              ? "إدارة دورة حياة المختبرات: نشطة، معلقة، محذوفة"
+              : "Manage laboratory lifecycle: active, suspended, deleted"}
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -331,6 +409,19 @@ export default function TenantsPage() {
         </Dialog>
       </div>
 
+      <div className="flex flex-wrap gap-2">
+        {FILTER_TABS.map((tab) => (
+          <Button
+            key={tab.key}
+            variant={lifecycle === tab.key ? "default" : "outline"}
+            size="sm"
+            onClick={() => setLifecycle(tab.key)}
+          >
+            {locale === "ar" ? tab.labelAr : tab.labelEn}
+          </Button>
+        ))}
+      </div>
+
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -345,7 +436,6 @@ export default function TenantsPage() {
                 ? `كود المختبر: ${editCode} (لا يمكن تغييره)`
                 : `Lab code: ${editCode} (cannot be changed)`}
             </div>
-
             <div className="space-y-2">
               <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>
               <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required />
@@ -374,102 +464,62 @@ export default function TenantsPage() {
                 <Select value={editForm.status} onValueChange={(v) => v && setEditForm({ ...editForm, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {["active", "trial", "suspended", "locked", "expired"].map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
+                    <SelectItem value="active">{locale === "ar" ? "نشط" : "Active"}</SelectItem>
+                    <SelectItem value="suspended">{locale === "ar" ? "معلق" : "Suspended"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-
-            <div className="border-t border-border/60 pt-4">
-              <p className="mb-3 text-sm font-semibold">
-                {locale === "ar" ? "حدود المستخدمين والفروع" : "User & Branch Limits"}
-              </p>
-              {editLimits && (
-                <p className="mb-3 text-xs text-muted-foreground">
-                  {locale === "ar"
-                    ? `الاستخدام الحالي: ${editLimits.current_users}/${editLimits.max_users} مستخدم، ${editLimits.current_branches}/${editLimits.max_branches} فرع`
-                    : `Current usage: ${editLimits.current_users}/${editLimits.max_users} users, ${editLimits.current_branches}/${editLimits.max_branches} branches`}
-                  {editLimits.plan_max_users != null && (
-                    <span className="block mt-1">
-                      {locale === "ar"
-                        ? `حدود الباقة: ${editLimits.plan_max_users} مستخدم، ${editLimits.plan_max_branches} فرع`
-                        : `Plan defaults: ${editLimits.plan_max_users} users, ${editLimits.plan_max_branches} branches`}
-                    </span>
-                  )}
-                </p>
-              )}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>{locale === "ar" ? "حد المستخدمين" : "Max Users"}</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={editForm.max_users_override}
-                    onChange={(e) => setEditForm({ ...editForm, max_users_override: e.target.value })}
-                    placeholder={editLimits?.plan_max_users?.toString() || "5"}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>{locale === "ar" ? "حد الفروع" : "Max Branches"}</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={editForm.max_branches_override}
-                    onChange={(e) => setEditForm({ ...editForm, max_branches_override: e.target.value })}
-                    placeholder={editLimits?.plan_max_branches?.toString() || "1"}
-                  />
-                </div>
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {locale === "ar"
-                  ? "اترك الحقل فارغاً لاستخدام حدود الباقة الافتراضية"
-                  : "Leave blank to use subscription plan defaults"}
-              </p>
-            </div>
-
             <div className="border-t border-border/60 pt-4">
               <p className="mb-3 text-sm font-semibold">
                 {locale === "ar" ? "بيانات دخول مدير المختبر" : "Laboratory Admin Login"}
               </p>
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <Label>{locale === "ar" ? "اسم المدير" : "Admin Name"}</Label>
-                  <Input value={editForm.admin_name} onChange={(e) => setEditForm({ ...editForm, admin_name: e.target.value })} />
-                </div>
-                <div className="space-y-2">
                   <Label>{locale === "ar" ? "اسم المستخدم" : "Username"} *</Label>
-                  <Input
-                    value={editForm.admin_username}
-                    onChange={(e) => setEditForm({ ...editForm, admin_username: e.target.value })}
-                    required
-                    minLength={2}
-                  />
+                  <Input value={editForm.admin_username} onChange={(e) => setEditForm({ ...editForm, admin_username: e.target.value })} required minLength={2} />
                 </div>
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "كلمة المرور الجديدة" : "New Password"}</Label>
-                  <Input
-                    type="password"
-                    value={editForm.admin_password}
-                    onChange={(e) => setEditForm({ ...editForm, admin_password: e.target.value })}
-                    minLength={8}
-                    placeholder={locale === "ar" ? "اتركه فارغاً للإبقاء على الحالية" : "Leave blank to keep current"}
-                  />
+                  <Input type="password" value={editForm.admin_password} onChange={(e) => setEditForm({ ...editForm, admin_password: e.target.value })} minLength={8} />
                 </div>
               </div>
             </div>
-
             <Button type="submit" className="w-full" disabled={saving}>
-              {saving
-                ? locale === "ar"
-                  ? "جاري الحفظ..."
-                  : "Saving..."
-                : locale === "ar"
-                  ? "حفظ التغييرات"
-                  : "Save Changes"}
+              {saving ? "..." : locale === "ar" ? "حفظ التغييرات" : "Save Changes"}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={purgeOpen} onOpenChange={setPurgeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">
+              {locale === "ar" ? "حذف نهائي" : "Permanent Delete"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {locale === "ar"
+              ? `سيتم حذف جميع بيانات المختبر "${purgeTarget?.code}" نهائياً ولا يمكن التراجع. اكتب الكود للتأكيد.`
+              : `All data for "${purgeTarget?.code}" will be permanently removed. Type the lab code to confirm.`}
+          </p>
+          <div className="space-y-2">
+            <Label>{locale === "ar" ? "كود المختبر" : "Laboratory code"}</Label>
+            <Input
+              value={purgeConfirm}
+              onChange={(e) => setPurgeConfirm(e.target.value)}
+              placeholder={purgeTarget?.code}
+            />
+          </div>
+          <Button
+            variant="destructive"
+            className="w-full"
+            disabled={purgeConfirm.trim().toLowerCase() !== purgeTarget?.code.toLowerCase()}
+            onClick={permanentDelete}
+          >
+            {locale === "ar" ? "حذف نهائياً" : "Delete permanently"}
+          </Button>
         </DialogContent>
       </Dialog>
 

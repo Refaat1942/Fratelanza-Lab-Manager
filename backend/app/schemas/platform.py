@@ -70,6 +70,10 @@ class TenantLimitsResponse(BaseModel):
     max_branches_override: Optional[int] = None
 
 
+class TenantPermanentDeleteRequest(BaseModel):
+    confirm_code: str = Field(min_length=2, max_length=50)
+
+
 class TenantResponse(BaseModel):
     id: UUID
     code: str
@@ -83,6 +87,7 @@ class TenantResponse(BaseModel):
     custom_domain: Optional[str] = None
     max_users_override: Optional[int] = None
     max_branches_override: Optional[int] = None
+    deleted_at: Optional[datetime] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
