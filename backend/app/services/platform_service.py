@@ -30,6 +30,7 @@ from app.schemas.platform import (
 )
 from app.services.auth_service import AuthService
 from app.services.tenant_access_service import BLOCKED_STATUSES, TenantAccessService
+from app.services.tenant_lifecycle_service import TenantLifecycleService
 
 settings = get_settings()
 
@@ -91,19 +92,26 @@ class PlatformService:
             })
         return rows
 
+    async def list_tenants(self, lifecycle: str | None = None) -> list[Tenant]:
+        return await TenantLifecycleService(self.db).list_tenants(lifecycle)
+
     async def create_tenant(self, data: TenantCreate, admin_id: UUID) -> Tenant:
         plan = await self.db.get(SubscriptionPlan, data.plan_id)
         if not plan:
             raise ValueError("Plan not found")
 
+        code = data.code.strip().lower()
+        if not await TenantLifecycleService(self.db).code_available(code):
+            raise ValueError("Tenant code already exists")
+
         tenant = Tenant(
-            code=data.code.strip().lower(),
+            code=code,
             name=data.name,
             name_ar=data.name_ar,
-            email=data.email,
+            email=(data.email or "").strip() or f"{code}@labmaster.local",
             phone=data.phone,
             tax_number=data.tax_number,
-            status=TenantStatus.TRIAL,
+            status=TenantStatus.ACTIVE,
         )
         self.db.add(tenant)
         await self.db.flush()
@@ -131,7 +139,9 @@ class PlatformService:
                 is_system=True,
             ),
         )
-        await self.log_action(admin_id, "tenant_created", "tenant", tenant.id, str(tenant.id), {"code": data.code})
+        await self.log_action(
+            admin_id, "tenant_created", "tenant", tenant.id, str(tenant.id), {"code": code}
+        )
         return tenant
 
     async def get_tenant_admin(self, tenant_id: UUID) -> Optional[User]:
@@ -154,6 +164,8 @@ class PlatformService:
         updates = data.model_dump(exclude_unset=True)
         for key, value in updates.items():
             setattr(tenant, key, value)
+        if updates.get("status") == TenantStatus.DELETED:
+            raise ValueError("Use delete action to mark a laboratory as deleted")
         if updates.get("status") in BLOCKED_STATUSES:
             await TenantAccessService(self.db).revoke_tenant_sessions(tenant.id)
         await self.log_action(admin_id, "tenant_updated", "tenant", tenant.id, str(tenant.id))
@@ -206,13 +218,21 @@ class PlatformService:
         return user
 
     async def delete_tenant(self, tenant_id: UUID, admin_id: UUID) -> bool:
-        tenant = await self.get_tenant(tenant_id)
-        if not tenant:
-            return False
-        tenant.deleted_at = func.now()
-        tenant.status = TenantStatus.LOCKED
-        await self.log_action(admin_id, "tenant_deleted", "tenant", tenant.id, str(tenant.id))
-        return True
+        return await TenantLifecycleService(self.db).soft_delete(
+            tenant_id, admin_id, self.log_action
+        )
+
+    async def restore_tenant(self, tenant_id: UUID, admin_id: UUID) -> bool:
+        return await TenantLifecycleService(self.db).restore(
+            tenant_id, admin_id, self.log_action
+        )
+
+    async def permanent_delete_tenant(
+        self, tenant_id: UUID, admin_id: UUID, confirm_code: str
+    ) -> bool:
+        return await TenantLifecycleService(self.db).permanent_delete(
+            tenant_id, admin_id, confirm_code, self.log_action
+        )
 
     async def suspend_tenant(self, tenant_id: UUID, admin_id: UUID) -> bool:
         tenant = await self.get_tenant(tenant_id)
@@ -223,7 +243,9 @@ class PlatformService:
         if sub:
             sub.status = SubscriptionStatus.CANCELLED
         await TenantAccessService(self.db).revoke_tenant_sessions(tenant.id)
-        await self.log_action(admin_id, "tenant_suspended", "tenant", tenant.id, str(tenant.id))
+        await self.log_action(
+            admin_id, "tenant_suspended", "tenant", tenant.id, str(tenant.id), {"code": tenant.code}
+        )
         return True
 
     async def activate_tenant(self, tenant_id: UUID, admin_id: UUID) -> bool:
@@ -234,24 +256,9 @@ class PlatformService:
         sub = await self.get_active_subscription(tenant_id)
         if sub:
             sub.status = SubscriptionStatus.ACTIVE
-        await self.log_action(admin_id, "tenant_activated", "tenant", tenant.id, str(tenant.id))
-        return True
-
-    async def lock_tenant(self, tenant_id: UUID, admin_id: UUID) -> bool:
-        tenant = await self.get_tenant(tenant_id)
-        if not tenant:
-            return False
-        tenant.status = TenantStatus.LOCKED
-        await TenantAccessService(self.db).revoke_tenant_sessions(tenant.id)
-        await self.log_action(admin_id, "tenant_locked", "tenant", tenant.id, str(tenant.id))
-        return True
-
-    async def unlock_tenant(self, tenant_id: UUID, admin_id: UUID) -> bool:
-        tenant = await self.get_tenant(tenant_id)
-        if not tenant:
-            return False
-        tenant.status = TenantStatus.ACTIVE
-        await self.log_action(admin_id, "tenant_unlocked", "tenant", tenant.id, str(tenant.id))
+        await self.log_action(
+            admin_id, "tenant_activated", "tenant", tenant.id, str(tenant.id), {"code": tenant.code}
+        )
         return True
 
     async def renew_subscription(

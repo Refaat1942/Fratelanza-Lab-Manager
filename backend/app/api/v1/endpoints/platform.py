@@ -29,6 +29,7 @@ from app.schemas.platform import (
     TenantCreate,
     TenantDetailResponse,
     TenantLimitsResponse,
+    TenantPermanentDeleteRequest,
     TenantResponse,
     TenantSubscriptionResponse,
     TenantUpdate,
@@ -66,7 +67,12 @@ async def revenue_dashboard(db: DbSession, admin: PlatformAdmin):
             TenantSubscription.status == SubscriptionStatus.ACTIVE,
         )
     )
-    suspended = await db.scalar(select(func.count()).select_from(Tenant).where(Tenant.status == TenantStatus.SUSPENDED))
+    suspended = await db.scalar(
+        select(func.count()).select_from(Tenant).where(
+            Tenant.deleted_at.is_(None),
+            Tenant.status == TenantStatus.SUSPENDED,
+        )
+    )
     return RevenueDashboard(
         total_tenants=total or 0,
         active_subscriptions=active or 0,
@@ -107,12 +113,17 @@ async def list_audit_logs(db: DbSession, admin: PlatformAdmin, limit: int = Quer
 
 
 @router.get("/tenants", response_model=list[TenantResponse])
-async def list_tenants(db: DbSession, admin: PlatformAdmin, status_filter: TenantStatus | None = None):
-    query = select(Tenant).where(Tenant.deleted_at.is_(None))
-    if status_filter:
-        query = query.where(Tenant.status == status_filter)
-    result = await db.execute(query.order_by(Tenant.created_at.desc()))
-    return [TenantResponse.model_validate(t) for t in result.scalars().all()]
+async def list_tenants(
+    db: DbSession,
+    admin: PlatformAdmin,
+    lifecycle: str | None = Query(
+        None,
+        description="Filter: active (default), suspended, or deleted",
+        pattern="^(active|suspended|deleted)$",
+    ),
+):
+    tenants = await PlatformService(db).list_tenants(lifecycle or "active")
+    return [TenantResponse.model_validate(t) for t in tenants]
 
 
 @router.get("/tenants/{tenant_id}", response_model=TenantDetailResponse)
@@ -139,10 +150,6 @@ async def get_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
 
 @router.post("/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(data: TenantCreate, db: DbSession, admin: PlatformAdmin):
-    code = data.code.strip().lower()
-    existing = await db.execute(select(Tenant).where(Tenant.code == code))
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Tenant code already exists")
     try:
         tenant = await PlatformService(db).create_tenant(data, admin.id)
         return TenantResponse.model_validate(tenant)
@@ -183,7 +190,40 @@ async def update_tenant_admin(
 async def delete_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
     if not await PlatformService(db).delete_tenant(tenant_id, admin.id):
         raise HTTPException(status_code=404, detail="Tenant not found")
-    return MessageResponse(message="Tenant deleted", message_ar="تم حذف المختبر")
+    return MessageResponse(
+        message="Laboratory moved to deleted (code can be reused)",
+        message_ar="تم نقل المختبر إلى المحذوفة (يمكن إعادة استخدام الكود)",
+    )
+
+
+@router.post("/tenants/{tenant_id}/restore", response_model=MessageResponse)
+async def restore_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
+    try:
+        if not await PlatformService(db).restore_tenant(tenant_id, admin.id):
+            raise HTTPException(status_code=404, detail="Deleted tenant not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return MessageResponse(message="Laboratory restored", message_ar="تم استعادة المختبر")
+
+
+@router.post("/tenants/{tenant_id}/permanent-delete", response_model=MessageResponse)
+async def permanent_delete_tenant(
+    tenant_id: UUID,
+    data: TenantPermanentDeleteRequest,
+    db: DbSession,
+    admin: PlatformAdmin,
+):
+    try:
+        if not await PlatformService(db).permanent_delete_tenant(
+            tenant_id, admin.id, data.confirm_code
+        ):
+            raise HTTPException(status_code=404, detail="Tenant not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return MessageResponse(
+        message="Laboratory permanently deleted",
+        message_ar="تم حذف المختبر نهائياً",
+    )
 
 
 @router.post("/tenants/{tenant_id}/suspend", response_model=MessageResponse)
@@ -198,20 +238,6 @@ async def activate_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
     if not await PlatformService(db).activate_tenant(tenant_id, admin.id):
         raise HTTPException(status_code=404, detail="Tenant not found")
     return MessageResponse(message="Tenant activated", message_ar="تم تفعيل المختبر")
-
-
-@router.post("/tenants/{tenant_id}/lock", response_model=MessageResponse)
-async def lock_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
-    if not await PlatformService(db).lock_tenant(tenant_id, admin.id):
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return MessageResponse(message="Tenant locked", message_ar="تم قفل المختبر")
-
-
-@router.post("/tenants/{tenant_id}/unlock", response_model=MessageResponse)
-async def unlock_tenant(tenant_id: UUID, db: DbSession, admin: PlatformAdmin):
-    if not await PlatformService(db).unlock_tenant(tenant_id, admin.id):
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return MessageResponse(message="Tenant unlocked", message_ar="تم تفعيل المختبر")
 
 
 @router.post("/tenants/{tenant_id}/renew", response_model=TenantSubscriptionResponse)
