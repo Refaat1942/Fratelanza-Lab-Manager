@@ -103,6 +103,22 @@ git pull origin main
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 ```
 
+## Per-customer databases and daily backups
+
+See **[PER_TENANT_DATABASE_AND_BACKUPS.md](PER_TENANT_DATABASE_AND_BACKUPS.md)** for:
+
+- Enabling one database per laboratory
+- Migrating existing customers off the shared database
+- Installing daily automated backups (platform + each customer + uploads)
+
+Quick backup install:
+
+```bash
+cd /opt/labmaster
+sudo bash deploy/hostinger/install-backup-cron.sh
+bash deploy/hostinger/backup-all-tenants.sh   # test now
+```
+
 ## Stop LabMaster (without touching other projects)
 
 ```bash
