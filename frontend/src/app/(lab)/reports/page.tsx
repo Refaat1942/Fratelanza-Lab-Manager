@@ -5,21 +5,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Download, FileText } from "lucide-react";
+import { Download } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
-import { downloadDailyOperationsPdf, exportReportExcel } from "@/lib/export";
+import { exportReportExcel } from "@/lib/export";
 import { toast } from "sonner";
 
 const reports = [
-  { id: "daily", en: "Daily Operations Report", ar: "تقرير العمليات اليومي", pdf: true },
-  { id: "monthly", en: "Monthly Operations Report", ar: "تقرير العمليات الشهري", pdf: true },
-  { id: "profitability", en: "Profitability Report", ar: "تقرير الربحية", pdf: false },
-  { id: "inventory", en: "Inventory Valuation", ar: "تقييم المخزون", pdf: false },
-  { id: "referrals", en: "Doctor Referrals", ar: "إحالات الأطباء", pdf: false },
-  { id: "patients", en: "Patient Statistics", ar: "إحصائيات المرضى", pdf: false },
-  { id: "branches", en: "Branch Performance", ar: "أداء الفروع", pdf: false },
-  { id: "labs_done", en: "Completed Lab Tests", ar: "التحاليل المنجزة", pdf: false },
+  { id: "daily", en: "Daily Operations Report", ar: "تقرير العمليات اليومية" },
+  { id: "monthly", en: "Monthly Operations Report", ar: "تقرير العمليات الشهرية" },
+  { id: "profitability", en: "Profitability Report", ar: "تقرير الربحية" },
+  { id: "inventory", en: "Inventory Valuation", ar: "تقييم المخزون" },
+  { id: "referrals", en: "Doctor Referrals", ar: "إحالات الأطباء" },
+  { id: "patients", en: "Patient Statistics", ar: "إحصائيات المرضى" },
+  { id: "branches", en: "Branch Performance", ar: "أداء الفروع" },
+  { id: "labs_done", en: "Completed Lab Tests", ar: "التحاليل المنجزة" },
 ];
 
 function defaultRange() {
@@ -45,7 +45,7 @@ export default function ReportsPage() {
   const [exporting, setExporting] = useState<string | null>(null);
 
   const exportExcel = async (id: string) => {
-    setExporting(`${id}-excel`);
+    setExporting(id);
     try {
       const range = ranges[id];
       await exportReportExcel(id, range.from, range.to);
@@ -57,27 +57,14 @@ export default function ReportsPage() {
     }
   };
 
-  const exportPdf = async (id: string) => {
-    setExporting(`${id}-pdf`);
-    try {
-      const range = ranges[id];
-      await downloadDailyOperationsPdf(range.from, range.to);
-      toast.success(locale === "ar" ? "تم تصدير PDF" : "PDF exported");
-    } catch {
-      toast.error(locale === "ar" ? "فشل تصدير PDF" : "PDF export failed");
-    } finally {
-      setExporting(null);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">{t(locale, "reports")}</h1>
         <p className="text-muted-foreground">
           {locale === "ar"
-            ? "تقرير العمليات اليومي بالعربية — عدد الفواتير، الإجمالي، المحصّل، المتبقي، والصافي (Excel و PDF)"
-            : "Arabic daily operations report — invoices, gross, collected, remaining, net (Excel & PDF)"}
+            ? "تقرير العمليات اليومية بالعربية — عدد الفواتير، الإجمالي، المحصّل، المتبقي، والصافي (Excel)"
+            : "Arabic daily operations report — invoices, gross, collected, remaining, net (Excel)"}
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -86,10 +73,10 @@ export default function ReportsPage() {
             <CardHeader>
               <CardTitle className="text-base">{locale === "ar" ? report.ar : report.en}</CardTitle>
               <CardDescription>
-                {report.pdf
+                {report.id === "daily" || report.id === "monthly"
                   ? locale === "ar"
-                    ? "Excel + PDF بالعربية"
-                    : "Arabic Excel + PDF"
+                    ? "تصدير Excel بالعربية"
+                    : "Arabic Excel export"
                   : locale === "ar"
                     ? "تصدير Excel"
                     : "Excel export"}
@@ -124,30 +111,16 @@ export default function ReportsPage() {
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex-1"
-                  disabled={exporting === `${report.id}-excel`}
-                  onClick={() => exportExcel(report.id)}
-                >
-                  <Download className="me-2 h-4 w-4" />
-                  Excel
-                </Button>
-                {report.pdf && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    disabled={exporting === `${report.id}-pdf`}
-                    onClick={() => exportPdf(report.id)}
-                  >
-                    <FileText className="me-2 h-4 w-4" />
-                    PDF
-                  </Button>
-                )}
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                disabled={exporting === report.id}
+                onClick={() => exportExcel(report.id)}
+              >
+                <Download className="me-2 h-4 w-4" />
+                Excel
+              </Button>
             </CardContent>
           </Card>
         ))}

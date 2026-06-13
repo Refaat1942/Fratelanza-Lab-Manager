@@ -24,11 +24,6 @@ export async function exportReportExcel(
   await downloadApiFile(`/reports/${reportType}/excel${qs ? `?${qs}` : ""}`, `${reportType}_report.xlsx`);
 }
 
-export async function downloadDailyOperationsPdf(dateFrom: string, dateTo: string) {
-  const params = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
-  await downloadApiFile(`/reports/daily-operations/pdf?${params}`, "daily_operations_ar.pdf");
-}
-
 export async function downloadInvoiceReceipt(invoiceId: string) {
   await downloadApiFile(`/billing/invoices/${invoiceId}/receipt`, `receipt_${invoiceId}.pdf`);
 }

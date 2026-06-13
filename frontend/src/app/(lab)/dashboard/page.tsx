@@ -18,7 +18,7 @@ import { t } from "@/lib/i18n";
 import { DateRangeFilter } from "@/components/filters/date-range-filter";
 import { useDateRange } from "@/hooks/use-date-range";
 import { api } from "@/lib/api";
-import { downloadDailyOperationsPdf } from "@/lib/export";
+import { exportReportExcel } from "@/lib/export";
 import { PageHeader } from "@/components/layout/page-header";
 import { toast } from "sonner";
 import { AnimatedStagger, AnimatedItem } from "@/components/layout/animated-page";
@@ -71,13 +71,13 @@ export default function DashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const printDailyPdf = async () => {
+  const exportDailyExcel = async () => {
     setPrinting(true);
     try {
-      await downloadDailyOperationsPdf(dateFrom, dateTo);
-      toast.success(locale === "ar" ? "تم تحميل PDF" : "PDF downloaded");
+      await exportReportExcel("daily", dateFrom, dateTo);
+      toast.success(locale === "ar" ? "تم تحميل Excel" : "Excel downloaded");
     } catch {
-      toast.error(locale === "ar" ? "فشل الطباعة" : "Print failed");
+      toast.error(locale === "ar" ? "فشل التصدير" : "Export failed");
     } finally {
       setPrinting(false);
     }
@@ -136,10 +136,10 @@ export default function DashboardPage() {
             onDateToChange={setDateTo}
             onReset={reset}
           />
-          <Button variant="outline" size="sm" onClick={printDailyPdf} disabled={printing}>
+          <Button variant="outline" size="sm" onClick={exportDailyExcel} disabled={printing}>
             {printing
-              ? locale === "ar" ? "جاري الطباعة..." : "Printing..."
-              : locale === "ar" ? "طباعة العمليات اليومية PDF" : "Print Daily Operations PDF"}
+              ? locale === "ar" ? "جاري التصدير..." : "Exporting..."
+              : locale === "ar" ? "تصدير العمليات اليومية Excel" : "Export Daily Operations Excel"}
           </Button>
         </div>
       </div>

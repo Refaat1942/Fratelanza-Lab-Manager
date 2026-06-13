@@ -3,7 +3,7 @@ from io import BytesIO
 from uuid import UUID
 
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Alignment, Font, PatternFill
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,11 +40,19 @@ class ReportsService:
 
         filename = f"{report_type}_report.xlsx"
         if report_type == "daily":
-            headers, rows = await self._daily_report(tenant_id, date_from, date_to)
-            filename = "daily_operations_ar.xlsx"
+            return (
+                await self._daily_operations_xlsx(
+                    tenant_id, date_from, date_to, title_key="title_daily"
+                ),
+                "daily_operations_ar.xlsx",
+            )
         elif report_type == "monthly":
-            headers, rows = await self._monthly_report(tenant_id, date_from, date_to)
-            filename = "monthly_operations_ar.xlsx"
+            return (
+                await self._daily_operations_xlsx(
+                    tenant_id, date_from, date_to, title_key="title_monthly"
+                ),
+                "monthly_operations_ar.xlsx",
+            )
         elif report_type == "profitability":
             headers, rows = await self._profitability_report(tenant_id, date_from, date_to)
         elif report_type == "inventory":
@@ -138,29 +146,81 @@ class ReportsService:
             "lab_orders": int(orders or 0),
         }
 
-    def _daily_report_rows_ar(self, metrics: dict) -> tuple[list[str], list[list]]:
+    def _daily_metric_rows_ar(self, metrics: dict) -> list[tuple[str, object, bool]]:
         labels = DAILY_OPERATIONS_LABELS_AR
-        headers = ["البند", "القيمة"]
-        rows = [
-            [labels["period_from"], metrics["period_from"]],
-            [labels["period_to"], metrics["period_to"]],
-            [labels["invoice_count"], metrics["invoice_count"]],
-            [labels["gross_amount"], metrics["gross_amount"]],
-            [labels["collected"], metrics["collected"]],
-            [labels["remaining"], metrics["remaining"]],
-            [labels["expenses"], metrics["expenses"]],
-            [labels["net"], metrics["net"]],
-            [labels["new_patients"], metrics["new_patients"]],
-            [labels["lab_orders"], metrics["lab_orders"]],
+        return [
+            (labels["invoice_count"], metrics["invoice_count"], False),
+            (labels["gross_amount"], metrics["gross_amount"], True),
+            (labels["collected"], metrics["collected"], True),
+            (labels["remaining"], metrics["remaining"], True),
+            (labels["expenses"], metrics["expenses"], True),
+            (labels["net"], metrics["net"], True),
+            (labels["new_patients"], metrics["new_patients"], False),
+            (labels["lab_orders"], metrics["lab_orders"], False),
         ]
-        return headers, rows
 
-    async def _daily_report(self, tenant_id: UUID, date_from, date_to):
+    async def _daily_operations_xlsx(
+        self,
+        tenant_id: UUID,
+        date_from: date | None,
+        date_to: date | None,
+        *,
+        title_key: str,
+    ) -> bytes:
         metrics = await self._daily_operations_metrics(tenant_id, date_from, date_to)
-        return self._daily_report_rows_ar(metrics)
+        labels = DAILY_OPERATIONS_LABELS_AR
+        currency = labels["currency"]
 
-    async def _monthly_report(self, tenant_id: UUID, date_from, date_to):
-        return await self._daily_report(tenant_id, date_from, date_to)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "تقرير العمليات"
+        ws.sheet_view.rightToLeft = True
+
+        title_font = Font(bold=True, size=14)
+        header_font = Font(bold=True, color="FFFFFF")
+        label_font = Font(bold=True)
+        rtl = Alignment(horizontal="right", vertical="center", wrap_text=True)
+        value_align = Alignment(horizontal="center", vertical="center")
+        header_fill = PatternFill("solid", fgColor="0F766E")
+
+        ws.merge_cells("A1:B1")
+        ws["A1"] = labels[title_key]
+        ws["A1"].font = title_font
+        ws["A1"].alignment = rtl
+
+        ws.merge_cells("A2:B2")
+        ws["A2"] = (
+            f"{labels['period']}: {labels['period_from']} {metrics['period_from']} "
+            f"{labels['period_to']} {metrics['period_to']}"
+        )
+        ws["A2"].alignment = rtl
+
+        header_row = 4
+        ws.cell(row=header_row, column=1, value=labels["item_column"]).font = header_font
+        ws.cell(row=header_row, column=1).alignment = rtl
+        ws.cell(row=header_row, column=1).fill = header_fill
+        ws.cell(row=header_row, column=2, value=labels["value_column"]).font = header_font
+        ws.cell(row=header_row, column=2).alignment = value_align
+        ws.cell(row=header_row, column=2).fill = header_fill
+
+        money_fmt = f'#,##0.00 "{currency}"'
+        for offset, (label, value, is_money) in enumerate(self._daily_metric_rows_ar(metrics), start=1):
+            row = header_row + offset
+            label_cell = ws.cell(row=row, column=1, value=label)
+            label_cell.font = label_font
+            label_cell.alignment = rtl
+
+            value_cell = ws.cell(row=row, column=2, value=value)
+            value_cell.alignment = value_align
+            if is_money:
+                value_cell.number_format = money_fmt
+
+        ws.column_dimensions["A"].width = 42
+        ws.column_dimensions["B"].width = 22
+
+        buf = BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
 
     async def _profitability_report(self, tenant_id: UUID, date_from, date_to):
         financial = await BillingService(self.db).get_financial_summary(
@@ -341,12 +401,3 @@ class ReportsService:
             rows.append([branch.name, int(inv_count or 0), float(revenue or 0), int(pat_count)])
         return headers, rows
 
-    async def get_daily_operations_data(self, tenant_id: UUID, date_from: date, date_to: date) -> dict:
-        metrics = await self._daily_operations_metrics(tenant_id, date_from, date_to)
-        headers, rows = self._daily_report_rows_ar(metrics)
-        return {
-            "title": DAILY_OPERATIONS_LABELS_AR["title"],
-            "metrics": metrics,
-            "headers": headers,
-            "rows": [[str(c) for c in row] for row in rows],
-        }

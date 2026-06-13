@@ -1,4 +1,3 @@
-from datetime import date
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID
@@ -7,8 +6,6 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,91 +14,11 @@ from sqlalchemy.orm import selectinload
 from app.models.billing import Invoice
 from app.models.patients import Patient
 from app.models.tenant_config import TenantBranding
-from app.services.reports_service import ReportsService
-
-_ARABIC_FONT = "NotoArabic"
-_ARABIC_FONT_REGISTERED = False
-
-
-def _ensure_arabic_font() -> str:
-    global _ARABIC_FONT_REGISTERED
-    if _ARABIC_FONT_REGISTERED:
-        return _ARABIC_FONT
-    candidates = [
-        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
-        "/usr/share/fonts/opentype/noto/NotoSansArabic-Regular.ttf",
-        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
-    ]
-    for path in candidates:
-        if Path(path).exists():
-            pdfmetrics.registerFont(TTFont(_ARABIC_FONT, path))
-            _ARABIC_FONT_REGISTERED = True
-            return _ARABIC_FONT
-    return "Helvetica"
 
 
 class PdfService:
     def __init__(self, db: AsyncSession):
         self.db = db
-
-    async def daily_operations_pdf(
-        self, tenant_id: UUID, date_from: date, date_to: date, company_name: str
-    ) -> bytes:
-        data = await ReportsService(self.db).get_daily_operations_data(tenant_id, date_from, date_to)
-        font = _ensure_arabic_font()
-        buf = BytesIO()
-        doc = SimpleDocTemplate(
-            buf,
-            pagesize=A4,
-            rightMargin=20 * mm,
-            leftMargin=20 * mm,
-            topMargin=20 * mm,
-            bottomMargin=20 * mm,
-        )
-        styles = getSampleStyleSheet()
-        title_style = ParagraphStyle(
-            "Title",
-            parent=styles["Heading1"],
-            fontName=font,
-            fontSize=16,
-            spaceAfter=12,
-            alignment=2,
-        )
-        subtitle_style = ParagraphStyle(
-            "Subtitle",
-            parent=styles["Heading2"],
-            fontName=font,
-            fontSize=12,
-            spaceAfter=12,
-            alignment=2,
-        )
-        elements = [
-            Paragraph(company_name, title_style),
-            Paragraph(
-                f"{data['title']} — {date_from.isoformat()} إلى {date_to.isoformat()}",
-                subtitle_style,
-            ),
-            Spacer(1, 12),
-        ]
-        table_data = [data["headers"]] + data["rows"]
-        table = Table(table_data, colWidths=[95 * mm, 65 * mm])
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F766E")),
-                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                    ("FONTNAME", (0, 0), (-1, -1), font),
-                    ("FONTSIZE", (0, 0), (-1, -1), 11),
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f0fdfa")]),
-                    ("PADDING", (0, 0), (-1, -1), 8),
-                    ("ALIGN", (1, 0), (1, -1), "RIGHT"),
-                ]
-            )
-        )
-        elements.append(table)
-        doc.build(elements)
-        return buf.getvalue()
 
     async def invoice_receipt_pdf(self, tenant_id: UUID, invoice_id: UUID) -> bytes:
         from reportlab.platypus import Image
