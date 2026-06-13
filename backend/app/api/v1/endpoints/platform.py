@@ -73,7 +73,7 @@ async def list_subscriptions(db: PlatformDbSession, admin: PlatformAdmin):
             expires_at=row["subscription"].expires_at,
             grace_ends_at=row["subscription"].grace_ends_at,
             auto_renew=row["subscription"].auto_renew,
-            amount_paid=float(row["subscription"].amount_paid),
+            amount_paid=float(row["subscription"].amount_paid or 0),
             price_egp=float(row["plan"].price_egp),
         )
         for row in rows

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/data-table/data-table";
 import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
-import { api } from "@/lib/api";
+import { api, getApiError } from "@/lib/api";
 import { toast } from "sonner";
 import { RefreshCw } from "lucide-react";
 
@@ -35,7 +35,7 @@ export default function SubscriptionsPage() {
     setLoading(true);
     api.get("/platform/subscriptions")
       .then((res) => setItems(res.data))
-      .catch(() => toast.error("Failed to load subscriptions"))
+      .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
   };
 

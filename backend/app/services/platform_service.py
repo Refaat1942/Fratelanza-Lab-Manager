@@ -29,6 +29,7 @@ from app.schemas.platform import (
     TenantChangePlanRequest,
     TenantCreate,
     TenantListItem,
+    TenantResponse,
     TenantSubscriptionUpdate,
     TenantUpdate,
 )
@@ -177,14 +178,12 @@ class PlatformService:
                 starts_at = sub.starts_at
                 expires_at = sub.expires_at
                 sub_status = sub.status
+            tenant_data = TenantResponse.model_validate(tenant).model_dump()
+            if not tenant_data.get("locale"):
+                tenant_data["locale"] = "ar"
             items.append(
                 TenantListItem(
-                    id=tenant.id,
-                    code=tenant.code,
-                    name=tenant.name,
-                    email=tenant.email,
-                    status=tenant.status,
-                    created_at=tenant.created_at,
+                    **tenant_data,
                     plan_name=plan_name,
                     subscription_status=sub_status,
                     subscription_starts_at=starts_at,
