@@ -116,7 +116,7 @@ Quick backup install:
 ```bash
 cd /opt/labmaster
 sudo bash deploy/hostinger/install-backup-cron.sh
-bash deploy/hostinger/backup-all-tenants.sh   # test now
+sudo bash deploy/hostinger/run-backup.sh   # test now
 ```
 
 ## Stop LabMaster (without touching other projects)

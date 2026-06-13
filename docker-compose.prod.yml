@@ -74,29 +74,6 @@ services:
     networks:
       - labmaster_net
 
-  backup:
-    image: docker:27-cli
-    container_name: labmaster-backup
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - .:/opt/labmaster
-      - labmaster_backups:/opt/labmaster-backups
-    environment:
-      LABMASTER_INSTALL_DIR: /opt/labmaster
-      LABMASTER_BACKUP_DIR: /opt/labmaster-backups
-      LABMASTER_BACKUP_RETENTION_DAYS: ${LABMASTER_BACKUP_RETENTION_DAYS:-14}
-    entrypoint: >
-      /bin/sh -c "apk add --no-cache bash gzip dcron &&
-      chmod +x /opt/labmaster/deploy/hostinger/backup-all-tenants.sh &&
-      echo '0 2 * * * LABMASTER_INSTALL_DIR=/opt/labmaster LABMASTER_BACKUP_DIR=/opt/labmaster-backups bash /opt/labmaster/deploy/hostinger/backup-all-tenants.sh >> /var/log/labmaster-backup.log 2>&1' | crontab - &&
-      crond -f -l 2"
-    networks:
-      - labmaster_net
-
   frontend:
     build:
       context: ./frontend
@@ -121,6 +98,7 @@ volumes:
     name: labmaster_uploads
   labmaster_backups:
     name: labmaster_backups
+    # Written by host cron via deploy/hostinger/run-backup.sh (not a long-running container).
 
 networks:
   labmaster_net:

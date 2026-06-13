@@ -27,13 +27,17 @@ git checkout main
 git pull origin main
 
 echo ""
-echo "Rebuilding backend, frontend, and backup (no cache)..."
+echo "Rebuilding backend and frontend (no cache)..."
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache backend frontend
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate backend frontend backup
+docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate backend frontend
 
 echo ""
-echo "Installing host backup cron (if missing)..."
-bash deploy/hostinger/install-backup-cron.sh 2>/dev/null || sudo bash deploy/hostinger/install-backup-cron.sh || true
+echo "Removing legacy backup container (backups use host cron now)..."
+docker rm -f labmaster-backup 2>/dev/null || true
+
+echo ""
+echo "Installing host backup cron..."
+bash deploy/hostinger/install-backup-cron.sh 2>/dev/null || sudo bash deploy/hostinger/install-backup-cron.sh
 
 API_PORT="$(grep -E '^LABMASTER_API_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2 || echo 18000)"
 API_PORT="${API_PORT:-18000}"
@@ -55,5 +59,6 @@ echo ""
 echo "=== Done ==="
 echo "1. Hard-refresh browser: Ctrl+Shift+R"
 echo "2. Settings → General should show version 1.2.0 build $BUILD_SHA"
-echo "3. Reports → daily card should have Excel + PDF buttons"
+echo "3. Reports → daily card should export Arabic Excel"
 echo "4. Patients → new visit should show Paid / Remaining fields"
+echo "5. Backups: sudo bash deploy/hostinger/run-backup.sh  (cron daily at 02:00)"
