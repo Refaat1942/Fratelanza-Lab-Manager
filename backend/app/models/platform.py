@@ -75,6 +75,7 @@ class Tenant(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     custom_domain: Mapped[Optional[str]] = mapped_column(String(255), unique=True, nullable=True)
     max_users_override: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     max_branches_override: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    database_name: Mapped[Optional[str]] = mapped_column(String(128), unique=True, nullable=True, index=True)
 
     subscriptions: Mapped[list["TenantSubscription"]] = relationship(back_populates="tenant")
     feature_flags: Mapped[list["TenantFeatureFlag"]] = relationship(back_populates="tenant")

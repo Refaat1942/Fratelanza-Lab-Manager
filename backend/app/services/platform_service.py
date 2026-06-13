@@ -28,10 +28,13 @@ from app.schemas.platform import (
     TenantCreate,
     TenantUpdate,
 )
+from app.db.manager import get_database_manager, tenant_database_name
 from app.services.auth_service import AuthService
 from app.services.tenant_access_service import BLOCKED_STATUSES, TenantAccessService
+from app.services.tenant_provisioning_service import TenantProvisioningService
 
 settings = get_settings()
+manager = get_database_manager()
 
 
 class PlatformService:
@@ -96,14 +99,17 @@ class PlatformService:
         if not plan:
             raise ValueError("Plan not found")
 
+        code = data.code.strip().lower()
+        admin_username = data.admin_username.strip().lower()
         tenant = Tenant(
-            code=data.code.strip().lower(),
+            code=code,
             name=data.name,
             name_ar=data.name_ar,
-            email=data.email,
+            email=(data.email or "").strip() or f"{code}@labmaster.local",
             phone=data.phone,
             tax_number=data.tax_number,
-            status=TenantStatus.TRIAL,
+            status=TenantStatus.ACTIVE,
+            database_name=tenant_database_name(code) if settings.TENANT_DATABASE_PER_CUSTOMER else None,
         )
         self.db.add(tenant)
         await self.db.flush()
@@ -118,34 +124,67 @@ class PlatformService:
                 amount_paid=plan.price_egp,
             )
         )
-        self.db.add(Branch(tenant_id=tenant.id, code="HQ", name="Headquarters", name_ar="الفرع الرئيسي", is_headquarters=True))
-        self.db.add(TenantBranding(tenant_id=tenant.id, company_name=data.name, company_name_ar=data.name_ar or data.name))
+        await self.db.flush()
 
-        await AuthService(self.db).create_user(
-            tenant.id,
-            UserCreate(
-                username=data.admin_username,
-                password=data.admin_password,
-                full_name=data.admin_name,
-                is_tenant_admin=True,
-                is_system=True,
-            ),
-        )
-        await self.log_action(admin_id, "tenant_created", "tenant", tenant.id, str(tenant.id), {"code": data.code})
+        db_name = await TenantProvisioningService(self.db).provision_new_tenant(tenant)
+        factory = await manager.get_tenant_session_factory(db_name)
+        async with factory() as tenant_db:
+            tenant_db.add(
+                Branch(
+                    tenant_id=tenant.id,
+                    code="HQ",
+                    name="Headquarters",
+                    name_ar="الفرع الرئيسي",
+                    is_headquarters=True,
+                )
+            )
+            tenant_db.add(
+                TenantBranding(
+                    tenant_id=tenant.id,
+                    company_name=data.name,
+                    company_name_ar=data.name_ar or data.name,
+                )
+            )
+            await AuthService(self.db, tenant_db).create_user(
+                tenant.id,
+                UserCreate(
+                    username=admin_username,
+                    password=data.admin_password,
+                    full_name=data.admin_name,
+                    is_tenant_admin=True,
+                    is_system=True,
+                ),
+            )
+            await tenant_db.commit()
+
+        await self.log_action(admin_id, "tenant_created", "tenant", tenant.id, str(tenant.id), {"code": code})
+        await self.db.flush()
         return tenant
 
+    async def _tenant_db_session(self, tenant: Tenant):
+        db_name = manager.resolve_tenant_database(tenant.code, tenant.database_name)
+        factory = await manager.get_tenant_session_factory(db_name)
+        return factory()
+
     async def get_tenant_admin(self, tenant_id: UUID) -> Optional[User]:
-        result = await self.db.execute(
-            select(User)
-            .where(
-                User.tenant_id == tenant_id,
-                User.is_tenant_admin.is_(True),
-                User.deleted_at.is_(None),
-            )
-            .order_by(User.created_at.asc())
-            .limit(1)
+        tenant = await self.get_tenant(tenant_id)
+        if not tenant:
+            return None
+        factory = await manager.get_tenant_session_factory(
+            manager.resolve_tenant_database(tenant.code, tenant.database_name)
         )
-        return result.scalar_one_or_none()
+        async with factory() as tenant_db:
+            result = await tenant_db.execute(
+                select(User)
+                .where(
+                    User.tenant_id == tenant_id,
+                    User.is_tenant_admin.is_(True),
+                    User.deleted_at.is_(None),
+                )
+                .order_by(User.created_at.asc())
+                .limit(1)
+            )
+            return result.scalar_one_or_none()
 
     async def update_tenant(self, tenant_id: UUID, data: TenantUpdate, admin_id: UUID) -> Optional[Tenant]:
         tenant = await self.get_tenant(tenant_id)
@@ -166,42 +205,84 @@ class PlatformService:
         if not tenant:
             return None
 
-        user = await self.get_tenant_admin(tenant_id)
-        if not user:
-            raise ValueError("Tenant admin user not found")
-
         updates = data.model_dump(exclude_unset=True)
-        if "username" in updates:
-            username = updates["username"].strip().lower()
-            conflict = await self.db.execute(
-                select(User).where(
-                    User.tenant_id == tenant_id,
-                    User.username == username,
-                    User.id != user.id,
-                    User.deleted_at.is_(None),
+        db_name = manager.resolve_tenant_database(tenant.code, tenant.database_name)
+        factory = await manager.get_tenant_session_factory(db_name)
+        async with factory() as tenant_db:
+            existing_admin = await self.get_tenant_admin(tenant_id)
+            if existing_admin:
+                user = await tenant_db.get(User, existing_admin.id)
+            else:
+                user = None
+
+            if not user and updates.get("username") and updates.get("password"):
+                from app.schemas.auth import UserCreate
+
+                user = await AuthService(self.db, tenant_db).create_user(
+                    tenant_id,
+                    UserCreate(
+                        username=updates["username"].strip().lower(),
+                        password=updates["password"],
+                        full_name=updates.get("full_name") or "Lab Administrator",
+                        full_name_ar=updates.get("full_name_ar"),
+                        is_tenant_admin=True,
+                        is_system=True,
+                    ),
                 )
-            )
-            if conflict.scalar_one_or_none():
-                raise ValueError("Username already taken in this laboratory")
-            user.username = username
+                await tenant_db.commit()
+                await self.log_action(
+                    admin_id,
+                    "tenant_admin_created",
+                    "user",
+                    tenant.id,
+                    str(user.id),
+                    {"username": user.username},
+                )
+                return user
 
-        if "password" in updates:
-            user.password_hash = get_password_hash(updates["password"])
+            if not user:
+                raise ValueError("Tenant admin user not found")
 
-        if "full_name" in updates:
-            user.full_name = updates["full_name"]
-        if "full_name_ar" in updates:
-            user.full_name_ar = updates["full_name_ar"]
-        if "is_active" in updates:
-            user.is_active = updates["is_active"]
+            if "username" in updates:
+                username = updates["username"].strip().lower()
+                conflict = await tenant_db.execute(
+                    select(User).where(
+                        User.tenant_id == tenant_id,
+                        User.username == username,
+                        User.id != user.id,
+                        User.deleted_at.is_(None),
+                    )
+                )
+                if conflict.scalar_one_or_none():
+                    raise ValueError("Username already taken in this laboratory")
+                user.username = username
+
+            if "password" in updates:
+                user.password_hash = get_password_hash(updates["password"])
+
+            if "full_name" in updates:
+                user.full_name = updates["full_name"]
+            if "full_name_ar" in updates:
+                user.full_name_ar = updates["full_name_ar"]
+            if "is_active" in updates:
+                user.is_active = updates["is_active"]
+
+            await tenant_db.commit()
+            saved_id = user.id
+            saved_username = user.username
+
+        async with factory() as tenant_db:
+            user = await tenant_db.get(User, saved_id)
+            if not user:
+                raise ValueError("Tenant admin user not found after save")
 
         await self.log_action(
             admin_id,
             "tenant_admin_updated",
             "user",
             tenant.id,
-            str(user.id),
-            {"username": user.username},
+            str(saved_id),
+            {"username": saved_username},
         )
         return user
 
@@ -297,9 +378,18 @@ class PlatformService:
         return sub
 
     async def change_plan(self, tenant_id: UUID, data: TenantChangePlanRequest, admin_id: UUID) -> Optional[TenantSubscription]:
-        from app.services.tenant_limits_service import TenantLimitsService
+        tenant = await self.get_tenant(tenant_id)
+        if not tenant:
+            return None
+        factory = await manager.get_tenant_session_factory(
+            manager.resolve_tenant_database(tenant.code, tenant.database_name)
+        )
+        async with factory() as tenant_db:
+            from app.services.tenant_limits_service import TenantLimitsService
 
-        await TenantLimitsService(self.db).assert_plan_downgrade_allowed(tenant_id, data.plan_id)
+            await TenantLimitsService(tenant_db, self.db).assert_plan_downgrade_allowed(
+                tenant_id, data.plan_id
+            )
         return await self.renew_subscription(
             tenant_id,
             SubscriptionRenewRequest(plan_id=data.plan_id, days=None, amount_paid=data.amount_paid, auto_renew=data.auto_renew),

@@ -171,13 +171,8 @@ function LoginPageContent() {
                     required
                     className="h-11 bg-background"
                     autoComplete="organization"
-                    placeholder="demo-lab"
+                    placeholder={locale === "ar" ? "كود-المختبر" : "your-lab-code"}
                   />
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {locale === "ar"
-                      ? "المعرّف الفريد لمختبرك (أحرف صغيرة، بدون مسافات). للتجربة: demo-lab — المستخدم labadmin — كلمة المرور Demo@123"
-                      : "Your lab ID (lowercase, no spaces). Demo: demo-lab · user labadmin · password Demo@123"}
-                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="username">{locale === "ar" ? "اسم المستخدم" : "Username"}</Label>
@@ -188,7 +183,7 @@ function LoginPageContent() {
                     required
                     className="h-11 bg-background"
                     autoComplete="username"
-                    placeholder="labadmin"
+                    placeholder={locale === "ar" ? "اسم المستخدم" : "username"}
                   />
                 </div>
                 <div className="space-y-2">

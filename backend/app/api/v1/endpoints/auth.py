@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.api.deps import CurrentUser, DbSession, PlatformAdmin
+from app.api.deps import CurrentUser, PlatformDbSession
 from app.schemas.auth import (
     LoginRequest,
     PlatformLoginRequest,
@@ -9,6 +9,7 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.schemas.platform import PlatformAdminResponse
+from app.api.deps import PlatformAdmin
 from app.services.auth_service import AuthService
 from app.services.tenant_access_service import TenantAccessService
 
@@ -16,9 +17,9 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(data: LoginRequest, db: DbSession):
+async def login(data: LoginRequest, platform_db: PlatformDbSession):
     try:
-        return await AuthService(db).login(data)
+        return await AuthService.login_with_platform(platform_db, data)
     except ValueError as e:
         msg = str(e)
         if msg.startswith("Tenant account is"):
@@ -27,17 +28,17 @@ async def login(data: LoginRequest, db: DbSession):
 
 
 @router.post("/platform/login", response_model=TokenResponse)
-async def platform_login(data: PlatformLoginRequest, db: DbSession):
+async def platform_login(data: PlatformLoginRequest, platform_db: PlatformDbSession):
     try:
-        return await AuthService(db).platform_login(data)
+        return await AuthService(platform_db=platform_db).platform_login(data)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(data: RefreshTokenRequest, db: DbSession):
+async def refresh_token(data: RefreshTokenRequest, platform_db: PlatformDbSession):
     try:
-        return await AuthService(db).refresh(data.refresh_token)
+        return await AuthService.refresh_with_platform(platform_db, data.refresh_token)
     except ValueError as e:
         msg = str(e)
         if msg.startswith("Tenant account is"):
@@ -51,10 +52,10 @@ async def get_platform_me(admin: PlatformAdmin):
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(user: CurrentUser, db: DbSession):
+async def get_me(user: CurrentUser, platform_db: PlatformDbSession):
     if user.tenant_id:
         try:
-            await TenantAccessService(db).assert_tenant_active(user.tenant_id)
+            await TenantAccessService(platform_db).assert_tenant_active(user.tenant_id)
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 

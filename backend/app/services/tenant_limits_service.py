@@ -4,10 +4,13 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.manager import get_database_manager
 from app.models.auth import User
 from app.models.platform import SubscriptionPlan, Tenant, TenantSubscription
 from app.models.tenant_config import Branch
 from app.schemas.platform import TenantLimitsResponse
+
+manager = get_database_manager()
 
 
 @dataclass
@@ -38,42 +41,48 @@ class TenantLimitsService:
     DEFAULT_MAX_USERS = 5
     DEFAULT_MAX_BRANCHES = 1
 
-    def __init__(self, db: AsyncSession):
-        self.db = db
+    def __init__(self, tenant_db: AsyncSession, platform_db: AsyncSession | None = None):
+        self.tenant_db = tenant_db
+        self._platform_db = platform_db
 
     async def get_limits(self, tenant_id: UUID) -> TenantLimits:
-        tenant = await self.db.get(Tenant, tenant_id)
-        if not tenant:
-            raise ValueError("Tenant not found")
+        platform_db, owned = await self._platform_session()
+        try:
+            tenant = await platform_db.get(Tenant, tenant_id)
+            if not tenant:
+                raise ValueError("Tenant not found")
 
-        plan_limits = await self._get_plan_limits(tenant_id)
-        plan_max_users = plan_limits[0] if plan_limits else None
-        plan_max_branches = plan_limits[1] if plan_limits else None
+            plan_limits = await self._get_plan_limits(platform_db, tenant_id)
+            plan_max_users = plan_limits[0] if plan_limits else None
+            plan_max_branches = plan_limits[1] if plan_limits else None
 
-        max_users = tenant.max_users_override or plan_max_users or self.DEFAULT_MAX_USERS
-        max_branches = tenant.max_branches_override or plan_max_branches or self.DEFAULT_MAX_BRANCHES
+            max_users = tenant.max_users_override or plan_max_users or self.DEFAULT_MAX_USERS
+            max_branches = tenant.max_branches_override or plan_max_branches or self.DEFAULT_MAX_BRANCHES
 
-        current_users = await self.db.scalar(
-            select(func.count()).where(
-                User.tenant_id == tenant_id,
-                User.deleted_at.is_(None),
-                User.is_system.is_(False),
+            current_users = await self.tenant_db.scalar(
+                select(func.count()).where(
+                    User.tenant_id == tenant_id,
+                    User.deleted_at.is_(None),
+                    User.is_system.is_(False),
+                )
+            ) or 0
+            current_branches = await self.tenant_db.scalar(
+                select(func.count()).where(Branch.tenant_id == tenant_id, Branch.deleted_at.is_(None))
+            ) or 0
+
+            return TenantLimits(
+                max_users=max_users,
+                max_branches=max_branches,
+                current_users=current_users,
+                current_branches=current_branches,
+                plan_max_users=plan_max_users,
+                plan_max_branches=plan_max_branches,
+                max_users_override=tenant.max_users_override,
+                max_branches_override=tenant.max_branches_override,
             )
-        ) or 0
-        current_branches = await self.db.scalar(
-            select(func.count()).where(Branch.tenant_id == tenant_id, Branch.deleted_at.is_(None))
-        ) or 0
-
-        return TenantLimits(
-            max_users=max_users,
-            max_branches=max_branches,
-            current_users=current_users,
-            current_branches=current_branches,
-            plan_max_users=plan_max_users,
-            plan_max_branches=plan_max_branches,
-            max_users_override=tenant.max_users_override,
-            max_branches_override=tenant.max_branches_override,
-        )
+        finally:
+            if owned:
+                await platform_db.close()
 
     async def assert_can_add_user(self, tenant_id: UUID) -> None:
         limits = await self.get_limits(tenant_id)
@@ -92,28 +101,40 @@ class TenantLimitsService:
             )
 
     async def assert_plan_downgrade_allowed(self, tenant_id: UUID, plan_id: UUID) -> None:
-        plan = await self.db.get(SubscriptionPlan, plan_id)
-        if not plan:
-            raise ValueError("Plan not found")
+        platform_db, owned = await self._platform_session()
+        try:
+            plan = await platform_db.get(SubscriptionPlan, plan_id)
+            if not plan:
+                raise ValueError("Plan not found")
 
-        tenant = await self.db.get(Tenant, tenant_id)
-        limits = await self.get_limits(tenant_id)
-        effective_max_users = tenant.max_users_override or plan.max_users
-        effective_max_branches = tenant.max_branches_override or plan.max_branches
+            tenant = await platform_db.get(Tenant, tenant_id)
+            limits = await self.get_limits(tenant_id)
+            effective_max_users = tenant.max_users_override or plan.max_users
+            effective_max_branches = tenant.max_branches_override or plan.max_branches
 
-        if limits.current_users > effective_max_users:
-            raise ValueError(
-                f"Cannot change plan: laboratory has {limits.current_users} users "
-                f"but the new plan allows only {effective_max_users}"
-            )
-        if limits.current_branches > effective_max_branches:
-            raise ValueError(
-                f"Cannot change plan: laboratory has {limits.current_branches} branches "
-                f"but the new plan allows only {effective_max_branches}"
-            )
+            if limits.current_users > effective_max_users:
+                raise ValueError(
+                    f"Cannot change plan: laboratory has {limits.current_users} users "
+                    f"but the new plan allows only {effective_max_users}"
+                )
+            if limits.current_branches > effective_max_branches:
+                raise ValueError(
+                    f"Cannot change plan: laboratory has {limits.current_branches} branches "
+                    f"but the new plan allows only {effective_max_branches}"
+                )
+        finally:
+            if owned:
+                await platform_db.close()
 
-    async def _get_plan_limits(self, tenant_id: UUID) -> tuple[int, int] | None:
-        result = await self.db.execute(
+    async def _platform_session(self) -> tuple[AsyncSession, bool]:
+        if self._platform_db is not None:
+            return self._platform_db, False
+        return await manager.platform_session(), True
+
+    async def _get_plan_limits(
+        self, platform_db: AsyncSession, tenant_id: UUID
+    ) -> tuple[int, int] | None:
+        result = await platform_db.execute(
             select(SubscriptionPlan.max_users, SubscriptionPlan.max_branches)
             .join(TenantSubscription, TenantSubscription.plan_id == SubscriptionPlan.id)
             .where(TenantSubscription.tenant_id == tenant_id)

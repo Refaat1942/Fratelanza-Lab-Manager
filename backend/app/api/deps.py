@@ -1,3 +1,4 @@
+from collections.abc import AsyncGenerator
 from typing import Annotated, Optional
 from uuid import UUID
 
@@ -7,17 +8,52 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import get_settings
 from app.core.security import verify_token
-from app.db.session import get_db
+from app.db.manager import get_database_manager
+from app.db.session import get_platform_db, get_tenant_db
 from app.models.auth import Permission, Role, RolePermission, User, UserRole
 from app.models.platform import PlatformUser, Tenant
-from app.services.tenant_access_service import BLOCKED_STATUSES, TenantAccessService
+from app.services.tenant_access_service import TenantAccessService
 
+settings = get_settings()
 security = HTTPBearer(auto_error=False)
+manager = get_database_manager()
+
+
+async def _resolve_database_name(
+    credentials: Optional[HTTPAuthorizationCredentials],
+    platform_db: AsyncSession,
+) -> str:
+    if credentials:
+        payload = verify_token(credentials.credentials)
+        if payload and payload.get("database_name"):
+            return payload["database_name"]
+        if payload and payload.get("tenant_id"):
+            tenant = await platform_db.get(Tenant, UUID(payload["tenant_id"]))
+            if tenant and tenant.database_name:
+                return tenant.database_name
+    return manager.platform_database_name
+
+
+async def get_tenant_db_from_token(
+    platform_db: Annotated[AsyncSession, Depends(get_platform_db)],
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)],
+) -> AsyncGenerator[AsyncSession, None]:
+    database_name = await _resolve_database_name(credentials, platform_db)
+    session = await manager.tenant_session(database_name)
+    try:
+        yield session
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
 
 
 async def get_platform_admin(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_platform_db)],
     credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)],
 ) -> PlatformUser:
     if not credentials:
@@ -39,7 +75,7 @@ PlatformAdmin = Annotated[PlatformUser, Depends(get_platform_admin)]
 
 
 async def get_current_user(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    db: Annotated[AsyncSession, Depends(get_tenant_db_from_token)],
     credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)],
 ) -> User:
     if not credentials:
@@ -62,20 +98,19 @@ async def get_current_user(
 
 
 async def get_current_tenant(
-    db: Annotated[AsyncSession, Depends(get_db)],
+    platform_db: Annotated[AsyncSession, Depends(get_platform_db)],
     user: Annotated[User, Depends(get_current_user)],
     x_tenant_id: Annotated[Optional[str], Header()] = None,
 ) -> Tenant:
-    # JWT tenant is authoritative; header is fallback only
     tenant_id = (str(user.tenant_id) if user.tenant_id else None) or x_tenant_id
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant context required")
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id, Tenant.deleted_at.is_(None)))
-    tenant = result.scalar_one_or_none()
-    if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-    if tenant.status in BLOCKED_STATUSES:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Tenant account is {tenant.status.value}")
+    if user.tenant_id and str(user.tenant_id) != tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant context mismatch")
+    try:
+        tenant = await TenantAccessService(platform_db).assert_tenant_active(UUID(tenant_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     return tenant
 
 
@@ -101,4 +136,5 @@ def require_permission(permission_code: str):
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 CurrentTenant = Annotated[Tenant, Depends(get_current_tenant)]
-DbSession = Annotated[AsyncSession, Depends(get_db)]
+PlatformDbSession = Annotated[AsyncSession, Depends(get_platform_db)]
+DbSession = Annotated[AsyncSession, Depends(get_tenant_db_from_token)]
