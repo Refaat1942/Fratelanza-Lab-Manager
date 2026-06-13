@@ -4,8 +4,9 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, PlatformDbSession, require_permission
 from app.schemas.branding import BrandingResponse, BrandingUpdate
-from app.schemas.platform import TenantFeaturesResponse, TenantLimitsResponse
+from app.schemas.platform import TenantFeaturesResponse, TenantLimitsResponse, LabSubscriptionResponse
 from app.services.branding_service import BrandingService
+from app.services.platform_service import PlatformService
 from app.services.tenant_limits_service import TenantLimitsService
 from app.services.tenant_feature_service import TenantFeatureService
 
@@ -49,6 +50,16 @@ async def get_features(
         modules=modules,
         enabled_modules=await svc.get_enabled_modules(tenant.id),
     )
+
+
+@router.get("/subscription", response_model=LabSubscriptionResponse)
+async def get_subscription(
+    tenant: CurrentTenant,
+    user: CurrentUser,
+    platform_db: PlatformDbSession,
+):
+    summary = await PlatformService(platform_db).get_lab_subscription_summary(tenant.id)
+    return LabSubscriptionResponse(**summary)
 
 
 @router.get("/branding", response_model=BrandingResponse)

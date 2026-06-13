@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -30,6 +31,10 @@ interface Tenant {
   email: string;
   status: string;
   created_at: string;
+  plan_name?: string;
+  subscription_status?: string;
+  subscription_starts_at?: string;
+  subscription_expires_at?: string;
 }
 
 interface Plan {
@@ -69,9 +74,17 @@ interface TenantDetail {
   status: string;
   max_users_override?: number;
   max_branches_override?: number;
+  plan_name?: string;
   admin?: TenantAdmin;
   limits?: TenantLimits;
   features?: { modules: Record<string, boolean>; enabled_modules: string[] };
+  subscription?: {
+    plan_id: string;
+    starts_at: string;
+    expires_at: string;
+    auto_renew: boolean;
+    status: string;
+  };
 }
 
 const emptyForm = {
@@ -83,7 +96,14 @@ const emptyEditForm = {
   name: "", name_ar: "", email: "", phone: "", tax_number: "", status: "active",
   admin_username: "", admin_password: "", admin_name: "", admin_name_ar: "",
   max_users_override: "", max_branches_override: "",
+  subscription_plan_id: "", subscription_starts_at: "", subscription_expires_at: "",
+  subscription_auto_renew: true,
 };
+
+function toDateInput(value?: string | null) {
+  if (!value) return "";
+  return value.slice(0, 10);
+}
 
 export default function TenantsPage() {
   const { locale } = useLocale("platform");
@@ -100,6 +120,12 @@ export default function TenantsPage() {
   const [moduleStates, setModuleStates] = useState<Record<string, boolean>>({});
   const [initialModuleStates, setInitialModuleStates] = useState<Record<string, boolean>>({});
   const [initialAdmin, setInitialAdmin] = useState({ username: "", name: "", name_ar: "" });
+  const [initialSubscription, setInitialSubscription] = useState({
+    plan_id: "",
+    starts_at: "",
+    expires_at: "",
+    auto_renew: true,
+  });
   const [passwordDirty, setPasswordDirty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -180,6 +206,16 @@ export default function TenantsPage() {
         admin_name_ar: data.admin?.full_name_ar || "",
         max_users_override: data.max_users_override?.toString() || "",
         max_branches_override: data.max_branches_override?.toString() || "",
+        subscription_plan_id: data.subscription?.plan_id || "",
+        subscription_starts_at: toDateInput(data.subscription?.starts_at),
+        subscription_expires_at: toDateInput(data.subscription?.expires_at),
+        subscription_auto_renew: data.subscription?.auto_renew ?? true,
+      });
+      setInitialSubscription({
+        plan_id: data.subscription?.plan_id || "",
+        starts_at: toDateInput(data.subscription?.starts_at),
+        expires_at: toDateInput(data.subscription?.expires_at),
+        auto_renew: data.subscription?.auto_renew ?? true,
       });
       setEditOpen(true);
       setPasswordDirty(false);
@@ -270,6 +306,40 @@ export default function TenantsPage() {
         }
       }
 
+      const subscriptionChanged =
+        editForm.subscription_plan_id !== initialSubscription.plan_id ||
+        editForm.subscription_starts_at !== initialSubscription.starts_at ||
+        editForm.subscription_expires_at !== initialSubscription.expires_at ||
+        editForm.subscription_auto_renew !== initialSubscription.auto_renew;
+
+      if (subscriptionChanged) {
+        if (!editForm.subscription_plan_id || !editForm.subscription_expires_at) {
+          toast.error(
+            locale === "ar"
+              ? "اختر الباقة وتاريخ انتهاء الاشتراك"
+              : "Select a plan and subscription end date"
+          );
+          return;
+        }
+        try {
+          await api.patch(`/platform/tenants/${editId}/subscription`, {
+            plan_id: editForm.subscription_plan_id,
+            starts_at: editForm.subscription_starts_at
+              ? new Date(`${editForm.subscription_starts_at}T00:00:00Z`).toISOString()
+              : undefined,
+            expires_at: new Date(`${editForm.subscription_expires_at}T23:59:59Z`).toISOString(),
+            auto_renew: editForm.subscription_auto_renew,
+          });
+        } catch (err) {
+          toast.error(
+            locale === "ar"
+              ? `فشل حفظ الاشتراك: ${getApiError(err)}`
+              : `Failed to save subscription: ${getApiError(err)}`
+          );
+          return;
+        }
+      }
+
       toast.success(locale === "ar" ? "تم تحديث المختبر" : "Laboratory updated");
       setEditOpen(false);
       setEditId(null);
@@ -284,6 +354,26 @@ export default function TenantsPage() {
   const columns: ColumnDef<Tenant>[] = [
     { accessorKey: "code", header: locale === "ar" ? "الكود" : "Code" },
     { accessorKey: "name", header: locale === "ar" ? "الاسم" : "Name" },
+    {
+      accessorKey: "plan_name",
+      header: locale === "ar" ? "الباقة" : "Plan",
+      cell: ({ row }) => row.original.plan_name || "—",
+    },
+    {
+      id: "validity",
+      header: locale === "ar" ? "صلاحية الاشتراك" : "Subscription",
+      cell: ({ row }) => {
+        const from = row.original.subscription_starts_at;
+        const to = row.original.subscription_expires_at;
+        if (!from && !to) return "—";
+        const fmt = (v?: string) => (v ? new Date(v).toLocaleDateString() : "—");
+        return (
+          <span className="text-sm whitespace-nowrap">
+            {fmt(from)} → {fmt(to)}
+          </span>
+        );
+      },
+    },
     { accessorKey: "email", header: "Email" },
     {
       accessorKey: "status",
@@ -463,6 +553,59 @@ export default function TenantsPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="border-t border-border/60 pt-4">
+              <p className="mb-3 text-sm font-semibold">
+                {locale === "ar" ? "شروط الاشتراك" : "Subscription Terms"}
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>{locale === "ar" ? "الباقة" : "Plan"} *</Label>
+                  <Select
+                    value={editForm.subscription_plan_id}
+                    onValueChange={(v) => v && setEditForm({ ...editForm, subscription_plan_id: v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder={locale === "ar" ? "اختر الباقة" : "Select plan"} /></SelectTrigger>
+                    <SelectContent>
+                      {plans.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} — EGP {p.price_egp}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "صالح من" : "Valid from"}</Label>
+                  <Input
+                    type="date"
+                    value={editForm.subscription_starts_at}
+                    onChange={(e) => setEditForm({ ...editForm, subscription_starts_at: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "صالح حتى" : "Valid to"} *</Label>
+                  <Input
+                    type="date"
+                    value={editForm.subscription_expires_at}
+                    onChange={(e) => setEditForm({ ...editForm, subscription_expires_at: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <Label className="text-base">{locale === "ar" ? "تجديد تلقائي" : "Auto renew"}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {locale === "ar" ? "تجديد الاشتراك تلقائياً عند الانتهاء" : "Renew automatically when the term ends"}
+                  </p>
+                </div>
+                <Switch
+                  checked={editForm.subscription_auto_renew}
+                  onCheckedChange={(v) => setEditForm({ ...editForm, subscription_auto_renew: v })}
+                />
               </div>
             </div>
 

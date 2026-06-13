@@ -7,6 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
+from app.core.security import get_password_hash
+from app.models.auth import User
+from app.models.tenant_config import Branch, TenantBranding
 from app.models.platform import (
     BillingCycle,
     PlatformAuditLog,
@@ -17,16 +20,16 @@ from app.models.platform import (
     TenantStatus,
     TenantSubscription,
 )
-from app.core.security import get_password_hash
-from app.models.auth import User
-from app.models.tenant_config import Branch, TenantBranding
 from app.schemas.auth import UserCreate
 from app.schemas.platform import (
+    RevenueDashboard,
     SubscriptionRenewRequest,
     TenantAdminResponse,
     TenantAdminUpdate,
     TenantChangePlanRequest,
     TenantCreate,
+    TenantListItem,
+    TenantSubscriptionUpdate,
     TenantUpdate,
 )
 from app.db.manager import get_database_manager, tenant_database_name
@@ -95,6 +98,203 @@ class PlatformService:
                 "plan": plan,
             })
         return rows
+
+    async def get_revenue_dashboard(self) -> RevenueDashboard:
+        now = datetime.now(timezone.utc)
+        total = await self.db.scalar(
+            select(func.count()).select_from(Tenant).where(Tenant.deleted_at.is_(None))
+        )
+        active = await self.db.scalar(
+            select(func.count())
+            .select_from(TenantSubscription)
+            .join(Tenant, TenantSubscription.tenant_id == Tenant.id)
+            .where(
+                TenantSubscription.status == SubscriptionStatus.ACTIVE,
+                Tenant.deleted_at.is_(None),
+            )
+        )
+        mrr = await self.db.scalar(
+            select(func.coalesce(func.sum(SubscriptionPlan.price_egp), 0))
+            .select_from(TenantSubscription)
+            .join(SubscriptionPlan, TenantSubscription.plan_id == SubscriptionPlan.id)
+            .join(Tenant, TenantSubscription.tenant_id == Tenant.id)
+            .where(
+                TenantSubscription.status == SubscriptionStatus.ACTIVE,
+                SubscriptionPlan.billing_cycle == BillingCycle.MONTHLY,
+                Tenant.deleted_at.is_(None),
+            )
+        )
+        yrr = await self.db.scalar(
+            select(func.coalesce(func.sum(SubscriptionPlan.price_egp), 0))
+            .select_from(TenantSubscription)
+            .join(SubscriptionPlan, TenantSubscription.plan_id == SubscriptionPlan.id)
+            .join(Tenant, TenantSubscription.tenant_id == Tenant.id)
+            .where(
+                TenantSubscription.status == SubscriptionStatus.ACTIVE,
+                SubscriptionPlan.billing_cycle == BillingCycle.YEARLY,
+                Tenant.deleted_at.is_(None),
+            )
+        )
+        soon = await self.db.scalar(
+            select(func.count())
+            .select_from(TenantSubscription)
+            .join(Tenant, TenantSubscription.tenant_id == Tenant.id)
+            .where(
+                TenantSubscription.status == SubscriptionStatus.ACTIVE,
+                TenantSubscription.expires_at <= now + timedelta(days=14),
+                Tenant.deleted_at.is_(None),
+            )
+        )
+        suspended = await self.db.scalar(
+            select(func.count()).select_from(Tenant).where(
+                Tenant.status == TenantStatus.SUSPENDED,
+                Tenant.deleted_at.is_(None),
+            )
+        )
+        return RevenueDashboard(
+            total_tenants=int(total or 0),
+            active_subscriptions=int(active or 0),
+            monthly_recurring_revenue=float(mrr or 0),
+            yearly_recurring_revenue=float(yrr or 0),
+            expiring_soon=int(soon or 0),
+            suspended_tenants=int(suspended or 0),
+        )
+
+    async def list_tenants_enriched(self) -> list[TenantListItem]:
+        result = await self.db.execute(
+            select(Tenant).where(Tenant.deleted_at.is_(None)).order_by(Tenant.created_at.desc())
+        )
+        items: list[TenantListItem] = []
+        for tenant in result.scalars().all():
+            sub = await self.get_active_subscription(tenant.id)
+            plan_name = None
+            starts_at = None
+            expires_at = None
+            sub_status = None
+            if sub:
+                plan = await self.db.get(SubscriptionPlan, sub.plan_id)
+                plan_name = plan.name if plan else None
+                starts_at = sub.starts_at
+                expires_at = sub.expires_at
+                sub_status = sub.status
+            items.append(
+                TenantListItem(
+                    id=tenant.id,
+                    code=tenant.code,
+                    name=tenant.name,
+                    email=tenant.email,
+                    status=tenant.status,
+                    created_at=tenant.created_at,
+                    plan_name=plan_name,
+                    subscription_status=sub_status,
+                    subscription_starts_at=starts_at,
+                    subscription_expires_at=expires_at,
+                )
+            )
+        return items
+
+    async def _sync_subscription_branding(self, tenant: Tenant, expires_at: datetime) -> None:
+        db_name = manager.resolve_tenant_database(tenant.code, tenant.database_name)
+        if db_name == manager.platform_database_name:
+            result = await self.db.execute(
+                select(TenantBranding).where(TenantBranding.tenant_id == tenant.id)
+            )
+            branding = result.scalar_one_or_none()
+            if branding:
+                branding.subscription_end_date = expires_at.date()
+            return
+
+        factory = await manager.get_tenant_session_factory(db_name)
+        async with factory() as tenant_db:
+            result = await tenant_db.execute(
+                select(TenantBranding).where(TenantBranding.tenant_id == tenant.id)
+            )
+            branding = result.scalar_one_or_none()
+            if branding:
+                branding.subscription_end_date = expires_at.date()
+                await tenant_db.commit()
+
+    async def update_subscription(
+        self, tenant_id: UUID, data: TenantSubscriptionUpdate, admin_id: UUID
+    ) -> TenantSubscription:
+        tenant = await self.get_tenant(tenant_id)
+        if not tenant:
+            raise ValueError("Tenant not found")
+
+        sub = await self.get_active_subscription(tenant_id)
+        if not sub:
+            if not data.plan_id or not data.expires_at:
+                raise ValueError("plan_id and expires_at are required for a new subscription")
+            plan = await self.db.get(SubscriptionPlan, data.plan_id)
+            if not plan:
+                raise ValueError("Plan not found")
+            now = datetime.now(timezone.utc)
+            sub = TenantSubscription(
+                tenant_id=tenant_id,
+                plan_id=plan.id,
+                status=data.status or SubscriptionStatus.ACTIVE,
+                starts_at=data.starts_at or now,
+                expires_at=data.expires_at,
+                grace_ends_at=data.expires_at + timedelta(days=settings.GRACE_PERIOD_DAYS),
+                auto_renew=data.auto_renew if data.auto_renew is not None else True,
+                amount_paid=float(plan.price_egp),
+            )
+            self.db.add(sub)
+        else:
+            if data.plan_id:
+                plan = await self.db.get(SubscriptionPlan, data.plan_id)
+                if not plan:
+                    raise ValueError("Plan not found")
+                sub.plan_id = plan.id
+            if data.starts_at is not None:
+                sub.starts_at = data.starts_at
+            if data.expires_at is not None:
+                sub.expires_at = data.expires_at
+                sub.grace_ends_at = data.expires_at + timedelta(days=settings.GRACE_PERIOD_DAYS)
+            if data.status is not None:
+                sub.status = data.status
+            if data.auto_renew is not None:
+                sub.auto_renew = data.auto_renew
+
+        await self.db.flush()
+        await self._sync_subscription_branding(tenant, sub.expires_at)
+        await self.log_action(
+            admin_id,
+            "subscription_updated",
+            "subscription",
+            tenant_id,
+            str(sub.id),
+            {
+                "plan_id": str(sub.plan_id),
+                "starts_at": sub.starts_at.isoformat(),
+                "expires_at": sub.expires_at.isoformat(),
+                "status": sub.status.value,
+            },
+        )
+        return sub
+
+    async def get_lab_subscription_summary(self, tenant_id: UUID) -> dict:
+        sub = await self.get_active_subscription(tenant_id)
+        if not sub:
+            return {
+                "plan_name": None,
+                "plan_tier": None,
+                "status": None,
+                "starts_at": None,
+                "expires_at": None,
+                "auto_renew": None,
+                "price_egp": None,
+            }
+        plan = await self.db.get(SubscriptionPlan, sub.plan_id)
+        return {
+            "plan_name": plan.name if plan else None,
+            "plan_tier": plan.tier.value if plan else None,
+            "status": sub.status.value,
+            "starts_at": sub.starts_at.isoformat(),
+            "expires_at": sub.expires_at.isoformat(),
+            "auto_renew": sub.auto_renew,
+            "price_egp": float(plan.price_egp) if plan else None,
+        }
 
     async def create_tenant(self, data: TenantCreate, admin_id: UUID) -> Tenant:
         plan = await self.db.get(SubscriptionPlan, data.plan_id)

@@ -16,6 +16,7 @@ from app.models.platform import (
 from app.schemas.common import MessageResponse
 from app.schemas.platform import (
     FeatureFlagUpdate,
+    LabSubscriptionResponse,
     ModuleCatalogItem,
     PlatformAuditLogResponse,
     PlatformAdminResponse,
@@ -32,8 +33,10 @@ from app.schemas.platform import (
     TenantDetailResponse,
     TenantFeaturesResponse,
     TenantLimitsResponse,
+    TenantListItem,
     TenantResponse,
     TenantSubscriptionResponse,
+    TenantSubscriptionUpdate,
     TenantUpdate,
 )
 from app.services.platform_service import PlatformService
@@ -51,35 +54,7 @@ async def platform_me(admin: PlatformAdmin):
 
 @router.get("/dashboard", response_model=RevenueDashboard)
 async def revenue_dashboard(db: PlatformDbSession, admin: PlatformAdmin):
-    total = await db.scalar(select(func.count()).select_from(Tenant).where(Tenant.deleted_at.is_(None)))
-    active = await db.scalar(
-        select(func.count()).select_from(TenantSubscription).where(TenantSubscription.status == SubscriptionStatus.ACTIVE)
-    )
-    mrr = await db.scalar(
-        select(func.coalesce(func.sum(SubscriptionPlan.price_egp), 0))
-        .select_from(TenantSubscription).join(SubscriptionPlan)
-        .where(TenantSubscription.status == SubscriptionStatus.ACTIVE, SubscriptionPlan.billing_cycle == "monthly")
-    )
-    yrr = await db.scalar(
-        select(func.coalesce(func.sum(SubscriptionPlan.price_egp), 0))
-        .select_from(TenantSubscription).join(SubscriptionPlan)
-        .where(TenantSubscription.status == SubscriptionStatus.ACTIVE, SubscriptionPlan.billing_cycle == "yearly")
-    )
-    soon = await db.scalar(
-        select(func.count()).select_from(TenantSubscription).where(
-            TenantSubscription.expires_at <= datetime.now(timezone.utc) + timedelta(days=14),
-            TenantSubscription.status == SubscriptionStatus.ACTIVE,
-        )
-    )
-    suspended = await db.scalar(select(func.count()).select_from(Tenant).where(Tenant.status == TenantStatus.SUSPENDED))
-    return RevenueDashboard(
-        total_tenants=total or 0,
-        active_subscriptions=active or 0,
-        monthly_recurring_revenue=float(mrr or 0),
-        yearly_recurring_revenue=float(yrr or 0),
-        expiring_soon=soon or 0,
-        suspended_tenants=suspended or 0,
-    )
+    return await PlatformService(db).get_revenue_dashboard()
 
 
 @router.get("/subscriptions", response_model=list[SubscriptionListItem])
@@ -111,13 +86,12 @@ async def list_audit_logs(db: PlatformDbSession, admin: PlatformAdmin, limit: in
     return [PlatformAuditLogResponse.model_validate(log) for log in logs]
 
 
-@router.get("/tenants", response_model=list[TenantResponse])
+@router.get("/tenants", response_model=list[TenantListItem])
 async def list_tenants(db: PlatformDbSession, admin: PlatformAdmin, status_filter: TenantStatus | None = None):
-    query = select(Tenant).where(Tenant.deleted_at.is_(None))
+    items = await PlatformService(db).list_tenants_enriched()
     if status_filter:
-        query = query.where(Tenant.status == status_filter)
-    result = await db.execute(query.order_by(Tenant.created_at.desc()))
-    return [TenantResponse.model_validate(t) for t in result.scalars().all()]
+        items = [t for t in items if t.status == status_filter]
+    return items
 
 
 @router.get("/tenants/{tenant_id}", response_model=TenantDetailResponse)
@@ -247,6 +221,20 @@ async def change_plan(tenant_id: UUID, data: TenantChangePlanRequest, db: Platfo
         raise HTTPException(status_code=400, detail=str(e))
     if not sub:
         raise HTTPException(status_code=404, detail="Tenant not found")
+    return TenantSubscriptionResponse.model_validate(sub)
+
+
+@router.patch("/tenants/{tenant_id}/subscription", response_model=TenantSubscriptionResponse)
+async def update_tenant_subscription(
+    tenant_id: UUID,
+    data: TenantSubscriptionUpdate,
+    db: PlatformDbSession,
+    admin: PlatformAdmin,
+):
+    try:
+        sub = await PlatformService(db).update_subscription(tenant_id, data, admin.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return TenantSubscriptionResponse.model_validate(sub)
 
 

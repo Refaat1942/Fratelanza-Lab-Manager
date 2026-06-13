@@ -39,17 +39,35 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [subscription, setSubscription] = useState<{
+    plan_name?: string | null;
+    status?: string | null;
+    starts_at?: string | null;
+    expires_at?: string | null;
+    auto_renew?: boolean | null;
+    price_egp?: number | null;
+  } | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    api.get("/settings/branding")
-      .then((res) => {
-        const data = res.data;
+    Promise.all([
+      api.get("/settings/branding"),
+      api.get("/settings/subscription"),
+    ])
+      .then(([brandingRes, subscriptionRes]) => {
+        const data = brandingRes.data;
         setForm({
           ...data,
           subscription_end_date: data.subscription_end_date || "",
         });
+        setSubscription(subscriptionRes.data);
+        if (subscriptionRes.data?.expires_at && !data.subscription_end_date) {
+          setForm((prev) => ({
+            ...prev,
+            subscription_end_date: subscriptionRes.data.expires_at.slice(0, 10),
+          }));
+        }
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
@@ -69,7 +87,6 @@ export default function SettingsPage() {
         report_footer_html: form.report_footer_html || null,
         renewal_reminder_days: form.renewal_reminder_days ?? 14,
         renewal_reminder_enabled: form.renewal_reminder_enabled ?? true,
-        subscription_end_date: form.subscription_end_date || null,
       });
       setForm({ ...data, subscription_end_date: data.subscription_end_date || "" });
       persistBranding(data);
@@ -262,23 +279,78 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="general">
-          <Card>
-            <CardHeader>
-              <CardTitle>{locale === "ar" ? "الإعدادات العامة" : "General Settings"}</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2">
-              {[
-                { label: locale === "ar" ? "اللغة الافتراضية" : "Default Language", desc: locale === "ar" ? "العربية RTL" : "Arabic RTL" },
-                { label: locale === "ar" ? "المنطقة الزمنية" : "Timezone", desc: "Africa/Cairo" },
-              ].map((item) => (
-                <div key={item.label} className="rounded-lg border p-4">
-                  <Label className="text-base">{item.label}</Label>
-                  <p className="text-sm text-muted-foreground">{item.desc}</p>
-                  <Switch defaultChecked className="mt-3" />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>{locale === "ar" ? "الاشتراك" : "Subscription"}</CardTitle>
+                <CardDescription>
+                  {locale === "ar"
+                    ? "شروط الاشتراك وصلاحيته كما حددها مالك المنصة"
+                    : "Your plan and validity period as set by the platform owner"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {subscription?.plan_name ? (
+                  <>
+                    <div className="flex justify-between gap-4 border-b pb-2">
+                      <span className="text-muted-foreground">{locale === "ar" ? "الباقة" : "Plan"}</span>
+                      <span className="font-medium">{subscription.plan_name}</span>
+                    </div>
+                    <div className="flex justify-between gap-4 border-b pb-2">
+                      <span className="text-muted-foreground">{locale === "ar" ? "الحالة" : "Status"}</span>
+                      <span className="font-medium capitalize">{subscription.status || "—"}</span>
+                    </div>
+                    <div className="flex justify-between gap-4 border-b pb-2">
+                      <span className="text-muted-foreground">{locale === "ar" ? "صالح من" : "Valid from"}</span>
+                      <span className="font-medium">
+                        {subscription.starts_at
+                          ? new Date(subscription.starts_at).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-GB")
+                          : "—"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-4 border-b pb-2">
+                      <span className="text-muted-foreground">{locale === "ar" ? "صالح حتى" : "Valid to"}</span>
+                      <span className="font-medium">
+                        {subscription.expires_at
+                          ? new Date(subscription.expires_at).toLocaleDateString(locale === "ar" ? "ar-EG" : "en-GB")
+                          : "—"}
+                      </span>
+                    </div>
+                    {subscription.price_egp != null && (
+                      <div className="flex justify-between gap-4">
+                        <span className="text-muted-foreground">{locale === "ar" ? "السعر" : "Price"}</span>
+                        <span className="font-medium">EGP {subscription.price_egp.toLocaleString()}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-muted-foreground">
+                    {locale === "ar"
+                      ? "لا يوجد اشتراك نشط. تواصل مع مالك المنصة."
+                      : "No active subscription on file. Contact the platform owner."}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{locale === "ar" ? "الإعدادات العامة" : "General Settings"}</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {[
+                  { label: locale === "ar" ? "اللغة الافتراضية" : "Default Language", desc: locale === "ar" ? "العربية RTL" : "Arabic RTL" },
+                  { label: locale === "ar" ? "المنطقة الزمنية" : "Timezone", desc: "Africa/Cairo" },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border p-4">
+                    <Label className="text-base">{item.label}</Label>
+                    <p className="text-sm text-muted-foreground">{item.desc}</p>
+                    <Switch defaultChecked className="mt-3" />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="notifications">
@@ -311,9 +383,19 @@ export default function SettingsPage() {
                   </Label>
                   <Input
                     type="date"
-                    value={form.subscription_end_date || ""}
-                    onChange={(e) => setForm({ ...form, subscription_end_date: e.target.value })}
+                    value={
+                      subscription?.expires_at?.slice(0, 10) ||
+                      form.subscription_end_date ||
+                      ""
+                    }
+                    readOnly
+                    className="bg-muted/40"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    {locale === "ar"
+                      ? "يُدار من مالك المنصة"
+                      : "Managed by the platform owner"}
+                  </p>
                 </div>
                 <div className="space-y-2 rounded-lg border p-4">
                   <Label>{locale === "ar" ? "التذكير قبل (يوم)" : "Remind Before (days)"}</Label>
@@ -330,12 +412,14 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {form.subscription_end_date && (
+              {(subscription?.expires_at || form.subscription_end_date) && (
                 <div className="rounded-lg bg-muted/50 p-3 text-sm">
                   {locale === "ar" ? "تذكير في: " : "Reminder on: "}
                   <strong>
                     {(() => {
-                      const end = new Date(form.subscription_end_date);
+                      const end = new Date(
+                        subscription?.expires_at || `${form.subscription_end_date}T00:00:00`
+                      );
                       end.setDate(end.getDate() - (form.renewal_reminder_days || 14));
                       return end.toLocaleDateString(locale === "ar" ? "ar-EG" : "en-GB");
                     })()}

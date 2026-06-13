@@ -89,6 +89,31 @@ class TenantResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TenantListItem(TenantResponse):
+    plan_name: Optional[str] = None
+    subscription_status: Optional[SubscriptionStatus] = None
+    subscription_starts_at: Optional[datetime] = None
+    subscription_expires_at: Optional[datetime] = None
+
+
+class TenantSubscriptionUpdate(BaseModel):
+    plan_id: Optional[UUID] = None
+    starts_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    status: Optional[SubscriptionStatus] = None
+    auto_renew: Optional[bool] = None
+
+
+class LabSubscriptionResponse(BaseModel):
+    plan_name: Optional[str] = None
+    plan_tier: Optional[str] = None
+    status: Optional[str] = None
+    starts_at: Optional[str] = None
+    expires_at: Optional[str] = None
+    auto_renew: Optional[bool] = None
+    price_egp: Optional[float] = None
+
+
 class TenantSubscriptionResponse(BaseModel):
     id: UUID
     tenant_id: UUID
