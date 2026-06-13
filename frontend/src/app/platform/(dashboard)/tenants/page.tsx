@@ -100,6 +100,7 @@ export default function TenantsPage() {
   const [moduleStates, setModuleStates] = useState<Record<string, boolean>>({});
   const [initialModuleStates, setInitialModuleStates] = useState<Record<string, boolean>>({});
   const [initialAdmin, setInitialAdmin] = useState({ username: "", name: "", name_ar: "" });
+  const [passwordDirty, setPasswordDirty] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -181,9 +182,20 @@ export default function TenantsPage() {
         max_branches_override: data.max_branches_override?.toString() || "",
       });
       setEditOpen(true);
+      setPasswordDirty(false);
     } catch (err) {
       toast.error(getApiError(err));
     }
+  };
+
+  const saveFeatures = async (tenantId: string) => {
+    const flags = moduleCatalog.map((item) => ({
+      feature_key: item.key,
+      is_enabled: moduleStates[item.key] ?? true,
+      config: {},
+    }));
+    if (flags.length === 0) return;
+    await api.put(`/platform/tenants/${tenantId}/features`, flags);
   };
 
   const saveEdit = async (e: React.FormEvent) => {
@@ -200,22 +212,40 @@ export default function TenantsPage() {
         (f) => (initialModuleStates[f.feature_key] ?? true) !== f.is_enabled
       );
       if (flags.length > 0 && featuresChanged) {
-        await api.put(`/platform/tenants/${editId}/features`, flags);
+        try {
+          await saveFeatures(editId);
+        } catch (err) {
+          toast.error(
+            locale === "ar"
+              ? `فشل حفظ الميزات: ${getApiError(err)}`
+              : `Failed to save features: ${getApiError(err)}`
+          );
+          return;
+        }
       }
 
-      await api.patch(`/platform/tenants/${editId}`, {
-        name: editForm.name,
-        name_ar: editForm.name_ar || null,
-        email: editForm.email || null,
-        phone: editForm.phone || null,
-        tax_number: editForm.tax_number || null,
-        status: editForm.status,
-        max_users_override: editForm.max_users_override ? Number(editForm.max_users_override) : null,
-        max_branches_override: editForm.max_branches_override ? Number(editForm.max_branches_override) : null,
-      });
+      try {
+        await api.patch(`/platform/tenants/${editId}`, {
+          name: editForm.name,
+          name_ar: editForm.name_ar || null,
+          email: editForm.email || null,
+          phone: editForm.phone || null,
+          tax_number: editForm.tax_number || null,
+          status: editForm.status,
+          max_users_override: editForm.max_users_override ? Number(editForm.max_users_override) : null,
+          max_branches_override: editForm.max_branches_override ? Number(editForm.max_branches_override) : null,
+        });
+      } catch (err) {
+        toast.error(
+          locale === "ar"
+            ? `فشل حفظ بيانات المختبر: ${getApiError(err)}`
+            : `Failed to save laboratory: ${getApiError(err)}`
+        );
+        return;
+      }
 
       const adminChanged =
-        editForm.admin_password ||
+        (passwordDirty && editForm.admin_password) ||
         editForm.admin_username.trim() !== initialAdmin.username ||
         editForm.admin_name.trim() !== initialAdmin.name ||
         editForm.admin_name_ar.trim() !== initialAdmin.name_ar;
@@ -223,11 +253,20 @@ export default function TenantsPage() {
       if (adminChanged) {
         const adminPayload: Record<string, string> = {};
         if (editForm.admin_username.trim()) adminPayload.username = editForm.admin_username.trim();
-        if (editForm.admin_password) adminPayload.password = editForm.admin_password;
+        if (passwordDirty && editForm.admin_password) adminPayload.password = editForm.admin_password;
         if (editForm.admin_name.trim()) adminPayload.full_name = editForm.admin_name.trim();
         if (editForm.admin_name_ar.trim()) adminPayload.full_name_ar = editForm.admin_name_ar.trim();
         if (Object.keys(adminPayload).length > 0) {
-          await api.patch(`/platform/tenants/${editId}/admin`, adminPayload);
+          try {
+            await api.patch(`/platform/tenants/${editId}/admin`, adminPayload);
+          } catch (err) {
+            toast.error(
+              locale === "ar"
+                ? `فشل حفظ بيانات المدير: ${getApiError(err)}`
+                : `Failed to save admin login: ${getApiError(err)}`
+            );
+            return;
+          }
         }
       }
 
@@ -507,8 +546,12 @@ export default function TenantsPage() {
                   <Label>{locale === "ar" ? "كلمة المرور الجديدة" : "New Password"}</Label>
                   <Input
                     type="password"
+                    autoComplete="new-password"
                     value={editForm.admin_password}
-                    onChange={(e) => setEditForm({ ...editForm, admin_password: e.target.value })}
+                    onChange={(e) => {
+                      setPasswordDirty(true);
+                      setEditForm({ ...editForm, admin_password: e.target.value });
+                    }}
                     minLength={8}
                     placeholder={locale === "ar" ? "اتركه فارغاً للإبقاء على الحالية" : "Leave blank to keep current"}
                   />

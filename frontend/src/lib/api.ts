@@ -76,6 +76,12 @@ export function getApiError(error: unknown): string {
     const detail = error.response?.data?.detail;
     if (typeof detail === "string") return detail;
     if (Array.isArray(detail)) return detail.map((d) => d.msg || d).join(", ");
+    if (detail && typeof detail === "object") {
+      const message = (detail as { message?: string }).message;
+      if (message) return message;
+    }
+    const status = error.response?.status;
+    if (status) return `Request failed (${status})`;
     return error.message;
   }
   return "An error occurred";
