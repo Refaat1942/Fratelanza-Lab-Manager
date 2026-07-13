@@ -13,8 +13,7 @@ set -e
 INSTALL_DIR="${LABMASTER_DIR:-/opt/labmaster}"
 DOMAIN="${1:-}"
 NGINX_SITE="labmaster"
-NGINX_AVAILABLE="/etc/nginx/sites-available/${NGINX_SITE}"
-NGINX_ENABLED="/etc/nginx/sites-enabled/${NGINX_SITE}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -100,29 +99,9 @@ info "Existing nginx sites (we will NOT modify these):"
 ls -1 /etc/nginx/sites-enabled/ 2>/dev/null | grep -v "^${NGINX_SITE}$" || echo "  (none)"
 echo ""
 
-# Generate nginx config from template
-TEMPLATE="$INSTALL_DIR/deploy/hostinger/nginx-labmaster.conf.template"
-if [ ! -f "$TEMPLATE" ]; then
-    error "Template not found: $TEMPLATE"
-fi
-
-info "Creating NEW nginx site: $NGINX_AVAILABLE"
-sed -e "s/__LABMASTER_DOMAIN__/${DOMAIN}/g" \
-    -e "s/__LABMASTER_WEB_PORT__/${WEB_PORT}/g" \
-    -e "s/__LABMASTER_API_PORT__/${API_PORT}/g" \
-    "$TEMPLATE" > "$NGINX_AVAILABLE"
-
-ln -sf "$NGINX_AVAILABLE" "$NGINX_ENABLED"
-
-info "Testing nginx configuration..."
-if ! nginx -t 2>&1; then
-    error "Nginx config test failed. Removed broken config."
-    rm -f "$NGINX_ENABLED" "$NGINX_AVAILABLE"
-    exit 1
-fi
-
-info "Reloading nginx (existing sites unaffected)..."
-systemctl reload nginx
+# Apply isolated nginx config (never merges with Fratelanza)
+info "Creating isolated nginx site: /etc/nginx/sites-enabled/00-labmaster"
+bash "$SCRIPT_DIR/apply-labmaster-nginx.sh" "$DOMAIN"
 
 # Update .env.production with domain
 API_URL="https://${DOMAIN}/api/v1"
@@ -170,14 +149,7 @@ echo ""
 echo "If wrong project shows (Fratelanza instead of LabMaster), run:"
 echo "  sudo bash deploy/hostinger/fix-nginx-routing.sh $DOMAIN"
 echo ""
-echo "Next — enable HTTPS (only affects LabMaster site):"
-echo "  sudo certbot --nginx -d ${DOMAIN}"
-echo ""
-echo "After SSL, update API URL to HTTPS and rebuild:"
-echo "  cd $INSTALL_DIR"
-echo "  sed -i 's|http://${DOMAIN}|https://${DOMAIN}|g' .env.production"
-echo "  docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build frontend"
-echo ""
-echo "Or run: sudo bash deploy/hostinger/enable-ssl.sh ${DOMAIN}"
+echo "Next — enable HTTPS (isolated, won't touch Fratelanza):"
+echo "  sudo bash deploy/hostinger/enable-ssl.sh ${DOMAIN}"
 echo ""
 echo "Demo login: username labadmin (tenant code: demo-lab)"
