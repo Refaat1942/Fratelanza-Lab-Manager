@@ -3,15 +3,13 @@ from app.services.label_service import KitLabelData, build_kit_labels_pdf
 
 def _sample_label(**kwargs) -> KitLabelData:
     defaults = dict(
+        lab_name="Ahram Laboratory",
         patient_name="Ahmed Ali",
-        patient_code="P000001",
         test_name="Glucose",
-        test_code="GLU",
-        sample_type="Serum",
-        order_number="ORD-00001",
-        date_str="13/06/2026",
+        collection_date="13/07/2026",
         barcode="ORD-00001-GLU",
-        lab_name="Ahram Lab",
+        patient_code="P000001",
+        test_code="GLU",
     )
     defaults.update(kwargs)
     return KitLabelData(**defaults)

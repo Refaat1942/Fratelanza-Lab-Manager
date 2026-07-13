@@ -1,18 +1,24 @@
-import { downloadApiFile } from "./download";
+import { downloadApiFile, printApiFile } from "./download";
 
 export type KitLabelLayout = "single" | "double";
 
-export async function downloadOrderKitLabels(orderId: string, layout: KitLabelLayout = "single") {
+function labelPath(orderId: string, layout: KitLabelLayout) {
   const params = new URLSearchParams({ layout });
-  await downloadApiFile(
-    `/results/orders/${orderId}/labels?${params}`,
-    `kit_labels_${layout}_${orderId.slice(0, 8)}.pdf`
-  );
+  return `/results/orders/${orderId}/labels?${params}`;
 }
 
-export async function downloadResultKitLabel(resultId: string, layout: KitLabelLayout = "single") {
+export async function downloadOrderKitLabels(orderId: string, layout: KitLabelLayout = "single") {
+  await downloadApiFile(labelPath(orderId, layout), `kit_labels_${layout}_${orderId.slice(0, 8)}.pdf`);
+}
+
+/** Auto-print kit labels after patient registration (opens browser print dialog). */
+export async function printOrderKitLabels(orderId: string, layout: KitLabelLayout = "single") {
+  await printApiFile(labelPath(orderId, layout));
+}
+
+export async function printResultKitLabel(resultId: string, layout: KitLabelLayout = "single") {
   const params = new URLSearchParams({ layout });
-  await downloadApiFile(`/results/${resultId}/label?${params}`, `kit_label_${resultId.slice(0, 8)}.pdf`);
+  await printApiFile(`/results/${resultId}/label?${params}`);
 }
 
 export async function exportModuleExcel(

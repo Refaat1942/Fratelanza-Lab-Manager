@@ -12,8 +12,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  downloadOrderKitLabels,
-  downloadResultKitLabel,
+  printOrderKitLabels,
+  printResultKitLabel,
   type KitLabelLayout,
 } from "@/lib/export";
 import { toast } from "sonner";
@@ -39,15 +39,19 @@ export function KitLabelPrintMenu({
     setPrinting(true);
     try {
       if (scope === "all" && orderId) {
-        await downloadOrderKitLabels(orderId, layout);
+        await printOrderKitLabels(orderId, layout);
       } else if (resultId) {
-        await downloadResultKitLabel(resultId, layout);
+        await printResultKitLabel(resultId, layout);
       } else if (orderId) {
-        await downloadOrderKitLabels(orderId, layout);
+        await printOrderKitLabels(orderId, layout);
       } else {
         throw new Error("No order or result to print");
       }
-      toast.success(locale === "ar" ? "تم تحميل ملصقات التحاليل" : "Kit labels downloaded — send to thermal printer");
+      toast.success(
+        locale === "ar"
+          ? "تم فتح نافذة الطباعة — اختر الطابعة الحرارية"
+          : "Print dialog opened — select your thermal printer"
+      );
     } catch {
       toast.error(locale === "ar" ? "فشل طباعة الملصق" : "Label print failed");
     } finally {

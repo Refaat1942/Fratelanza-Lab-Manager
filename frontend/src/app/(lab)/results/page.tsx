@@ -16,7 +16,7 @@ import { DateRangeFilter } from "@/components/filters/date-range-filter";
 import { useDateRange } from "@/hooks/use-date-range";
 import { TestLinesPicker, validTestIds, type TestCatalogItem, type TestLine } from "@/components/tests/test-lines-picker";
 import { api, getApiError } from "@/lib/api";
-import { exportModuleExcel } from "@/lib/export";
+import { exportModuleExcel, printOrderKitLabels } from "@/lib/export";
 import { KitLabelPrintMenu } from "@/components/labels/kit-label-print-menu";
 import { toast } from "sonner";
 
@@ -84,9 +84,7 @@ export default function ResultsPage() {
       load();
       if (data?.id) {
         try {
-          const { downloadOrderKitLabels } = await import("@/lib/export");
-          await downloadOrderKitLabels(data.id, testIds.length > 1 ? "double" : "single");
-          toast.success(locale === "ar" ? "تم تحميل ملصقات التحاليل" : "Kit labels downloaded");
+          await printOrderKitLabels(data.id, testIds.length > 1 ? "double" : "single");
         } catch {
           /* user can re-print from table */
         }
