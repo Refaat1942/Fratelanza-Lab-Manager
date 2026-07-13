@@ -1,10 +1,12 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
+from fastapi.responses import Response
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.results import LabOrderCreate, LabOrderListItem, ResultEntryCreate, ResultListItem
+from app.services.label_service import build_kit_labels_pdf
 from app.services.results_service import ResultsService
 from app.utils.date_filter import parse_date_param
 
@@ -69,6 +71,47 @@ async def create_order(
         return {"id": str(order.id), "order_number": order.order_number}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/orders/{order_id}/labels")
+async def order_kit_labels(
+    order_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("results.read"),
+    layout: str = Query("single", description="single = one label per row, double = two labels per row (76mm)"),
+):
+    try:
+        labels = await ResultsService(db).get_order_kit_labels(tenant.id, order_id)
+        content = build_kit_labels_pdf(labels, layout=layout)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    filename = f"kit_labels_{layout}.pdf"
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{result_id}/label")
+async def result_kit_label(
+    result_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("results.read"),
+    layout: str = Query("single", description="single or double (one label centered on double-width page)"),
+):
+    try:
+        label = await ResultsService(db).get_result_kit_label(tenant.id, result_id)
+        content = build_kit_labels_pdf([label], layout=layout)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="kit_label.pdf"'},
+    )
 
 
 @router.get("/{result_id}/form")

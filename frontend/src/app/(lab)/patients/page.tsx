@@ -20,6 +20,7 @@ import { DateRangeFilter } from "@/components/filters/date-range-filter";
 import { useDateRange } from "@/hooks/use-date-range";
 import { api, getApiError } from "@/lib/api";
 import { exportModuleExcel } from "@/lib/export";
+import { KitLabelPrintMenu } from "@/components/labels/kit-label-print-menu";
 import { toast } from "sonner";
 
 interface Patient {
@@ -50,7 +51,8 @@ export default function PatientsPage() {
   const [discountValue, setDiscountValue] = useState("0");
   const [amountPaid, setAmountPaid] = useState("0");
   const [closeRemaining, setCloseRemaining] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
@@ -146,6 +148,10 @@ export default function PatientsPage() {
       setOpen(false);
       resetVisitForm();
       load();
+      if (data.order_id) {
+        setLastOrderId(data.order_id);
+        setLabelDialogOpen(true);
+      }
     } catch (err) {
       toast.error(getApiError(err));
     } finally {
@@ -446,6 +452,27 @@ export default function PatientsPage() {
                 <dd>{viewPatient.age != null ? viewPatient.age : "—"}</dd>
               </div>
             </dl>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={labelDialogOpen} onOpenChange={setLabelDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{locale === "ar" ? "طباعة ملصقات التحاليل" : "Print kit labels"}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {locale === "ar"
+              ? "ملصقات حرارية 38×25 مم — اختر التخطيط ثم أرسل الملف للطابعة."
+              : "Thermal labels 38×25 mm — choose layout and send the PDF to your printer."}
+          </p>
+          {lastOrderId && (
+            <div className="flex flex-col gap-2 pt-2">
+              <KitLabelPrintMenu locale={locale} orderId={lastOrderId} size="default" variant="default" />
+              <Button variant="ghost" onClick={() => setLabelDialogOpen(false)}>
+                {locale === "ar" ? "لاحقاً" : "Later"}
+              </Button>
+            </div>
           )}
         </DialogContent>
       </Dialog>

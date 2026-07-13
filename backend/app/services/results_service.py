@@ -8,7 +8,8 @@ from sqlalchemy.orm import selectinload
 from app.models.orders import LabOrder, LabOrderItem, LabResult, LabResultValue, OrderStatus, ResultStatus
 from app.models.patients import Patient, PatientVisit, VisitStatus
 from app.models.tests import Test, TestResultTemplate
-from app.models.tenant_config import Branch
+from app.models.tenant_config import Branch, TenantBranding
+from app.services.label_service import KitLabelData
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.results import LabOrderCreate, ResultEntryCreate
 from app.utils.list_date_filter import filter_by_entry_date
@@ -250,3 +251,86 @@ class ResultsService:
         lab_result.released_at = datetime.now(timezone.utc)
         await self.db.flush()
         return lab_result
+
+    async def _lab_name(self, tenant_id: UUID) -> str:
+        branding = await self.db.execute(
+            select(TenantBranding).where(TenantBranding.tenant_id == tenant_id)
+        )
+        row = branding.scalar_one_or_none()
+        return (row.company_name if row and row.company_name else "")[:20]
+
+    def _format_label_date(self, dt: datetime | None) -> str:
+        if not dt:
+            return ""
+        return dt.strftime("%d/%m/%Y")
+
+    def _build_kit_label(
+        self,
+        *,
+        lab_name: str,
+        patient: Patient,
+        test: Test,
+        order: LabOrder,
+    ) -> KitLabelData:
+        barcode = f"{order.order_number}-{test.code}"
+        return KitLabelData(
+            lab_name=lab_name,
+            patient_name=patient.full_name_ar or patient.full_name,
+            patient_code=patient.patient_code,
+            test_name=test.name_ar or test.name,
+            test_code=test.code,
+            sample_type=test.sample_type or "",
+            order_number=order.order_number,
+            date_str=self._format_label_date(order.ordered_at),
+            barcode=barcode,
+        )
+
+    async def get_order_kit_labels(self, tenant_id: UUID, order_id: UUID) -> list[KitLabelData]:
+        result = await self.db.execute(
+            select(LabOrder)
+            .options(selectinload(LabOrder.items))
+            .where(
+                LabOrder.id == order_id,
+                LabOrder.tenant_id == tenant_id,
+                LabOrder.deleted_at.is_(None),
+            )
+        )
+        order = result.scalar_one_or_none()
+        if not order:
+            raise ValueError("Order not found")
+
+        patient = await self.db.get(Patient, order.patient_id)
+        if not patient or patient.tenant_id != tenant_id:
+            raise ValueError("Patient not found")
+
+        lab_name = await self._lab_name(tenant_id)
+        labels: list[KitLabelData] = []
+        for item in sorted(order.items, key=lambda i: str(i.id)):
+            test = await self.db.get(Test, item.test_id)
+            if not test:
+                continue
+            labels.append(
+                self._build_kit_label(lab_name=lab_name, patient=patient, test=test, order=order)
+            )
+        if not labels:
+            raise ValueError("Order has no tests to label")
+        return labels
+
+    async def get_result_kit_label(self, tenant_id: UUID, result_id: UUID) -> KitLabelData:
+        result = await self.db.execute(
+            select(LabResult, LabOrder, Patient, Test)
+            .join(LabOrder, LabResult.order_id == LabOrder.id)
+            .join(Patient, LabOrder.patient_id == Patient.id)
+            .join(Test, LabResult.test_id == Test.id)
+            .where(
+                LabResult.id == result_id,
+                LabResult.tenant_id == tenant_id,
+                LabResult.deleted_at.is_(None),
+            )
+        )
+        row = result.first()
+        if not row:
+            raise ValueError("Result not found")
+        _lab_result, order, patient, test = row
+        lab_name = await self._lab_name(tenant_id)
+        return self._build_kit_label(lab_name=lab_name, patient=patient, test=test, order=order)

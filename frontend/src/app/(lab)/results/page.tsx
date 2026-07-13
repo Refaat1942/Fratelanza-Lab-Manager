@@ -17,10 +17,12 @@ import { useDateRange } from "@/hooks/use-date-range";
 import { TestLinesPicker, validTestIds, type TestCatalogItem, type TestLine } from "@/components/tests/test-lines-picker";
 import { api, getApiError } from "@/lib/api";
 import { exportModuleExcel } from "@/lib/export";
+import { KitLabelPrintMenu } from "@/components/labels/kit-label-print-menu";
 import { toast } from "sonner";
 
 interface Result {
   id: string;
+  order_id: string;
   order_number: string;
   patient_name: string;
   test_name: string;
@@ -75,11 +77,20 @@ export default function ResultsPage() {
     if (!patientId || testIds.length === 0) return;
     setSaving(true);
     try {
-      await api.post("/results/orders", { patient_id: patientId, test_ids: testIds });
+      const { data } = await api.post("/results/orders", { patient_id: patientId, test_ids: testIds });
       toast.success(locale === "ar" ? "تم إنشاء الطلب" : "Order created");
       setOpen(false);
       setTestLines([{ testId: "" }]);
       load();
+      if (data?.id) {
+        try {
+          const { downloadOrderKitLabels } = await import("@/lib/export");
+          await downloadOrderKitLabels(data.id, testIds.length > 1 ? "double" : "single");
+          toast.success(locale === "ar" ? "تم تحميل ملصقات التحاليل" : "Kit labels downloaded");
+        } catch {
+          /* user can re-print from table */
+        }
+      }
     } catch (err) {
       toast.error(getApiError(err));
     } finally {
@@ -153,6 +164,11 @@ export default function ResultsPage() {
       id: "actions",
       cell: ({ row }) => (
         <div className="flex gap-1">
+          <KitLabelPrintMenu
+            locale={locale}
+            orderId={row.original.order_id}
+            resultId={row.original.id}
+          />
           {row.original.status === "pending" && (
             <Button size="sm" variant="outline" onClick={() => openEnterForm(row.original.id)}>
               <CheckCircle className="mr-1 h-3 w-3" />{locale === "ar" ? "إدخال" : "Enter"}
