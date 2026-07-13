@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -257,12 +258,17 @@ class ResultsService:
             select(TenantBranding).where(TenantBranding.tenant_id == tenant_id)
         )
         row = branding.scalar_one_or_none()
-        return (row.company_name if row and row.company_name else "")[:20]
+        if not row:
+            return "Laboratory"
+        return (row.company_name_ar or row.company_name or "Laboratory").strip()
 
-    def _format_label_date(self, dt: datetime | None) -> str:
+    def _format_collection_date(self, order: LabOrder) -> str:
+        dt = order.collected_at or order.ordered_at
         if not dt:
-            return ""
-        return dt.strftime("%d/%m/%Y")
+            return datetime.now(ZoneInfo("Africa/Cairo")).strftime("%d/%m/%Y")
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(ZoneInfo("Africa/Cairo")).strftime("%d/%m/%Y")
 
     def _build_kit_label(
         self,
@@ -276,13 +282,11 @@ class ResultsService:
         return KitLabelData(
             lab_name=lab_name,
             patient_name=patient.full_name_ar or patient.full_name,
-            patient_code=patient.patient_code,
             test_name=test.name_ar or test.name,
-            test_code=test.code,
-            sample_type=test.sample_type or "",
-            order_number=order.order_number,
-            date_str=self._format_label_date(order.ordered_at),
+            collection_date=self._format_collection_date(order),
             barcode=barcode,
+            patient_code=patient.patient_code,
+            test_code=test.code,
         )
 
     async def get_order_kit_labels(self, tenant_id: UUID, order_id: UUID) -> list[KitLabelData]:

@@ -1,10 +1,9 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.patients import Patient, PatientVisit, VisitStatus
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.patients import PatientCreate, PatientUpdate, PatientVisitCreate
@@ -18,7 +17,7 @@ from app.schemas.billing import InvoiceCreate, InvoiceItemCreate, PaymentCreate
 from app.services.results_service import ResultsService
 from app.services.billing_service import BillingService
 from app.models.tests import Test
-from app.models.orders import LabOrderItem
+from app.models.orders import LabOrderItem, OrderStatus
 from app.services.audit_service import AuditService
 from app.utils.date_filter import apply_date_range
 
@@ -196,6 +195,10 @@ class PatientService:
             LabOrderCreate(patient_id=patient.id, test_ids=data.test_ids),
             user_id,
         )
+        collection_time = datetime.now(timezone.utc)
+        order.collected_at = collection_time
+        order.status = OrderStatus.COLLECTED
+        await self.db.flush()
 
         items_result = await self.db.execute(
             select(LabOrderItem).where(LabOrderItem.order_id == order.id)

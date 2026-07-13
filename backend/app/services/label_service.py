@@ -16,15 +16,13 @@ DOUBLE_PAGE_W = 76 * mm
 
 @dataclass(frozen=True)
 class KitLabelData:
+    lab_name: str
     patient_name: str
-    patient_code: str
     test_name: str
-    test_code: str
-    sample_type: str
-    order_number: str
-    date_str: str
+    collection_date: str
     barcode: str
-    lab_name: str = ""
+    patient_code: str = ""
+    test_code: str = ""
 
 
 def _truncate(text: str, max_len: int) -> str:
@@ -39,33 +37,26 @@ def _draw_label(c: canvas.Canvas, x: float, y: float, label: KitLabelData) -> No
     lx = x + pad
     top = y + LABEL_H - pad
 
-    if label.lab_name:
-        c.setFont("Helvetica-Bold", 5)
-        c.drawString(lx, top - 2.5 * mm, _truncate(label.lab_name, 16))
+    c.setFont("Helvetica-Bold", 5.5)
+    c.drawString(lx, top - 2.8 * mm, _truncate(label.lab_name, 22))
 
     c.setFont("Helvetica-Bold", 6.5)
-    c.drawString(lx, top - 6 * mm, _truncate(label.patient_name, 18))
+    c.drawString(lx, top - 6.5 * mm, _truncate(label.patient_name, 20))
 
-    c.setFont("Helvetica", 5.5)
-    c.drawString(lx, top - 9 * mm, f"{label.patient_code}  {label.test_code}")
-    c.drawString(lx, top - 12 * mm, _truncate(label.test_name, 22))
-
-    sample = _truncate(label.sample_type, 14)
-    if sample:
-        c.setFont("Helvetica", 5)
-        c.drawString(lx, top - 14.5 * mm, sample)
+    c.setFont("Helvetica", 6)
+    c.drawString(lx, top - 10 * mm, _truncate(label.test_name, 24))
 
     c.setFont("Helvetica", 5)
-    c.drawString(lx, top - 17 * mm, f"{label.order_number}  {label.date_str}")
+    c.drawString(lx, top - 13 * mm, f"Collection: {label.collection_date}")
 
     barcode_value = label.barcode[:40]
     bc = code128.Code128(
         barcode_value,
-        barHeight=5.5 * mm,
+        barHeight=5 * mm,
         barWidth=0.14 * mm,
         humanReadable=False,
     )
-    bc.drawOn(c, lx, y + 0.8 * mm)
+    bc.drawOn(c, lx, y + 0.6 * mm)
 
 
 def build_kit_labels_pdf(labels: list[KitLabelData], layout: str = "single") -> bytes:

@@ -19,8 +19,7 @@ import { t } from "@/lib/i18n";
 import { DateRangeFilter } from "@/components/filters/date-range-filter";
 import { useDateRange } from "@/hooks/use-date-range";
 import { api, getApiError } from "@/lib/api";
-import { exportModuleExcel } from "@/lib/export";
-import { KitLabelPrintMenu } from "@/components/labels/kit-label-print-menu";
+import { exportModuleExcel, printOrderKitLabels } from "@/lib/export";
 import { toast } from "sonner";
 
 interface Patient {
@@ -52,8 +51,6 @@ export default function PatientsPage() {
   const [amountPaid, setAmountPaid] = useState("0");
   const [closeRemaining, setCloseRemaining] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
-  const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
@@ -150,8 +147,21 @@ export default function PatientsPage() {
       resetVisitForm();
       load();
       if (data.order_id) {
-        setLastOrderId(data.order_id);
-        setLabelDialogOpen(true);
+        try {
+          const layout = data.test_count > 1 ? "double" : "single";
+          await printOrderKitLabels(data.order_id, layout);
+          toast.info(
+            locale === "ar"
+              ? "تم فتح طباعة ملصقات العينات — اختر الطابعة الحرارية 38×25"
+              : "Kit label print opened — select 38×25 mm thermal printer"
+          );
+        } catch {
+          toast.error(
+            locale === "ar"
+              ? "تم التسجيل لكن فشلت الطباعة — اطبع من قائمة النتائج"
+              : "Registered but print failed — re-print from Results"
+          );
+        }
       }
     } catch (err) {
       toast.error(getApiError(err));
@@ -453,27 +463,6 @@ export default function PatientsPage() {
                 <dd>{viewPatient.age != null ? viewPatient.age : "—"}</dd>
               </div>
             </dl>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={labelDialogOpen} onOpenChange={setLabelDialogOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{locale === "ar" ? "طباعة ملصقات التحاليل" : "Print kit labels"}</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            {locale === "ar"
-              ? "ملصقات حرارية 38×25 مم — اختر التخطيط ثم أرسل الملف للطابعة."
-              : "Thermal labels 38×25 mm — choose layout and send the PDF to your printer."}
-          </p>
-          {lastOrderId && (
-            <div className="flex flex-col gap-2 pt-2">
-              <KitLabelPrintMenu locale={locale} orderId={lastOrderId} size="default" variant="default" />
-              <Button variant="ghost" onClick={() => setLabelDialogOpen(false)}>
-                {locale === "ar" ? "لاحقاً" : "Later"}
-              </Button>
-            </div>
           )}
         </DialogContent>
       </Dialog>
