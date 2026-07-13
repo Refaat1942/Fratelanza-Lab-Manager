@@ -51,6 +51,7 @@ export default function PatientsPage() {
   const [discountValue, setDiscountValue] = useState("0");
   const [amountPaid, setAmountPaid] = useState("0");
   const [closeRemaining, setCloseRemaining] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
   const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
