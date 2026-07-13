@@ -1,5 +1,20 @@
 import { downloadApiFile } from "./download";
 
+export type KitLabelLayout = "single" | "double";
+
+export async function downloadOrderKitLabels(orderId: string, layout: KitLabelLayout = "single") {
+  const params = new URLSearchParams({ layout });
+  await downloadApiFile(
+    `/results/orders/${orderId}/labels?${params}`,
+    `kit_labels_${layout}_${orderId.slice(0, 8)}.pdf`
+  );
+}
+
+export async function downloadResultKitLabel(resultId: string, layout: KitLabelLayout = "single") {
+  const params = new URLSearchParams({ layout });
+  await downloadApiFile(`/results/${resultId}/label?${params}`, `kit_label_${resultId.slice(0, 8)}.pdf`);
+}
+
 export async function exportModuleExcel(
   module: string,
   dateFrom?: string,
