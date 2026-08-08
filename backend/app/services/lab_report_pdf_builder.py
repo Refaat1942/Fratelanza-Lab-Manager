@@ -9,6 +9,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
@@ -27,12 +28,12 @@ from sqlalchemy.orm import selectinload
 
 from app.constants.standard_result_templates import fields_for_test_code, is_generic_result_template
 from app.models.doctors import Doctor
-from app.models.orders import LabOrder, LabResult, LabResultValue, ResultStatus
+from app.models.orders import LabOrder, LabResult, ResultStatus
 from app.models.patients import Patient
 from app.models.tenant_config import Branch, TenantBranding
 from app.models.tests import Test, TestReferenceRange, TestResultTemplate
 from app.schemas.patients import parse_age_from_notes
-from app.services.pdf_fonts import FONT_BOLD, FONT_REGULAR, ensure_lab_pdf_fonts, shape_for_pdf
+from app.services.pdf_fonts import contains_arabic, ensure_lab_pdf_fonts, pdf_escape, pdf_text, reshape_arabic
 
 
 @dataclass
@@ -50,10 +51,16 @@ class LabReportPdfBuilder:
     LINE_GRAY = colors.HexColor("#CCCCCC")
     ABNORMAL_RED = colors.HexColor("#CC0000")
     TEXT = colors.HexColor("#111111")
+    PAGE_W, PAGE_H = A4
+    MARGIN_X = 14 * mm
+    MARGIN_TOP = 12 * mm
+    MARGIN_BOTTOM = 18 * mm
+    CONTENT_W = PAGE_W - 2 * MARGIN_X
 
     def __init__(self, db: AsyncSession):
         self.db = db
         self.font_reg, self.font_bold = ensure_lab_pdf_fonts()
+        self._styles: dict[str, ParagraphStyle] = {}
 
     async def build(self, tenant_id: UUID, result_id: UUID) -> bytes:
         lab_result = await self._load_result(tenant_id, result_id)
@@ -94,10 +101,10 @@ class LabReportPdfBuilder:
         doc = SimpleDocTemplate(
             buf,
             pagesize=A4,
-            leftMargin=14 * mm,
-            rightMargin=14 * mm,
-            topMargin=12 * mm,
-            bottomMargin=18 * mm,
+            leftMargin=self.MARGIN_X,
+            rightMargin=self.MARGIN_X,
+            topMargin=self.MARGIN_TOP,
+            bottomMargin=self.MARGIN_BOTTOM,
             title=f"{test.name} Report",
         )
 
@@ -107,28 +114,33 @@ class LabReportPdfBuilder:
         if footer_note:
             footer_lines.append(footer_note.replace("\n", " | ")[:120])
 
-        def draw_footer(canvas, document):
+        def draw_footer(canvas, _document):
             canvas.saveState()
             canvas.setStrokeColor(self.LINE_GRAY)
-            canvas.line(14 * mm, 14 * mm, 196 * mm, 14 * mm)
+            y = self.MARGIN_BOTTOM - 4 * mm
+            canvas.line(self.MARGIN_X, y, self.PAGE_W - self.MARGIN_X, y)
             canvas.setFont(self.font_reg, 7.5)
             canvas.setFillColor(colors.HexColor("#555555"))
-            canvas.drawString(14 * mm, 9 * mm, shape_for_pdf(footer_lines[0][:80]))
+            canvas.drawString(self.MARGIN_X, y - 5 * mm, footer_lines[0][:90])
             if len(footer_lines) > 1:
-                canvas.drawString(14 * mm, 5 * mm, footer_lines[1][:90])
-            canvas.drawRightString(196 * mm, 9 * mm, str(canvas.getPageNumber()))
+                canvas.drawString(self.MARGIN_X, y - 9 * mm, footer_lines[1][:100])
+            canvas.drawRightString(self.PAGE_W - self.MARGIN_X, y - 5 * mm, str(canvas.getPageNumber()))
             canvas.restoreState()
 
-        story = []
-        story.extend(self._header_block(branding, lab_name_en, lab_name_ar, patient, order, age, gender, sample_dt, report_dt, doctor_name))
-        story.append(Spacer(1, 4 * mm))
-        story.append(self._test_title_bar(test))
+        story: list = []
+        story.extend(
+            self._header_block(
+                branding, lab_name_en, lab_name_ar, patient, order, age, gender, sample_dt, report_dt, doctor_name
+            )
+        )
+        story.append(Spacer(1, 5 * mm))
+        story.append(self._gray_title_bar(test.name or "Laboratory Test"))
         story.append(Spacer(1, 3 * mm))
         story.extend(self._results_sections(rows))
         if lab_result.notes:
-            story.append(Spacer(1, 5 * mm))
+            story.append(Spacer(1, 6 * mm))
             story.append(self._comment_block(lab_result.notes))
-        story.append(Spacer(1, 8 * mm))
+        story.append(Spacer(1, 10 * mm))
         story.append(self._signature_block(report_dt))
 
         doc.build(story, onFirstPage=draw_footer, onLaterPages=draw_footer)
@@ -172,7 +184,7 @@ class LabReportPdfBuilder:
         std_fields = fields_for_test_code(test.code)
         rows: list[ReportRow] = []
 
-        def ref_text(param: str, unit: str | None, fallback: str = "") -> str:
+        def ref_text(param: str, _unit: str | None, fallback: str = "") -> str:
             v = value_by_param.get(param.lower())
             if v and v.reference_range:
                 return v.reference_range
@@ -217,6 +229,29 @@ class LabReportPdfBuilder:
             )
         return rows
 
+    def _style(self, name: str, size: float, *, bold: bool = False, align=TA_LEFT) -> ParagraphStyle:
+        key = f"{name}_{size}_{bold}_{align}"
+        if key not in self._styles:
+            self._styles[key] = ParagraphStyle(
+                key,
+                fontName=self.font_bold if bold else self.font_reg,
+                fontSize=size,
+                leading=size + 3,
+                textColor=self.TEXT,
+                alignment=align,
+            )
+        return self._styles[key]
+
+    def _para(self, text: str, size: float = 9, *, bold: bool = False, align=TA_LEFT) -> Paragraph:
+        if align == TA_LEFT and contains_arabic(text):
+            align = TA_RIGHT
+        return Paragraph(pdf_text(text), self._style("p", size, bold=bold, align=align))
+
+    def _label_value_row(self, label: str, value: str) -> list:
+        lbl = self._para(label, 8, bold=True)
+        val = self._para(value, 8)
+        return [lbl, val]
+
     def _header_block(
         self,
         branding,
@@ -230,124 +265,167 @@ class LabReportPdfBuilder:
         report_dt: str,
         doctor_name: str,
     ) -> list:
-        logo_cell = ""
+        w = self.CONTENT_W
+        lab_col = 58 * mm
+        info_w = w - lab_col
+
+        logo_cell: list = []
         if branding and branding.logo_url:
             logo_path = self._resolve_logo_path(branding.logo_url)
             if logo_path and logo_path.exists():
                 try:
-                    logo_cell = Image(str(logo_path), width=28 * mm, height=12 * mm)
+                    logo_cell = [Image(str(logo_path), width=28 * mm, height=14 * mm)]
                 except Exception:
-                    logo_cell = ""
+                    logo_cell = []
 
-        header_lines = []
+        title_lines: list[str] = []
         if branding and branding.report_header_html:
-            for line in branding.report_header_html.splitlines()[:4]:
-                if line.strip():
-                    header_lines.append(shape_for_pdf(line.strip()))
+            title_lines = [ln.strip() for ln in branding.report_header_html.splitlines() if ln.strip()][:3]
         else:
-            header_lines.append(shape_for_pdf(lab_name_ar))
-            header_lines.append(lab_name_en)
+            if lab_name_ar:
+                title_lines.append(lab_name_ar)
+            if lab_name_en:
+                title_lines.append(lab_name_en)
 
-        left_rows = [[logo_cell]] if logo_cell else []
-        for line in header_lines:
-            left_rows.append([Paragraph(f"<font name='{self.font_bold}' size='10'>{line}</font>", self._p(10, bold=True))])
+        lab_block_rows = []
+        if logo_cell:
+            lab_block_rows.append(logo_cell)
+        for line in title_lines:
+            lab_block_rows.append([self._para(line, 11, bold=True)])
 
-        patient_name = shape_for_pdf(patient.full_name_ar or patient.full_name)
-        right_data = [
-            [f"Name: {patient_name}", f"Age: {age if age is not None else '—'}", f"Sex: {gender}"],
-            [f"Patient ID: {patient.patient_code}", f"Sample: {sample_dt}", ""],
-            [f"Order: {order.order_number}", f"Report: {report_dt}", ""],
+        if not lab_block_rows:
+            lab_block_rows.append([self._para(lab_name_en, 11, bold=True)])
+
+        lab_table = Table(lab_block_rows, colWidths=[lab_col])
+        lab_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+
+        patient_name = patient.full_name_ar or patient.full_name
+        col_w = info_w / 4
+        info_data = [
+            self._label_value_row("Patient Name", patient_name)
+            + self._label_value_row("Age", str(age) if age is not None else "—"),
+            self._label_value_row("Patient ID", patient.patient_code)
+            + self._label_value_row("Sex", gender),
+            self._label_value_row("Order No.", order.order_number)
+            + self._label_value_row("Sample Date", sample_dt.split(" ")[0] if sample_dt else "—"),
+            self._label_value_row("Report Date", report_dt)
+            + self._label_value_row("Phone", patient.phone or "—"),
         ]
         if doctor_name:
-            right_data.append([f"Referring Dr: {shape_for_pdf(doctor_name)}", "", ""])
+            info_data.append(
+                self._label_value_row("Referring Doctor", doctor_name) + [Paragraph("", self._style("e", 8)), Paragraph("", self._style("e", 8))]
+            )
 
-        right_table = Table(right_data, colWidths=[42 * mm, 32 * mm, 18 * mm])
-        right_table.setStyle(
+        info_table = Table(info_data, colWidths=[col_w, col_w, col_w, col_w])
+        info_table.setStyle(
             TableStyle(
                 [
-                    ("FONT", (0, 0), (-1, -1), self.font_reg, 8),
-                    ("TEXTCOLOR", (0, 0), (-1, -1), self.TEXT),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 4),
                 ]
             )
         )
 
-        left_table = Table(left_rows, colWidths=[75 * mm])
-        left_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
-
-        header = Table([[left_table, right_table]], colWidths=[78 * mm, 98 * mm])
+        header = Table([[lab_table, info_table]], colWidths=[lab_col, info_w])
         header.setStyle(
             TableStyle(
                 [
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
                     ("LINEBELOW", (0, 0), (-1, -1), 0.75, self.LINE_GRAY),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
                 ]
             )
         )
         return [header]
 
-    def _test_title_bar(self, test: Test) -> Table:
-        title = test.name
-        if test.name_ar and test.name_ar != test.name:
-            title = f"{test.name}"
-        bar = Table([[Paragraph(f"<font name='{self.font_bold}' size='11'>{title}</font>", self._p(11, bold=True))]])
+    def _gray_title_bar(self, title: str) -> Table:
+        bar = Table(
+            [[self._para(title, 11, bold=True, align=TA_CENTER)]],
+            colWidths=[self.CONTENT_W],
+        )
         bar.setStyle(
             TableStyle(
                 [
                     ("BACKGROUND", (0, 0), (-1, -1), self.SECTION_GRAY),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                    ("TOPPADDING", (0, 0), (-1, -1), 6),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 7),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                    ("BOX", (0, 0), (-1, -1), 0.25, self.LINE_GRAY),
                 ]
             )
         )
         return bar
 
     def _results_table(self, rows: list[ReportRow]) -> Table:
-        data = [["Test", "Result", "Unit", "Reference Range"]]
+        col_test = self.CONTENT_W * 0.42
+        col_result = self.CONTENT_W * 0.16
+        col_unit = self.CONTENT_W * 0.14
+        col_ref = self.CONTENT_W - col_test - col_result - col_unit
+
+        header = [
+            self._para("Test", 9, bold=True),
+            self._para("Result", 9, bold=True, align=TA_CENTER),
+            self._para("Unit", 9, bold=True, align=TA_CENTER),
+            self._para("Reference Range", 9, bold=True, align=TA_CENTER),
+        ]
+        data = [header]
         for row in rows:
             result_display = row.value
             if row.abnormal and row.value != "—":
                 result_display = f"↑ {row.value}"
-            data.append([row.name, result_display, row.unit, row.reference])
+            data.append(
+                [
+                    self._para(row.name, 9),
+                    self._para(result_display, 9, bold=row.abnormal, align=TA_CENTER),
+                    self._para(row.unit, 9, align=TA_CENTER),
+                    self._para(row.reference, 9, align=TA_CENTER),
+                ]
+            )
 
-        table = Table(data, colWidths=[72 * mm, 28 * mm, 22 * mm, 54 * mm], repeatRows=1)
+        if len(data) == 1:
+            data.append(
+                [
+                    self._para("—", 9),
+                    self._para("—", 9, align=TA_CENTER),
+                    self._para("", 9),
+                    self._para("", 9),
+                ]
+            )
+
+        table = Table(data, colWidths=[col_test, col_result, col_unit, col_ref], repeatRows=1)
         style = TableStyle(
             [
-                ("FONT", (0, 0), (-1, 0), self.font_bold, 9),
-                ("FONT", (0, 1), (-1, -1), self.font_reg, 9),
                 ("BACKGROUND", (0, 0), (-1, 0), self.SECTION_GRAY),
-                ("TEXTCOLOR", (0, 0), (-1, -1), self.TEXT),
-                ("ALIGN", (0, 0), (0, -1), "LEFT"),
-                ("ALIGN", (1, 0), (1, -1), "CENTER"),
-                ("ALIGN", (2, 0), (2, -1), "CENTER"),
-                ("ALIGN", (3, 0), (3, -1), "CENTER"),
+                ("BOX", (0, 0), (-1, -1), 0.5, self.LINE_GRAY),
                 ("LINEBELOW", (0, 0), (-1, 0), 0.5, self.LINE_GRAY),
-                ("LINEBELOW", (0, 1), (-1, -1), 0.25, self.LINE_GRAY),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, self.LINE_GRAY),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
             ]
         )
         for i, row in enumerate(rows, start=1):
             if row.abnormal:
                 style.add("TEXTCOLOR", (1, i), (1, i), self.ABNORMAL_RED)
-                style.add("FONT", (1, i), (1, i), self.font_bold, 9)
         table.setStyle(style)
         return table
 
     def _section_bar(self, title: str) -> Table:
-        bar = Table([[Paragraph(f"<font name='{self.font_bold}' size='9'>{title}</font>", self._p(9, bold=True))]])
+        bar = Table(
+            [[self._para(title, 9, bold=True)]],
+            colWidths=[self.CONTENT_W],
+        )
         bar.setStyle(
             TableStyle(
                 [
                     ("BACKGROUND", (0, 0), (-1, -1), self.SECTION_GRAY),
-                    ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 5),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
                     ("LEFTPADDING", (0, 0), (-1, -1), 8),
-                    ("TOPPADDING", (0, 0), (-1, -1), 4),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
                 ]
             )
         )
@@ -358,16 +436,18 @@ class LabReportPdfBuilder:
         diff_rows = [r for r in rows if r.section == "differential"]
         parts: list = [self._results_table(main_rows)]
         if diff_rows:
-            parts.append(Spacer(1, 4 * mm))
-            parts.append(self._section_bar("Differential Count"))
-            parts.append(Spacer(1, 2 * mm))
-            parts.append(self._results_table(diff_rows))
+            parts.extend([Spacer(1, 4 * mm), self._section_bar("Differential Count"), Spacer(1, 2 * mm), self._results_table(diff_rows)])
         return parts
 
     def _comment_block(self, notes: str) -> KeepTogether:
-        title = Paragraph(f"<font name='{self.font_bold}' size='9'>Comment:</font>", self._p(9, bold=True))
-        body = Paragraph(shape_for_pdf(notes.replace("\n", "<br/>")), self._p(9))
-        block = Table([[title], [body]], colWidths=[176 * mm])
+        safe = pdf_escape(reshape_arabic(notes)).replace("\n", "<br/>")
+        block = Table(
+            [
+                [self._para("Comment:", 9, bold=True)],
+                [Paragraph(safe, self._style("c", 9))],
+            ],
+            colWidths=[self.CONTENT_W],
+        )
         block.setStyle(
             TableStyle(
                 [
@@ -379,42 +459,30 @@ class LabReportPdfBuilder:
         return KeepTogether([block])
 
     def _signature_block(self, report_dt: str) -> Table:
+        date_str = report_dt.split(" ")[0] if report_dt and report_dt != "—" else "—"
         sig = Table(
             [
-                ["", ""],
                 [
-                    Paragraph(
-                        f"<font name='{self.font_bold}' size='9'>Lab Director</font><br/>"
-                        f"<font name='{self.font_reg}' size='8'>Authorized Signatory</font>",
-                        self._p(9),
-                    ),
-                    Paragraph(
-                        f"<font name='{self.font_reg}' size='8'>Date: {report_dt.split(' ')[0] if report_dt else '—'}</font>",
-                        self._p(8),
-                    ),
+                    self._para("Lab Director", 9, bold=True),
+                    self._para(f"Date: {date_str}", 9, align=TA_RIGHT),
+                ],
+                [
+                    self._para("Authorized Signatory", 8),
+                    Paragraph("", self._style("s", 8)),
                 ],
             ],
-            colWidths=[90 * mm, 86 * mm],
+            colWidths=[self.CONTENT_W * 0.55, self.CONTENT_W * 0.45],
         )
         sig.setStyle(
             TableStyle(
                 [
                     ("LINEABOVE", (0, 0), (0, 0), 0.75, colors.black),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("ALIGN", (1, 1), (1, 1), "RIGHT"),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
                 ]
             )
         )
         return sig
-
-    def _p(self, size: float, bold: bool = False) -> ParagraphStyle:
-        return ParagraphStyle(
-            name=f"P{size}{'B' if bold else ''}",
-            fontName=self.font_bold if bold else self.font_reg,
-            fontSize=size,
-            leading=size + 2,
-            textColor=self.TEXT,
-        )
 
     @staticmethod
     def _cairo_dt(dt: datetime | None) -> str:
