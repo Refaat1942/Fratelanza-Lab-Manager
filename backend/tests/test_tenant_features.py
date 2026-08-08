@@ -46,18 +46,26 @@ async def test_no_flags_enables_all_modules():
 async def test_explicit_flags_control_visibility():
     tenant_id = uuid.uuid4()
     flags = [
-        TenantFeatureFlag(tenant_id=tenant_id, feature_key="crm", is_enabled=False, config={}),
-        TenantFeatureFlag(tenant_id=tenant_id, feature_key="marketing", is_enabled=False, config={}),
+        TenantFeatureFlag(tenant_id=tenant_id, feature_key="inventory", is_enabled=False, config={}),
+        TenantFeatureFlag(tenant_id=tenant_id, feature_key="reports", is_enabled=False, config={}),
     ]
     svc = TenantFeatureService(FakeSession(flags))
     states = await svc.get_module_states(tenant_id)
-    assert states["crm"] is False
+    assert states["inventory"] is False
+    assert states["reports"] is False
     assert states["patients"] is True
     for key in ALWAYS_ENABLED_MODULES:
         assert states[key] is True
 
 
 def test_modules_for_plan_tier():
-    assert "inventory" in TenantFeatureService.modules_for_plan_tier(PlanTier.PROFESSIONAL)
-    assert "crm" not in TenantFeatureService.modules_for_plan_tier(PlanTier.STARTER)
-    assert "crm" in TenantFeatureService.modules_for_plan_tier(PlanTier.ENTERPRISE)
+    starter = TenantFeatureService.modules_for_plan_tier(PlanTier.STARTER)
+    assert "inventory" not in starter
+    assert "patients" in starter
+    assert "accounting" not in starter
+    professional = TenantFeatureService.modules_for_plan_tier(PlanTier.PROFESSIONAL)
+    assert "inventory" in professional
+    assert "accounting" not in professional
+    enterprise = TenantFeatureService.modules_for_plan_tier(PlanTier.ENTERPRISE)
+    assert "accounting" in enterprise
+    assert set(enterprise) == set(ALL_LAB_MODULES)
