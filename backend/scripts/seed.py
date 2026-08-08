@@ -24,8 +24,8 @@ from app.models.platform import (
     TenantStatus,
     TenantSubscription,
 )
-from app.models.tenant_config import Branch, TenantBranding
-from app.models.tests import Test, TestCategory
+from app.constants.standard_result_templates import CBC_RESULT_FIELDS
+from app.models.tests import Test, TestCategory, TestResultTemplate
 from app.models.billing import Invoice, InvoiceItem, InvoiceStatus
 from app.models.inventory import InventoryBatch, InventoryCategory, InventoryItem
 from app.models.orders import LabOrder, LabOrderItem, LabResult, OrderStatus, ResultStatus
@@ -244,6 +244,25 @@ async def seed_tenant_data(db, tenant: Tenant) -> None:
     glu = glu_test.scalar_one()
     cbc_test = await db.execute(select(Test).where(Test.tenant_id == tenant.id, Test.code == "CBC"))
     cbc = cbc_test.scalar_one()
+
+    existing_tpl = await db.execute(
+        select(TestResultTemplate).where(TestResultTemplate.test_id == cbc.id, TestResultTemplate.tenant_id == tenant.id)
+    )
+    if not existing_tpl.scalars().first():
+        for field in CBC_RESULT_FIELDS:
+            db.add(
+                TestResultTemplate(
+                    tenant_id=tenant.id,
+                    test_id=cbc.id,
+                    parameter_name=field.parameter_name,
+                    parameter_name_ar=field.parameter_name_ar,
+                    unit=field.unit,
+                    sort_order=field.sort_order,
+                    field_type="numeric",
+                    options={"reference": field.reference, "section": field.section},
+                )
+            )
+        await db.flush()
 
     now = datetime.now(timezone.utc)
     visit = PatientVisit(

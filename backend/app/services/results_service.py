@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.orders import LabOrder, LabOrderItem, LabResult, LabResultValue, OrderStatus, ResultStatus
 from app.models.patients import Patient, PatientVisit, VisitStatus
+from app.constants.standard_result_templates import form_fields_for_test, is_generic_result_template
 from app.models.tests import Test, TestResultTemplate
 from app.models.tenant_config import Branch, TenantBranding
 from app.services.label_service import KitLabelData
@@ -216,9 +217,29 @@ class ResultsService:
             .order_by(TestResultTemplate.sort_order)
         )
         templates = tpl_result.scalars().all()
-        if not templates:
-            templates = [
-                type("T", (), {"parameter_name": "Result", "parameter_name_ar": "النتيجة", "unit": "", "field_type": "text", "sort_order": 0})()
+        std_fields = form_fields_for_test(test.code) if is_generic_result_template(templates) else None
+        if std_fields:
+            field_defs = std_fields
+        elif not templates:
+            field_defs = [
+                {
+                    "parameter_name": "Result",
+                    "parameter_name_ar": "النتيجة",
+                    "unit": "",
+                    "field_type": "text",
+                    "sort_order": 0,
+                }
+            ]
+        else:
+            field_defs = [
+                {
+                    "parameter_name": t.parameter_name,
+                    "parameter_name_ar": t.parameter_name_ar,
+                    "unit": t.unit,
+                    "field_type": t.field_type,
+                    "sort_order": t.sort_order,
+                }
+                for t in templates
             ]
         return {
             "result_id": str(lab_result.id),
@@ -227,16 +248,7 @@ class ResultsService:
             "test_name": test.name,
             "test_id": str(test.id),
             "status": lab_result.status.value,
-            "fields": [
-                {
-                    "parameter_name": t.parameter_name,
-                    "parameter_name_ar": getattr(t, "parameter_name_ar", None),
-                    "unit": t.unit,
-                    "field_type": getattr(t, "field_type", "numeric"),
-                    "sort_order": getattr(t, "sort_order", i),
-                }
-                for i, t in enumerate(templates)
-            ],
+            "fields": field_defs,
         }
 
     async def release_result(self, tenant_id: UUID, result_id: UUID) -> LabResult:
