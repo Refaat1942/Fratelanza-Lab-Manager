@@ -108,7 +108,10 @@ async def result_report_pdf(
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="result_{result_id}.pdf"'},
+        headers={
+            "Content-Disposition": f'inline; filename="result_{result_id}.pdf"',
+            "Cache-Control": "no-store",
+        },
     )
 
 
