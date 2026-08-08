@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 class DoctorCreate(BaseModel):
     full_name: str = Field(min_length=2, max_length=255)
     full_name_ar: Optional[str] = None
+    specialty_key: Optional[str] = None
     specialty: Optional[str] = None
     specialty_ar: Optional[str] = None
     phone: Optional[str] = None
@@ -21,6 +22,7 @@ class DoctorCreate(BaseModel):
 class DoctorUpdate(BaseModel):
     full_name: Optional[str] = None
     full_name_ar: Optional[str] = None
+    specialty_key: Optional[str] = None
     specialty: Optional[str] = None
     specialty_ar: Optional[str] = None
     phone: Optional[str] = None
@@ -38,6 +40,7 @@ class DoctorResponse(BaseModel):
     full_name: str
     full_name_ar: Optional[str] = None
     specialty: Optional[str] = None
+    specialty_ar: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
     clinic_name: Optional[str] = None

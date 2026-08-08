@@ -1,8 +1,9 @@
+from io import BytesIO
 from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from openpyxl import Workbook, load_workbook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tests import Test, TestCategory, TestResultTemplate
@@ -220,3 +221,73 @@ class TestService:
             templates.append(t)
         await self.db.flush()
         return templates
+
+    @staticmethod
+    def generate_import_template() -> bytes:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Tests"
+        ws.append(["Name", "Name_AR", "Price", "Cost", "Turnaround_Hours", "Sample_Type", "Category_Code"])
+        ws.append(["Fasting Glucose", "سكر صائم", 80, 25, 24, "Serum", "GEN"])
+        ws.append(["Complete Blood Count", "صورة دم كاملة", 120, 40, 24, "Blood", "GEN"])
+        buf = BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
+    async def import_from_excel(self, tenant_id: UUID, content: bytes, user_id: UUID) -> dict:
+        category_id = await self.resolve_category_id(tenant_id, None)
+        wb = load_workbook(BytesIO(content), read_only=True)
+        ws = wb.active
+        created, updated, skipped = 0, 0, 0
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+        for row in rows:
+            if not row or not row[0]:
+                continue
+            name = str(row[0]).strip()
+            name_ar = str(row[1] or name).strip()
+            price = float(row[2] or 0)
+            cost = float(row[3] or 0)
+            tat = int(float(row[4] or 24))
+            sample_type = str(row[5] or "").strip() or None
+            cat_code = str(row[6] or "GEN").strip().upper()
+            cat_result = await self.db.execute(
+                select(TestCategory).where(
+                    TestCategory.tenant_id == tenant_id,
+                    TestCategory.code == cat_code,
+                    TestCategory.deleted_at.is_(None),
+                )
+            )
+            cat = cat_result.scalar_one_or_none()
+            row_category_id = cat.id if cat else category_id
+            existing = await self.db.scalar(
+                select(Test).where(
+                    Test.tenant_id == tenant_id,
+                    Test.name.ilike(name),
+                    Test.deleted_at.is_(None),
+                )
+            )
+            if existing:
+                existing.name_ar = name_ar
+                existing.price = price
+                existing.cost = cost
+                existing.turnaround_hours = tat
+                existing.sample_type = sample_type
+                updated += 1
+                continue
+            code = await self._next_test_code(tenant_id)
+            test = Test(
+                tenant_id=tenant_id,
+                category_id=row_category_id,
+                code=code,
+                name=name,
+                name_ar=name_ar,
+                price=price,
+                cost=cost,
+                turnaround_hours=tat,
+                sample_type=sample_type,
+            )
+            self.db.add(test)
+            await self.db.flush()
+            created += 1
+        await self.db.flush()
+        return {"created": created, "updated": updated, "skipped": skipped, "total_rows": len(rows)}

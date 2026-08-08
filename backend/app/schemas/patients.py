@@ -104,6 +104,7 @@ class PatientQuickVisitCreate(BaseModel):
     phone: Optional[str] = Field(None, max_length=50)
     age: Optional[int] = Field(None, ge=0, le=150)
     patient_id: Optional[UUID] = None
+    referring_doctor_id: Optional[UUID] = None
     test_ids: list[UUID] = Field(min_length=1)
     discount: float = Field(default=0, ge=0)
     discount_percent: Optional[float] = Field(None, ge=0, le=100)

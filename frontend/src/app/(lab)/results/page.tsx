@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, CheckCircle, Settings2 } from "lucide-react";
+import { Plus, CheckCircle, Settings2, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -16,8 +16,7 @@ import { DateRangeFilter } from "@/components/filters/date-range-filter";
 import { useDateRange } from "@/hooks/use-date-range";
 import { TestLinesPicker, validTestIds, type TestCatalogItem, type TestLine } from "@/components/tests/test-lines-picker";
 import { api, getApiError } from "@/lib/api";
-import { exportModuleExcel, printOrderKitLabels } from "@/lib/export";
-import { KitLabelPrintMenu } from "@/components/labels/kit-label-print-menu";
+import { exportModuleExcel, printOrderKitLabels, printResultReport } from "@/lib/export";
 import { toast } from "sonner";
 
 interface Result {
@@ -42,6 +41,7 @@ export default function ResultsPage() {
   const [patientId, setPatientId] = useState("");
   const [testLines, setTestLines] = useState<TestLine[]>([{ testId: "" }]);
   const [saving, setSaving] = useState(false);
+  const [printingId, setPrintingId] = useState<string | null>(null);
   const [enterId, setEnterId] = useState<string | null>(null);
   const [formMeta, setFormMeta] = useState<{ patient_name: string; test_name: string; order_number: string } | null>(null);
   const [fields, setFields] = useState<ResultField[]>([]);
@@ -86,7 +86,7 @@ export default function ResultsPage() {
         try {
           await printOrderKitLabels(data.id, testIds.length > 1 ? "double" : "single");
         } catch {
-          /* user can re-print from table */
+          /* user can re-print from patients */
         }
       }
     } catch (err) {
@@ -126,6 +126,22 @@ export default function ResultsPage() {
     }
   };
 
+  const printReport = async (resultId: string) => {
+    setPrintingId(resultId);
+    try {
+      await printResultReport(resultId);
+      toast.success(
+        locale === "ar"
+          ? "تم فتح تقرير A4 — اختر طابعة A4 أو احفظ PDF"
+          : "A4 report opened — choose A4 printer or Save as PDF"
+      );
+    } catch {
+      toast.error(locale === "ar" ? "فشل طباعة التقرير" : "Report print failed");
+    } finally {
+      setPrintingId(null);
+    }
+  };
+
   const openDesigner = async (testId: string) => {
     try {
       const { data } = await api.get(`/tests/${testId}/result-template`);
@@ -149,6 +165,8 @@ export default function ResultsPage() {
     }
   };
 
+  const isReleased = (status: string) => status === "released" || status === "verified";
+
   const columns: ColumnDef<Result>[] = [
     { accessorKey: "order_number", header: "Order #" },
     { accessorKey: "patient_name", header: locale === "ar" ? "المريض" : "Patient" },
@@ -156,17 +174,29 @@ export default function ResultsPage() {
     {
       accessorKey: "status",
       header: "Status",
-      cell: ({ row }) => <Badge variant={row.original.status === "released" ? "default" : "secondary"}>{row.original.status}</Badge>,
+      cell: ({ row }) => <Badge variant={isReleased(row.original.status) ? "default" : "secondary"}>{row.original.status}</Badge>,
     },
     {
       id: "actions",
       cell: ({ row }) => (
         <div className="flex gap-1">
-          <KitLabelPrintMenu
-            locale={locale}
-            orderId={row.original.order_id}
-            resultId={row.original.id}
-          />
+          {isReleased(row.original.status) && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={printingId === row.original.id}
+              onClick={() => printReport(row.original.id)}
+            >
+              <FileText className="mr-1 h-3 w-3" />
+              {printingId === row.original.id
+                ? locale === "ar"
+                  ? "..."
+                  : "..."
+                : locale === "ar"
+                  ? "تقرير A4"
+                  : "A4 Report"}
+            </Button>
+          )}
           {row.original.status === "pending" && (
             <Button size="sm" variant="outline" onClick={() => openEnterForm(row.original.id)}>
               <CheckCircle className="mr-1 h-3 w-3" />{locale === "ar" ? "إدخال" : "Enter"}

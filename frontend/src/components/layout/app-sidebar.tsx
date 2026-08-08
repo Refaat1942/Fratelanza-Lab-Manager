@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Users, Stethoscope, Share2, FlaskConical, FileText,
-  Receipt, Wallet, Package, ShoppingCart, Truck, Contact, Megaphone,
+  LayoutDashboard, Users, Stethoscope, FlaskConical, FileText,
+  Receipt, Wallet, Package,
   Calculator, BarChart3, Settings, UserCog, Building2, Microscope, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,16 +18,11 @@ const labModules = [
   { href: "/dashboard", icon: LayoutDashboard, key: "dashboard" as const },
   { href: "/patients", icon: Users, key: "patients" as const },
   { href: "/doctors", icon: Stethoscope, key: "doctors" as const },
-  { href: "/referrals", icon: Share2, key: "referrals" as const },
   { href: "/tests", icon: FlaskConical, key: "tests" as const },
   { href: "/results", icon: FileText, key: "results" as const },
   { href: "/billing", icon: Receipt, key: "billing" as const },
   { href: "/expenses", icon: Wallet, key: "expenses" as const },
   { href: "/inventory", icon: Package, key: "inventory" as const },
-  { href: "/purchasing", icon: ShoppingCart, key: "purchasing" as const },
-  { href: "/suppliers", icon: Truck, key: "suppliers" as const },
-  { href: "/crm", icon: Contact, key: "crm" as const },
-  { href: "/marketing", icon: Megaphone, key: "marketing" as const },
   { href: "/accounting", icon: Calculator, key: "accounting" as const },
   { href: "/reports", icon: BarChart3, key: "reports" as const },
   { href: "/users", icon: UserCog, key: "users" as const },

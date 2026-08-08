@@ -16,6 +16,7 @@ from app.schemas.results import LabOrderCreate
 from app.schemas.billing import InvoiceCreate, InvoiceItemCreate, PaymentCreate
 from app.services.results_service import ResultsService
 from app.services.billing_service import BillingService
+from app.services.doctor_service import DoctorService
 from app.models.tests import Test
 from app.models.orders import LabOrderItem, OrderStatus
 from app.services.audit_service import AuditService
@@ -192,7 +193,11 @@ class PatientService:
 
         order = await ResultsService(self.db).create_order(
             tenant_id,
-            LabOrderCreate(patient_id=patient.id, test_ids=data.test_ids),
+            LabOrderCreate(
+                patient_id=patient.id,
+                test_ids=data.test_ids,
+                referring_doctor_id=data.referring_doctor_id,
+            ),
             user_id,
         )
         collection_time = datetime.now(timezone.utc)
@@ -256,6 +261,15 @@ class PatientService:
             paid_amount = float(invoice.paid_amount)
 
         balance = max(invoice_total - paid_amount, 0)
+
+        if data.referring_doctor_id and invoice_total > 0:
+            await DoctorService(self.db).accrue_commission_for_invoice(
+                tenant_id,
+                doctor_id=data.referring_doctor_id,
+                invoice_id=invoice.id,
+                branch_id=order.branch_id,
+                invoice_total=invoice_total,
+            )
 
         await self.audit.log(
             tenant_id=tenant_id,

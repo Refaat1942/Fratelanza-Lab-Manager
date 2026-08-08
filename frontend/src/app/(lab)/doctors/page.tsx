@@ -13,6 +13,9 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { DataTable } from "@/components/data-table/data-table";
 import { useAuthStore } from "@/stores/auth-store";
 import { t } from "@/lib/i18n";
@@ -20,6 +23,11 @@ import { DateRangeFilter } from "@/components/filters/date-range-filter";
 import { useDateRange } from "@/hooks/use-date-range";
 import { api, getApiError } from "@/lib/api";
 import { exportModuleExcel } from "@/lib/export";
+import {
+  MEDICAL_SPECIALTIES,
+  resolveSpecialtyKey,
+  specialtyLabel,
+} from "@/lib/medical-specialties";
 import { toast } from "sonner";
 
 interface Doctor {
@@ -28,13 +36,14 @@ interface Doctor {
   full_name: string;
   full_name_ar?: string;
   specialty?: string;
+  specialty_ar?: string;
   phone?: string;
   commission_rate: number;
   is_active: boolean;
 }
 
 const emptyDoctor = {
-  full_name: "", full_name_ar: "", specialty: "", phone: "", commission_rate: "0",
+  full_name: "", specialty_key: "", phone: "", commission_rate: "0",
 };
 
 export default function DoctorsPage() {
@@ -60,7 +69,12 @@ export default function DoctorsPage() {
   const saveDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const payload = { ...form, commission_rate: parseFloat(form.commission_rate) || 0 };
+    const payload = {
+      full_name: form.full_name.trim(),
+      specialty_key: form.specialty_key || null,
+      phone: form.phone || null,
+      commission_rate: parseFloat(form.commission_rate) || 0,
+    };
     try {
       if (editId) {
         await api.put(`/doctors/${editId}`, payload);
@@ -85,9 +99,8 @@ export default function DoctorsPage() {
       const { data } = await api.get(`/doctors/${doctor.id}`);
       setEditId(doctor.id);
       setForm({
-        full_name: data.full_name || "",
-        full_name_ar: data.full_name_ar || "",
-        specialty: data.specialty || "",
+        full_name: data.full_name_ar || data.full_name || "",
+        specialty_key: resolveSpecialtyKey(data.specialty, data.specialty_ar),
         phone: data.phone || "",
         commission_rate: String(data.commission_rate ?? 0),
       });
@@ -113,9 +126,17 @@ export default function DoctorsPage() {
     {
       accessorKey: "full_name",
       header: locale === "ar" ? "الاسم" : "Name",
-      cell: ({ row }) => locale === "ar" ? row.original.full_name_ar || row.original.full_name : row.original.full_name,
+      cell: ({ row }) => row.original.full_name_ar || row.original.full_name,
     },
-    { accessorKey: "specialty", header: locale === "ar" ? "التخصص" : "Specialty" },
+    {
+      accessorKey: "specialty",
+      header: locale === "ar" ? "التخصص" : "Specialty",
+      cell: ({ row }) => {
+        const key = resolveSpecialtyKey(row.original.specialty, row.original.specialty_ar);
+        if (key) return specialtyLabel(key, locale);
+        return row.original.specialty || "—";
+      },
+    },
     { accessorKey: "phone", header: locale === "ar" ? "الهاتف" : "Phone" },
     {
       accessorKey: "commission_rate",
@@ -157,7 +178,7 @@ export default function DoctorsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t(locale, "doctors")}</h1>
           <p className="text-muted-foreground">
-            {locale === "ar" ? "قاعدة بيانات الأطباء والعمولات" : "Doctor database, commissions, and referrals"}
+            {locale === "ar" ? "قاعدة بيانات الأطباء والعمولات" : "Doctor database and commission rates"}
           </p>
         </div>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyDoctor); } }}>
@@ -170,20 +191,34 @@ export default function DoctorsPage() {
               <DialogTitle>{editId ? (locale === "ar" ? "تعديل طبيب" : "Edit Doctor") : (locale === "ar" ? "طبيب جديد" : "New Doctor")}</DialogTitle>
             </DialogHeader>
             <form onSubmit={saveDoctor} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>
-                  <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>{locale === "ar" ? "الاسم (عربي)" : "Name (AR)"}</Label>
-                  <Input value={form.full_name_ar} onChange={(e) => setForm({ ...form, full_name_ar: e.target.value })} />
-                </div>
+              <div className="space-y-2">
+                <Label>{locale === "ar" ? "اسم الطبيب" : "Doctor name"} *</Label>
+                <Input
+                  value={form.full_name}
+                  onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+                  required
+                  minLength={2}
+                  placeholder={locale === "ar" ? "الاسم بالعربية أو الإنجليزية" : "Arabic or English name"}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "التخصص" : "Specialty"}</Label>
-                  <Input value={form.specialty} onChange={(e) => setForm({ ...form, specialty: e.target.value })} />
+                  <Select
+                    value={form.specialty_key || ""}
+                    onValueChange={(v) => setForm({ ...form, specialty_key: v || "" })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={locale === "ar" ? "اختر التخصص" : "Select specialty"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MEDICAL_SPECIALTIES.map((s) => (
+                        <SelectItem key={s.key} value={s.key}>
+                          {locale === "ar" ? s.ar : s.en}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "الهاتف" : "Phone"}</Label>
@@ -193,6 +228,11 @@ export default function DoctorsPage() {
               <div className="space-y-2">
                 <Label>{locale === "ar" ? "نسبة العمولة %" : "Commission %"}</Label>
                 <Input type="number" min="0" max="100" value={form.commission_rate} onChange={(e) => setForm({ ...form, commission_rate: e.target.value })} />
+                <p className="text-xs text-muted-foreground">
+                  {locale === "ar"
+                    ? "تُحسب تلقائياً عند تسجيل مريض محول من هذا الطبيب"
+                    : "Accrued automatically when a patient is registered with this referring doctor"}
+                </p>
               </div>
               <Button type="submit" className="w-full" disabled={saving}>
                 {saving ? "Saving..." : t(locale, "save")}

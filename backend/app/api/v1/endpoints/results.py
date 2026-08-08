@@ -94,6 +94,24 @@ async def order_kit_labels(
     )
 
 
+@router.get("/{result_id}/report")
+async def result_report_pdf(
+    result_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("results.read"),
+):
+    try:
+        content = await ResultsService(db).get_result_report_pdf(tenant.id, result_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="result_{result_id}.pdf"'},
+    )
+
+
 @router.get("/{result_id}/label")
 async def result_kit_label(
     result_id: UUID,

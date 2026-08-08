@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.common import MessageResponse, PaginationParams
@@ -19,6 +20,33 @@ async def list_categories(
 ):
     categories = await TestService(db).list_categories(tenant.id)
     return [TestCategoryResponse.model_validate(c) for c in categories]
+
+
+@router.get("/import/template")
+async def download_import_template(
+    user: CurrentUser = require_permission("tests.read"),
+):
+    content = TestService.generate_import_template()
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="tests_import_template.xlsx"'},
+    )
+
+
+@router.post("/import")
+async def import_tests(
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("tests.create"),
+    file: UploadFile = File(...),
+):
+    content = await file.read()
+    try:
+        stats = await TestService(db).import_from_excel(tenant.id, content, user.id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return stats
 
 
 @router.get("")
