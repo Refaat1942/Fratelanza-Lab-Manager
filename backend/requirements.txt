@@ -13,6 +13,8 @@ email-validator==2.2.0
 httpx==0.28.1
 openpyxl==3.1.5
 reportlab==4.2.5
+arabic-reshaper==3.0.0
+python-bidi==0.6.3
 python-dateutil==2.9.0.post0
 slowapi==0.1.9
 redis==5.2.1
