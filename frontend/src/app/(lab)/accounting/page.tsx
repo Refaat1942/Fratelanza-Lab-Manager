@@ -24,20 +24,31 @@ interface ExpenseSummary {
   expense_count: number;
 }
 
+interface CommissionSummary {
+  total_commissions: number;
+  commission_count: number;
+}
+
 export default function AccountingPage() {
   const locale = useAuthStore((s) => s.locale);
   const [billing, setBilling] = useState<FinancialSummary | null>(null);
   const [expenses, setExpenses] = useState<ExpenseSummary | null>(null);
+  const [commissions, setCommissions] = useState<CommissionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
     setLoading(true);
     const qp = queryParams.replace(/^&/, "?");
-    Promise.all([api.get(`/billing/summary${qp}`), api.get(`/expenses/summary${qp}`)])
-      .then(([b, e]) => {
+    Promise.all([
+      api.get(`/billing/summary${qp}`),
+      api.get(`/expenses/summary${qp}`),
+      api.get(`/doctors/commissions/summary${qp}`),
+    ])
+      .then(([b, e, c]) => {
         setBilling(b.data);
         setExpenses(e.data);
+        setCommissions(c.data);
       })
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
@@ -47,7 +58,10 @@ export default function AccountingPage() {
     load();
   }, [load]);
 
-  const netProfit = billing && expenses ? billing.total_collected - expenses.total_expenses : 0;
+  const netProfit =
+    billing && expenses
+      ? billing.total_collected - expenses.total_expenses - (commissions?.total_commissions ?? 0)
+      : 0;
 
   if (loading) {
     return (
@@ -123,10 +137,29 @@ export default function AccountingPage() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              {locale === "ar" ? "عمولات الأطباء" : "Doctor Commissions"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-amber-600">
+              EGP {(commissions?.total_commissions ?? 0).toLocaleString()}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {commissions?.commission_count ?? 0}{" "}
+              {locale === "ar" ? "قيد محاسبي" : "accrual(s)"}
+            </p>
+          </CardContent>
+        </Card>
+
         <Card className="sm:col-span-2 lg:col-span-3">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              {locale === "ar" ? "صافي الربح (المحصّل − المصروفات)" : "Net Profit (Collected − Expenses)"}
+              {locale === "ar"
+                ? "صافي الربح (المحصّل − المصروفات − العمولات)"
+                : "Net Profit (Collected − Expenses − Commissions)"}
             </CardTitle>
           </CardHeader>
           <CardContent>

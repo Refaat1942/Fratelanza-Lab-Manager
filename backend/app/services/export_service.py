@@ -8,11 +8,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import Invoice, Payment
-from app.models.crm import CrmContact, MarketingCampaign
 from app.models.doctors import Doctor
 from app.models.expenses import Expense
-from app.models.doctors import Referral
-from app.models.inventory import InventoryBatch, InventoryItem, PurchaseOrder, Supplier
+from app.models.inventory import InventoryBatch, InventoryItem
 from app.models.orders import LabOrder
 from app.models.patients import Patient
 from app.models.tests import Test
@@ -21,8 +19,8 @@ from app.utils.date_filter import apply_date_range
 
 
 EXPORT_MODULES = {
-    "patients", "doctors", "referrals", "tests", "results", "billing",
-    "expenses", "inventory", "purchasing", "suppliers", "crm", "marketing", "branches", "users",
+    "patients", "doctors", "tests", "results", "billing",
+    "expenses", "inventory", "branches", "users",
 }
 
 
@@ -43,16 +41,11 @@ class ExportService:
         handlers = {
             "patients": self._export_patients,
             "doctors": self._export_doctors,
-            "referrals": self._export_referrals,
             "tests": self._export_tests,
             "results": self._export_results,
             "billing": self._export_billing,
             "expenses": self._export_expenses,
             "inventory": self._export_inventory,
-            "purchasing": self._export_purchasing,
-            "suppliers": self._export_suppliers,
-            "crm": self._export_crm,
-            "marketing": self._export_marketing,
             "branches": self._export_branches,
             "users": self._export_users,
         }
@@ -101,19 +94,6 @@ class ExportService:
             [d.full_name, d.specialty or "", d.phone or "", d.email or "",
              float(d.commission_rate or 0), d.created_at.strftime("%Y-%m-%d") if d.created_at else ""]
             for d in result.scalars().all()
-        ]
-        return headers, rows
-
-    async def _export_referrals(self, tenant_id: UUID, date_from, date_to):
-        q = select(Referral).where(Referral.tenant_id == tenant_id)
-        for clause in apply_date_range(Referral.referral_date, date_from, date_to):
-            q = q.where(clause)
-        result = await self.db.execute(q.order_by(Referral.referral_date.desc()))
-        headers = ["Patient", "Doctor", "Notes", "Created"]
-        rows = [
-            [str(r.patient_id), str(r.doctor_id), r.notes or "",
-             r.created_at.strftime("%Y-%m-%d") if r.created_at else ""]
-            for r in result.scalars().all()
         ]
         return headers, rows
 
@@ -191,61 +171,6 @@ class ExportService:
                 item.sku, item.name, item.unit or "", float(item.reorder_level), float(qty or 0),
                 item.created_at.strftime("%Y-%m-%d") if item.created_at else "",
             ])
-        return headers, rows
-
-    async def _export_purchasing(self, tenant_id: UUID, date_from, date_to):
-        q = select(PurchaseOrder).where(PurchaseOrder.tenant_id == tenant_id, PurchaseOrder.deleted_at.is_(None))
-        for clause in apply_date_range(PurchaseOrder.created_at, date_from, date_to):
-            q = q.where(clause)
-        result = await self.db.execute(q.order_by(PurchaseOrder.created_at.desc()))
-        headers = ["PO #", "Supplier", "Status", "Total", "Order Date"]
-        rows = [
-            [po.po_number, str(po.supplier_id), po.status.value if po.status else "", float(po.total_amount or 0),
-             po.order_date.strftime("%Y-%m-%d") if po.order_date else ""]
-            for po in result.scalars().all()
-        ]
-        return headers, rows
-
-    async def _export_suppliers(self, tenant_id: UUID, date_from, date_to):
-        q = select(Supplier).where(Supplier.tenant_id == tenant_id, Supplier.deleted_at.is_(None))
-        for clause in apply_date_range(Supplier.created_at, date_from, date_to):
-            q = q.where(clause)
-        result = await self.db.execute(q.order_by(Supplier.name))
-        headers = ["Name", "Contact", "Phone", "Email", "Created"]
-        rows = [
-            [s.name, s.contact_person or "", s.phone or "", s.email or "",
-             s.created_at.strftime("%Y-%m-%d") if s.created_at else ""]
-            for s in result.scalars().all()
-        ]
-        return headers, rows
-
-    async def _export_crm(self, tenant_id: UUID, date_from, date_to):
-        q = select(CrmContact).where(CrmContact.tenant_id == tenant_id, CrmContact.deleted_at.is_(None))
-        for clause in apply_date_range(CrmContact.created_at, date_from, date_to):
-            q = q.where(clause)
-        result = await self.db.execute(q.order_by(CrmContact.created_at.desc()))
-        headers = ["Name", "Phone", "Email", "Type", "Created"]
-        rows = [
-            [c.full_name, c.phone or "", c.email or "",
-             c.contact_type.value if c.contact_type else "",
-             c.created_at.strftime("%Y-%m-%d") if c.created_at else ""]
-            for c in result.scalars().all()
-        ]
-        return headers, rows
-
-    async def _export_marketing(self, tenant_id: UUID, date_from, date_to):
-        q = select(MarketingCampaign).where(MarketingCampaign.tenant_id == tenant_id, MarketingCampaign.deleted_at.is_(None))
-        for clause in apply_date_range(MarketingCampaign.created_at, date_from, date_to):
-            q = q.where(clause)
-        result = await self.db.execute(q.order_by(MarketingCampaign.created_at.desc()))
-        headers = ["Name", "Channel", "Status", "Start", "End", "Budget"]
-        rows = [
-            [c.name, c.channel or "", c.status.value if c.status else "",
-             c.start_date.strftime("%Y-%m-%d") if c.start_date else "",
-             c.end_date.strftime("%Y-%m-%d") if c.end_date else "",
-             float(c.budget or 0)]
-            for c in result.scalars().all()
-        ]
         return headers, rows
 
     async def _export_branches(self, tenant_id: UUID, date_from, date_to):

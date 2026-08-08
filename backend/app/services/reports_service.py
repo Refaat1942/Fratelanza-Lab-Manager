@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import Invoice, InvoiceStatus, Payment
-from app.models.doctors import Doctor, Referral
+from app.models.doctors import Doctor
 from app.models.expenses import Expense, ExpenseCategory
 from app.models.inventory import InventoryBatch, InventoryItem
 from app.models.orders import LabOrder, LabOrderItem, OrderStatus
@@ -21,7 +21,7 @@ from app.services.expense_service import ExpenseService
 from app.utils.date_filter import apply_date_range, date_end, date_start
 
 
-REPORT_TYPES = {"daily", "monthly", "profitability", "inventory", "referrals", "patients", "branches", "labs_done"}
+REPORT_TYPES = {"daily", "monthly", "profitability", "inventory", "patients", "branches", "labs_done"}
 
 
 class ReportsService:
@@ -57,8 +57,6 @@ class ReportsService:
             headers, rows = await self._profitability_report(tenant_id, date_from, date_to)
         elif report_type == "inventory":
             headers, rows = await self._inventory_report(tenant_id)
-        elif report_type == "referrals":
-            headers, rows = await self._referrals_report(tenant_id, date_from, date_to)
         elif report_type == "patients":
             headers, rows = await self._patients_report(tenant_id, date_from, date_to)
         elif report_type == "labs_done":
@@ -345,23 +343,6 @@ class ReportsService:
             total_value += value
             rows.append([item.sku, item.name, qty, avg_cost, value, float(item.reorder_level)])
         rows.append(["", "TOTAL", "", "", total_value, ""])
-        return headers, rows
-
-    async def _referrals_report(self, tenant_id: UUID, date_from, date_to):
-        q = (
-            select(Referral, Doctor, Patient)
-            .join(Doctor, Referral.doctor_id == Doctor.id)
-            .join(Patient, Referral.patient_id == Patient.id)
-            .where(Referral.tenant_id == tenant_id)
-        )
-        for clause in apply_date_range(Referral.referral_date, date_from, date_to):
-            q = q.where(clause)
-        result = await self.db.execute(q.order_by(Referral.referral_date.desc()))
-        headers = ["Date", "Doctor", "Patient", "Notes"]
-        rows = [
-            [r.referral_date.strftime("%Y-%m-%d") if r.referral_date else "", doc.full_name, pat.full_name, r.notes or ""]
-            for r, doc, pat in result.all()
-        ]
         return headers, rows
 
     async def _patients_report(self, tenant_id: UUID, date_from, date_to):

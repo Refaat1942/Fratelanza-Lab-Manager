@@ -16,7 +16,6 @@ const reports = [
   { id: "monthly", en: "Monthly Operations Report", ar: "تقرير العمليات الشهرية" },
   { id: "profitability", en: "Profitability Report", ar: "تقرير الربحية" },
   { id: "inventory", en: "Inventory Valuation", ar: "تقييم المخزون" },
-  { id: "referrals", en: "Doctor Referrals", ar: "إحالات الأطباء" },
   { id: "patients", en: "Patient Statistics", ar: "إحصائيات المرضى" },
   { id: "branches", en: "Branch Performance", ar: "أداء الفروع" },
   { id: "labs_done", en: "Completed Lab Tests", ar: "التحاليل المنجزة" },

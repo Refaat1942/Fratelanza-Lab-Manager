@@ -338,3 +338,8 @@ class ResultsService:
         _lab_result, order, patient, test = row
         lab_name = await self._lab_name(tenant_id)
         return self._build_kit_label(lab_name=lab_name, patient=patient, test=test, order=order)
+
+    async def get_result_report_pdf(self, tenant_id: UUID, result_id: UUID) -> bytes:
+        from app.services.pdf_service import PdfService
+
+        return await PdfService(self.db).lab_result_report_pdf(tenant_id, result_id)

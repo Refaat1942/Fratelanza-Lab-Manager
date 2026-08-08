@@ -6,9 +6,15 @@ from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permissi
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.doctors import DoctorCreate, DoctorResponse, DoctorUpdate
 from app.services.doctor_service import DoctorService
+from app.constants.specialties import SPECIALTIES
 from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/doctors", tags=["Doctors"])
+
+
+@router.get("/specialties")
+async def list_specialties(user: CurrentUser = require_permission("doctors.read")):
+    return SPECIALTIES
 
 
 @router.get("")
@@ -35,6 +41,19 @@ async def list_doctors(
         "page_size": result.page_size,
         "pages": result.pages,
     }
+
+
+@router.get("/commissions/summary")
+async def doctor_commissions_summary(
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("doctors.read"),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+):
+    return await DoctorService(db).commission_summary(
+        tenant.id, parse_date_param(date_from), parse_date_param(date_to)
+    )
 
 
 @router.post("", response_model=DoctorResponse, status_code=status.HTTP_201_CREATED)

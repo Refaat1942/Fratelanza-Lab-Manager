@@ -34,10 +34,18 @@ interface Patient {
 const emptyVisit = { full_name: "", phone: "", age: "" };
 const emptyEdit = { full_name: "", phone: "", age: "" };
 
+interface DoctorOption {
+  id: string;
+  full_name: string;
+  full_name_ar?: string;
+  commission_rate: number;
+}
+
 export default function PatientsPage() {
   const locale = useAuthStore((s) => s.locale);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [tests, setTests] = useState<TestCatalogItem[]>([]);
+  const [doctors, setDoctors] = useState<DoctorOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -50,6 +58,7 @@ export default function PatientsPage() {
   const [discountValue, setDiscountValue] = useState("0");
   const [amountPaid, setAmountPaid] = useState("0");
   const [closeRemaining, setCloseRemaining] = useState(false);
+  const [referringDoctorId, setReferringDoctorId] = useState("");
   const [saving, setSaving] = useState(false);
   const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
@@ -58,9 +67,11 @@ export default function PatientsPage() {
     Promise.all([
       api.get(`/patients?page_size=100${queryParams}`),
       api.get("/tests?page_size=100"),
+      api.get("/doctors?page_size=100&sort_by=full_name&sort_order=asc"),
     ])
-      .then(([patRes, testsRes]) => {
+      .then(([patRes, testsRes, docRes]) => {
         setPatients(patRes.data.items || []);
+        setDoctors((docRes.data.items || []).filter((d: DoctorOption & { is_active?: boolean }) => d.is_active !== false));
         setTests(
           (testsRes.data.items || []).map((t: { id: string; name: string; price: number; cost: number }) => ({
             id: t.id,
@@ -106,6 +117,7 @@ export default function PatientsPage() {
     setDiscountValue("0");
     setAmountPaid("0");
     setCloseRemaining(false);
+    setReferringDoctorId("");
   };
 
   const saveVisit = async (e: React.FormEvent) => {
@@ -125,6 +137,9 @@ export default function PatientsPage() {
         age: visitForm.age ? parseInt(visitForm.age, 10) : null,
         test_ids: testIds,
       };
+      if (referringDoctorId) {
+        payload.referring_doctor_id = referringDoctorId;
+      }
       if (discountType === "percent" && parsedDiscount > 0) {
         payload.discount_percent = Math.min(parsedDiscount, 100);
         payload.discount = 0;
@@ -301,6 +316,26 @@ export default function PatientsPage() {
                     onChange={(e) => setVisitForm({ ...visitForm, age: e.target.value })}
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>{locale === "ar" ? "الطبيب المحوّل (اختياري)" : "Referring doctor (optional)"}</Label>
+                <Select
+                  value={referringDoctorId || "none"}
+                  onValueChange={(v) => setReferringDoctorId(!v || v === "none" ? "" : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={locale === "ar" ? "بدون طبيب" : "None"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{locale === "ar" ? "بدون طبيب" : "None"}</SelectItem>
+                    {doctors.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.full_name_ar || d.full_name}
+                        {d.commission_rate > 0 ? ` (${d.commission_rate}%)` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <TestLinesPicker
                 locale={locale}

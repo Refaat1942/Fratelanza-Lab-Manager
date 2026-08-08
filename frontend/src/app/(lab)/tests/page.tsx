@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, Upload, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ import { t } from "@/lib/i18n";
 import { DateRangeFilter } from "@/components/filters/date-range-filter";
 import { useDateRange } from "@/hooks/use-date-range";
 import { api, getApiError } from "@/lib/api";
-import { exportModuleExcel } from "@/lib/export";
+import { exportModuleExcel, downloadTestsImportTemplate } from "@/lib/export";
 import { toast } from "sonner";
 
 interface Test {
@@ -46,6 +46,7 @@ export default function TestsPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyTest);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange(null);
 
   const load = useCallback(() => {
@@ -112,6 +113,30 @@ export default function TestsPage() {
     }
   };
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const { data } = await api.post("/tests/import", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      toast.success(
+        locale === "ar"
+          ? `تم الاستيراد — جديد: ${data.created}، محدّث: ${data.updated}، متخطى: ${data.skipped}`
+          : `Import done — created: ${data.created}, updated: ${data.updated}, skipped: ${data.skipped}`
+      );
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const columns: ColumnDef<Test>[] = [
     { accessorKey: "code", header: "Code" },
     {
@@ -170,6 +195,28 @@ export default function TestsPage() {
               : "Test catalog — name, price, and turnaround time"}
           </p>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => downloadTestsImportTemplate().catch((e) => toast.error(String(e)))}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {locale === "ar" ? "قالب Excel" : "Excel Template"}
+          </Button>
+          <label
+            className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
+          >
+            <Upload className="h-4 w-4" />
+            {importing
+              ? locale === "ar"
+                ? "جاري الاستيراد..."
+                : "Importing..."
+              : locale === "ar"
+                ? "استيراد Excel"
+                : "Import Excel"}
+            <input type="file" accept=".xlsx,.xls" className="hidden" disabled={importing} onChange={handleImport} />
+          </label>
         <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditId(null); setForm(emptyTest); } }}>
           <DialogTrigger render={<Button className="shadow-md" />}>
             <Plus className="mr-2 h-4 w-4" />
@@ -204,6 +251,7 @@ export default function TestsPage() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
       {loading ? (
         <div className="flex h-40 items-center justify-center">

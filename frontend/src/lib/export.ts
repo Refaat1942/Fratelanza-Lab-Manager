@@ -21,6 +21,18 @@ export async function printResultKitLabel(resultId: string, layout: KitLabelLayo
   await printApiFile(`/results/${resultId}/label?${params}`);
 }
 
+export async function printResultReport(resultId: string) {
+  await printApiFile(`/results/${resultId}/report`);
+}
+
+export async function downloadResultReport(resultId: string) {
+  await downloadApiFile(`/results/${resultId}/report`, `lab_result_${resultId.slice(0, 8)}.pdf`);
+}
+
+export async function downloadTestsImportTemplate() {
+  await downloadApiFile("/tests/import/template", "tests_import_template.xlsx");
+}
+
 export async function exportModuleExcel(
   module: string,
   dateFrom?: string,
