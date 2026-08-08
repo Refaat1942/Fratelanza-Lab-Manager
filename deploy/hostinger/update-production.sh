@@ -48,14 +48,9 @@ API_PORT="$(grep -E '^LABMASTER_API_PORT=' "$ENV_FILE" 2>/dev/null | cut -d= -f2
 API_PORT="${API_PORT:-18000}"
 
 echo ""
-echo "Waiting for API..."
-sleep 8
-
-HEALTH="$(curl -fsS "http://127.0.0.1:${API_PORT}/health" 2>/dev/null || echo '{}')"
-echo "API health: $HEALTH"
-
-VERSION="$(curl -fsS "http://127.0.0.1:${API_PORT}/api/v1/public/version" 2>/dev/null || echo '{}')"
-echo "App version: $VERSION"
+# shellcheck source=wait-for-api.sh
+source "$(dirname "$0")/wait-for-api.sh"
+wait_for_api "$API_PORT" || true
 
 echo ""
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
