@@ -1,10 +1,13 @@
 FROM node:20-alpine AS builder
 
+# Required for native modules (@swc/core) on Alpine/musl
+RUN apk add --no-cache libc6-compat
+
 WORKDIR /app
 ARG NEXT_PUBLIC_API_URL=http://127.0.0.1:18000/api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-COPY package*.json ./
-RUN npm ci
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 
