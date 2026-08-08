@@ -1,5 +1,4 @@
 import { api } from "./api";
-import { getApiError } from "./api";
 
 function responseContentType(headers: Record<string, unknown>): string | null {
   const raw = headers["content-type"];

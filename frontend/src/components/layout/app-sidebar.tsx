@@ -8,7 +8,6 @@ import {
   Calculator, BarChart3, Settings, UserCog, Building2, Microscope, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/stores/auth-store";
 import { useFeaturesStore } from "@/stores/features-store";
 import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
