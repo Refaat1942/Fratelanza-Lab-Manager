@@ -39,6 +39,16 @@ def _register_arabic_font() -> str:
     return font_name
 
 
+def _hex_color(value: str | None, default: str = "#1565C0") -> colors.Color:
+    raw = (value or default).strip()
+    if not raw.startswith("#"):
+        raw = f"#{raw}"
+    try:
+        return colors.HexColor(raw)
+    except Exception:
+        return colors.HexColor(default)
+
+
 class PdfService:
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -164,7 +174,13 @@ class PdfService:
         branding = branding_result.scalar_one_or_none()
         lab_name = (branding.company_name_ar or branding.company_name if branding else None) or "Laboratory"
         lab_name_en = (branding.company_name if branding else None) or "Laboratory"
+        header_html = (
+            branding.report_header_html
+            if branding and branding.report_header_html
+            else lab_name.replace("\n", "<br/>")
+        )
         footer_html = branding.report_footer_html if branding and branding.report_footer_html else ""
+        accent = _hex_color(branding.primary_color if branding else None)
 
         body_font = _register_arabic_font()
         buf = BytesIO()
@@ -208,6 +224,11 @@ class PdfService:
 
         elements = []
 
+        banner = Table([[""]], colWidths=[180 * mm], rowHeights=[3 * mm])
+        banner.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), accent)]))
+        elements.append(banner)
+        elements.append(Spacer(1, 6))
+
         if branding and branding.logo_url:
             logo_path = self._resolve_logo_path(branding.logo_url)
             if logo_path and logo_path.exists():
@@ -217,13 +238,14 @@ class PdfService:
                 except Exception:
                     pass
 
-        elements.append(Paragraph(lab_name.replace("\n", "<br/>"), title_style))
-        elements.append(Paragraph(lab_name_en, sub_style))
-        elements.append(Spacer(1, 8))
+        elements.append(Paragraph(header_html.replace("\n", "<br/>"), title_style))
+        if not branding or not branding.report_header_html:
+            elements.append(Paragraph(lab_name_en, sub_style))
+        elements.append(Spacer(1, 6))
         elements.append(
             Paragraph(
                 "<b>LABORATORY REPORT</b> &nbsp;|&nbsp; <b>تقرير نتائج التحاليل</b>",
-                ParagraphStyle("Hdr", parent=sub_style, fontSize=11, textColor=colors.HexColor("#1565C0")),
+                ParagraphStyle("Hdr", parent=sub_style, fontSize=11, textColor=accent),
             )
         )
         elements.append(Spacer(1, 10))
@@ -264,8 +286,8 @@ class PdfService:
                     ("FONTNAME", (3, 0), (3, -1), body_font),
                     ("FONTSIZE", (0, 0), (-1, -1), 9),
                     ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F5F9FF")),
-                    ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#90CAF9")),
-                    ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#BBDEFB")),
+                    ("BOX", (0, 0), (-1, -1), 0.5, accent),
+                    ("INNERGRID", (0, 0), (-1, -1), 0.25, accent),
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                     ("TOPPADDING", (0, 0), (-1, -1), 6),
                     ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
@@ -299,8 +321,10 @@ class PdfService:
                 TableStyle(
                     [
                         ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTNAME", (0, 1), (0, -1), body_font),
+                        ("FONTNAME", (1, 1), (1, -1), "Helvetica-Bold"),
                         ("FONTSIZE", (0, 0), (-1, -1), 9),
-                        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1565C0")),
+                        ("BACKGROUND", (0, 0), (-1, 0), accent),
                         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
                         ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
                         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#FAFAFA")]),

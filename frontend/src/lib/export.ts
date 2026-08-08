@@ -1,4 +1,4 @@
-import { downloadApiFile, printApiFile } from "./download";
+import { downloadApiFile, openPdfInNewTab, printApiFile } from "./download";
 
 export type KitLabelLayout = "single" | "double";
 
@@ -22,11 +22,19 @@ export async function printResultKitLabel(resultId: string, layout: KitLabelLayo
 }
 
 export async function printResultReport(resultId: string) {
-  await printApiFile(`/results/${resultId}/report`);
+  await printApiFile(`/results/${resultId}/report`, "application/pdf");
+}
+
+export async function previewResultReport(resultId: string) {
+  await openPdfInNewTab(`/results/${resultId}/report`);
 }
 
 export async function downloadResultReport(resultId: string) {
-  await downloadApiFile(`/results/${resultId}/report`, `lab_result_${resultId.slice(0, 8)}.pdf`);
+  await downloadApiFile(
+    `/results/${resultId}/report`,
+    `lab_result_${resultId.slice(0, 8)}.pdf`,
+    "application/pdf"
+  );
 }
 
 export async function downloadTestsImportTemplate() {

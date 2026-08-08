@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, CheckCircle, Settings2, FileText } from "lucide-react";
+import { Plus, CheckCircle, Settings2, FileText, Eye, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -16,7 +16,7 @@ import { DateRangeFilter } from "@/components/filters/date-range-filter";
 import { useDateRange } from "@/hooks/use-date-range";
 import { TestLinesPicker, validTestIds, type TestCatalogItem, type TestLine } from "@/components/tests/test-lines-picker";
 import { api, getApiError } from "@/lib/api";
-import { exportModuleExcel, printOrderKitLabels, printResultReport } from "@/lib/export";
+import { exportModuleExcel, printOrderKitLabels, previewResultReport, printResultReport, downloadResultReport } from "@/lib/export";
 import { toast } from "sonner";
 
 interface Result {
@@ -132,13 +132,33 @@ export default function ResultsPage() {
       await printResultReport(resultId);
       toast.success(
         locale === "ar"
-          ? "تم فتح تقرير A4 — اختر طابعة A4 أو احفظ PDF"
-          : "A4 report opened — choose A4 printer or Save as PDF"
+          ? "تم فتح التقرير — اختر طابعة A4 أو Save as PDF"
+          : "Report opened — choose A4 printer or Save as PDF"
       );
     } catch {
       toast.error(locale === "ar" ? "فشل طباعة التقرير" : "Report print failed");
     } finally {
       setPrintingId(null);
+    }
+  };
+
+  const viewReport = async (resultId: string) => {
+    setPrintingId(resultId);
+    try {
+      await previewResultReport(resultId);
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setPrintingId(null);
+    }
+  };
+
+  const saveReportPdf = async (resultId: string) => {
+    try {
+      await downloadResultReport(resultId);
+      toast.success(locale === "ar" ? "تم تحميل PDF" : "PDF downloaded");
+    } catch (err) {
+      toast.error(getApiError(err));
     }
   };
 
@@ -181,21 +201,35 @@ export default function ResultsPage() {
       cell: ({ row }) => (
         <div className="flex gap-1">
           {isReleased(row.original.status) && (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={printingId === row.original.id}
-              onClick={() => printReport(row.original.id)}
-            >
-              <FileText className="mr-1 h-3 w-3" />
-              {printingId === row.original.id
-                ? locale === "ar"
-                  ? "..."
-                  : "..."
-                : locale === "ar"
-                  ? "تقرير A4"
-                  : "A4 Report"}
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={printingId === row.original.id}
+                onClick={() => viewReport(row.original.id)}
+                title={locale === "ar" ? "عرض التقرير" : "View report"}
+              >
+                <Eye className="mr-1 h-3 w-3" />
+                {locale === "ar" ? "عرض" : "View"}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={printingId === row.original.id}
+                onClick={() => printReport(row.original.id)}
+              >
+                <FileText className="mr-1 h-3 w-3" />
+                {locale === "ar" ? "طباعة" : "Print"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => saveReportPdf(row.original.id)}
+                title={locale === "ar" ? "تحميل PDF" : "Download PDF"}
+              >
+                <Download className="h-3 w-3" />
+              </Button>
+            </>
           )}
           {row.original.status === "pending" && (
             <Button size="sm" variant="outline" onClick={() => openEnterForm(row.original.id)}>

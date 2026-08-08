@@ -12,6 +12,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useBrandingStore } from "@/stores/branding-store";
 import { BrandingLogo } from "@/components/branding/branding-logo";
 import { ReceiptPreview } from "@/components/branding/receipt-preview";
+import { ResultReportPreview } from "@/components/branding/result-report-preview";
 import { t } from "@/lib/i18n";
 import { api, getApiError } from "@/lib/api";
 import { displayName, type TenantBranding } from "@/lib/branding";
@@ -157,7 +158,7 @@ export default function SettingsPage() {
             {locale === "ar" ? "العلامة التجارية" : "Branding"}
           </TabsTrigger>
           <TabsTrigger value="receipt" className="flex-1 min-w-[120px]">
-            {locale === "ar" ? "تصميم الإيصال" : "Receipt"}
+            {locale === "ar" ? "تصميم التقارير" : "Reports"}
           </TabsTrigger>
           <TabsTrigger value="general" className="flex-1 min-w-[120px]">
             {locale === "ar" ? "عام" : "General"}
@@ -251,22 +252,27 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="receipt">
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-6 xl:grid-cols-2">
             <Card>
               <CardHeader>
-                <CardTitle>{locale === "ar" ? "تصميم الإيصال" : "Receipt Design"}</CardTitle>
+                <CardTitle>{locale === "ar" ? "تصميم التقارير والإيصالات" : "Report & Receipt Design"}</CardTitle>
                 <CardDescription>
-                  {locale === "ar" ? "يظهر على إيصال PDF للعميل" : "Shown on customer PDF receipt"}
+                  {locale === "ar"
+                    ? "الرأس والتذييل والألوان تظهر على تقرير A4 للمريض وإيصال الدفع. عدّل الألوان من تبويب العلامة التجارية."
+                    : "Header, footer, and brand colors appear on the patient A4 result report and payment receipt. Edit colors in the Branding tab."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label>{locale === "ar" ? "رأس الإيصال" : "Header"}</Label>
+                  <Label>{locale === "ar" ? "رأس التقرير / الإيصال" : "Report & receipt header"}</Label>
                   <Textarea rows={4} value={form.report_header_html || ""} onChange={(e) => setForm({ ...form, report_header_html: e.target.value })} placeholder={displayName(form, locale)} />
+                  <p className="text-xs text-muted-foreground">
+                    {locale === "ar" ? "اسم المختبر، العنوان، الهاتف — سطر لكل معلومة" : "Lab name, address, phone — one line per detail"}
+                  </p>
                 </div>
                 <div className="space-y-2">
-                  <Label>{locale === "ar" ? "تذييل الإيصال" : "Footer"}</Label>
-                  <Textarea rows={3} value={form.report_footer_html || ""} onChange={(e) => setForm({ ...form, report_footer_html: e.target.value })} />
+                  <Label>{locale === "ar" ? "تذييل التقرير" : "Report footer"}</Label>
+                  <Textarea rows={3} value={form.report_footer_html || ""} onChange={(e) => setForm({ ...form, report_footer_html: e.target.value })} placeholder={locale === "ar" ? "هذا التقرير للاستخدام الطبي فقط" : "For medical use only"} />
                 </div>
                 <Button onClick={saveBranding} disabled={saving}>
                   {saving ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : null}
@@ -274,14 +280,24 @@ export default function SettingsPage() {
                 </Button>
               </CardContent>
             </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">{locale === "ar" ? "معاينة الإيصال" : "Receipt Preview"}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex justify-center bg-muted/20 py-6">
-                <ReceiptPreview branding={{ ...form, logo_url: activeLogo }} tenantCode={logoTenantCode} tenantId={tenantId} />
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">{locale === "ar" ? "معاينة تقرير A4" : "A4 Result Report Preview"}</CardTitle>
+                </CardHeader>
+                <CardContent className="overflow-x-auto bg-muted/20 py-4">
+                  <ResultReportPreview branding={{ ...form, logo_url: activeLogo }} tenantCode={logoTenantCode} tenantId={tenantId} />
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">{locale === "ar" ? "معاينة الإيصال" : "Receipt Preview"}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex justify-center bg-muted/20 py-6">
+                  <ReceiptPreview branding={{ ...form, logo_url: activeLogo }} tenantCode={logoTenantCode} tenantId={tenantId} />
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 
