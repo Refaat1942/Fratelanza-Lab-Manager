@@ -265,7 +265,16 @@ export default function SettingsPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "رأس التقرير / الإيصال" : "Report & receipt header"}</Label>
-                  <Textarea rows={4} value={form.report_header_html || ""} onChange={(e) => setForm({ ...form, report_header_html: e.target.value })} placeholder={displayName(form, locale)} />
+                  <Textarea
+                    rows={5}
+                    value={form.report_header_html || ""}
+                    onChange={(e) => setForm({ ...form, report_header_html: e.target.value })}
+                    placeholder={
+                      locale === "ar"
+                        ? "مختبر XYZ للتحاليل الطبية\nXYZ Medical Laboratory\n123 ش التحرير — القاهرة\nTel: 02-12345678"
+                        : "XYZ Medical Laboratory\n123 Tahrir St — Cairo\nTel: 02-12345678"
+                    }
+                  />
                   <p className="text-xs text-muted-foreground">
                     {locale === "ar" ? "اسم المختبر، العنوان، الهاتف — سطر لكل معلومة" : "Lab name, address, phone — one line per detail"}
                   </p>

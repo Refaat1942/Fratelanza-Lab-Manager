@@ -73,6 +73,7 @@ def test_critical_api_routes_registered():
         "/api/v1/tests",
         "/api/v1/tests/import/template",
         "/api/v1/results",
+        "/api/v1/results/orders/{order_id}/collect",
         "/api/v1/billing/invoices",
         "/api/v1/settings/branding",
         "/api/v1/reports/{report_type}/excel",

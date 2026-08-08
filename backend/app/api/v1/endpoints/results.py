@@ -73,6 +73,55 @@ async def create_order(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/orders/{order_id}/collect")
+async def collect_order(
+    order_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("results.create"),
+):
+    try:
+        order = await ResultsService(db).collect_order(tenant.id, order_id)
+        return {
+            "id": str(order.id),
+            "order_number": order.order_number,
+            "status": order.status.value,
+            "collected_at": order.collected_at.isoformat() if order.collected_at else None,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.delete("/orders/{order_id}", response_model=MessageResponse)
+async def delete_order(
+    order_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("results.create"),
+):
+    try:
+        count = await ResultsService(db).delete_order(tenant.id, order_id)
+        return MessageResponse(
+            message=f"Order deleted ({count} test(s) removed)",
+            message_ar=f"تم حذف الطلب ({count} تحليل)",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/{result_id}", response_model=MessageResponse)
+async def delete_result(
+    result_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("results.create"),
+):
+    deleted = await ResultsService(db).delete_result(tenant.id, result_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Result not found")
+    return MessageResponse(message="Result deleted", message_ar="تم حذف النتيجة")
+
+
 @router.get("/orders/{order_id}/labels")
 async def order_kit_labels(
     order_id: UUID,

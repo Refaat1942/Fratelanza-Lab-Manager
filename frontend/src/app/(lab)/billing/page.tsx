@@ -18,13 +18,14 @@ import { t } from "@/lib/i18n";
 import { DateRangeFilter } from "@/components/filters/date-range-filter";
 import { useDateRange } from "@/hooks/use-date-range";
 import { api, getApiError } from "@/lib/api";
-import { downloadInvoiceReceipt, exportModuleExcel } from "@/lib/export";
+import { downloadInvoiceReceipt, exportModuleExcel, printOrderKitLabels } from "@/lib/export";
 import { toast } from "sonner";
 
 interface Invoice {
   id: string;
   invoice_number: string;
   patient_name: string;
+  order_id?: string | null;
   subtotal?: number;
   discount?: number;
   total: number;
@@ -38,6 +39,7 @@ interface InvoiceDetail extends Invoice {
   balance: number;
   tax?: number;
   notes?: string;
+  order_id?: string | null;
   items: { description: string; quantity: number; unit_price: number; total: number }[];
   payments: { amount: number; method?: string; paid_at: string }[];
 }
@@ -186,6 +188,18 @@ export default function BillingPage() {
             <DropdownMenuItem onClick={() => viewDetail(row.original.id)}>
               <Eye className="mr-2 h-4 w-4" />{locale === "ar" ? "عرض" : "View"}
             </DropdownMenuItem>
+            {row.original.order_id && (
+              <DropdownMenuItem
+                onClick={() =>
+                  printOrderKitLabels(row.original.order_id!, "single").catch(() =>
+                    toast.error(locale === "ar" ? "فشل طباعة الملصق" : "Label print failed")
+                  )
+                }
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                {locale === "ar" ? "ملصقات العينة" : "Sample labels"}
+              </DropdownMenuItem>
+            )}
             {row.original.status !== "paid" && (
               <DropdownMenuItem onClick={async () => {
                 const due = row.original.balance ?? row.original.total - row.original.paid_amount;
@@ -340,7 +354,20 @@ export default function BillingPage() {
                     <Button onClick={recordPayment}>{locale === "ar" ? "تسجيل دفع" : "Record Payment"}</Button>
                   </div>
                 )}
-                <div className="flex justify-end border-t pt-4">
+                <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
+                  {detail.order_id && (
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        printOrderKitLabels(detail.order_id!, "single").catch(() =>
+                          toast.error(locale === "ar" ? "فشل طباعة الملصق" : "Label print failed")
+                        )
+                      }
+                    >
+                      <Printer className="me-2 h-4 w-4" />
+                      {locale === "ar" ? "ملصقات العينة" : "Sample labels"}
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     onClick={() =>

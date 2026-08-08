@@ -36,6 +36,7 @@ class InvoiceListItem(BaseModel):
     invoice_number: str
     patient_id: UUID
     patient_name: str
+    order_id: Optional[UUID] = None
     status: InvoiceStatus
     subtotal: float
     discount: float
@@ -51,6 +52,7 @@ class InvoiceResponse(BaseModel):
     invoice_number: str
     patient_id: UUID
     patient_name: str
+    order_id: Optional[UUID] = None
     status: InvoiceStatus
     subtotal: float
     discount: float

@@ -25,6 +25,7 @@ class ResultListItem(BaseModel):
     test_name: str
     test_code: str
     status: ResultStatus
+    order_status: OrderStatus
     ordered_at: datetime
 
 

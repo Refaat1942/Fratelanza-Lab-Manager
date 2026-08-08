@@ -53,6 +53,7 @@ class ResultsService:
                 "test_name": test.name,
                 "test_code": test.code,
                 "status": lab_result.status,
+                "order_status": order.status,
                 "ordered_at": order.ordered_at,
             })
         pages = (total + params.page_size - 1) // params.page_size if params.page_size else 0
@@ -143,10 +144,17 @@ class ResultsService:
         self.db.add(order)
         await self.db.flush()
 
+        if not data.test_ids:
+            raise ValueError("At least one test is required")
+
+        resolved_tests: list[Test] = []
         for test_id in data.test_ids:
             test = await self.db.get(Test, test_id)
             if not test or test.tenant_id != tenant_id:
-                continue
+                raise ValueError(f"Test not found: {test_id}")
+            resolved_tests.append(test)
+
+        for test in resolved_tests:
             item = LabOrderItem(
                 tenant_id=tenant_id,
                 order_id=order.id,
@@ -168,6 +176,70 @@ class ResultsService:
             )
         await self.db.flush()
         return order
+
+    async def collect_order(self, tenant_id: UUID, order_id: UUID) -> LabOrder:
+        result = await self.db.execute(
+            select(LabOrder).where(
+                LabOrder.id == order_id,
+                LabOrder.tenant_id == tenant_id,
+                LabOrder.deleted_at.is_(None),
+            )
+        )
+        order = result.scalar_one_or_none()
+        if not order:
+            raise ValueError("Order not found")
+        if order.status == OrderStatus.COLLECTED:
+            return order
+        if order.status != OrderStatus.PENDING:
+            raise ValueError("Order cannot be collected in its current status")
+        order.collected_at = datetime.now(timezone.utc)
+        order.status = OrderStatus.COLLECTED
+        await self.db.flush()
+        return order
+
+    async def delete_result(self, tenant_id: UUID, result_id: UUID) -> bool:
+        result = await self.db.execute(
+            select(LabResult).where(
+                LabResult.id == result_id,
+                LabResult.tenant_id == tenant_id,
+                LabResult.deleted_at.is_(None),
+            )
+        )
+        lab_result = result.scalar_one_or_none()
+        if not lab_result:
+            return False
+        lab_result.deleted_at = func.now()
+        await self.db.flush()
+        return True
+
+    async def delete_order(self, tenant_id: UUID, order_id: UUID) -> int:
+        order_result = await self.db.execute(
+            select(LabOrder).where(
+                LabOrder.id == order_id,
+                LabOrder.tenant_id == tenant_id,
+                LabOrder.deleted_at.is_(None),
+            )
+        )
+        order = order_result.scalar_one_or_none()
+        if not order:
+            raise ValueError("Order not found")
+
+        results = await self.db.execute(
+            select(LabResult).where(
+                LabResult.order_id == order_id,
+                LabResult.tenant_id == tenant_id,
+                LabResult.deleted_at.is_(None),
+            )
+        )
+        now = func.now()
+        count = 0
+        for lab_result in results.scalars():
+            lab_result.deleted_at = now
+            count += 1
+        order.deleted_at = now
+        order.status = OrderStatus.CANCELLED
+        await self.db.flush()
+        return count
 
     async def enter_result(
         self, tenant_id: UUID, result_id: UUID, data: ResultEntryCreate, user_id: UUID

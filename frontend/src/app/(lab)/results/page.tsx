@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, CheckCircle, Settings2, FileText, Eye, Download } from "lucide-react";
+import { Plus, CheckCircle, Settings2, FileText, Eye, Download, FlaskConical, Trash2, MoreHorizontal } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ import { useDateRange } from "@/hooks/use-date-range";
 import { TestLinesPicker, validTestIds, type TestCatalogItem, type TestLine } from "@/components/tests/test-lines-picker";
 import { api, getApiError } from "@/lib/api";
 import { exportModuleExcel, printOrderKitLabels, previewResultReport, printResultReport, downloadResultReport } from "@/lib/export";
+import { KitLabelPrintMenu } from "@/components/labels/kit-label-print-menu";
 import { toast } from "sonner";
 
 interface Result {
@@ -28,6 +30,7 @@ interface Result {
   test_code: string;
   test_id?: string;
   status: string;
+  order_status: string;
   ordered_at: string;
 }
 
@@ -42,6 +45,7 @@ export default function ResultsPage() {
   const [testLines, setTestLines] = useState<TestLine[]>([{ testId: "" }]);
   const [saving, setSaving] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [collectingId, setCollectingId] = useState<string | null>(null);
   const [enterId, setEnterId] = useState<string | null>(null);
   const [formMeta, setFormMeta] = useState<{ patient_name: string; test_name: string; order_number: string } | null>(null);
   const [fields, setFields] = useState<ResultField[]>([]);
@@ -77,22 +81,48 @@ export default function ResultsPage() {
     if (!patientId || testIds.length === 0) return;
     setSaving(true);
     try {
-      const { data } = await api.post("/results/orders", { patient_id: patientId, test_ids: testIds });
+      await api.post("/results/orders", { patient_id: patientId, test_ids: testIds });
       toast.success(locale === "ar" ? "تم إنشاء الطلب" : "Order created");
       setOpen(false);
       setTestLines([{ testId: "" }]);
       load();
-      if (data?.id) {
-        try {
-          await printOrderKitLabels(data.id, testIds.length > 1 ? "double" : "single");
-        } catch {
-          /* user can re-print from patients */
-        }
-      }
     } catch (err) {
       toast.error(getApiError(err));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const collectSample = async (orderId: string, testCount: number) => {
+    setCollectingId(orderId);
+    try {
+      await api.post(`/results/orders/${orderId}/collect`);
+      toast.success(locale === "ar" ? "تم سحب العينة" : "Sample collected");
+      load();
+      try {
+        await printOrderKitLabels(orderId, testCount > 1 ? "double" : "single");
+      } catch {
+        /* labels can be re-printed from the row menu */
+      }
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setCollectingId(null);
+    }
+  };
+
+  const deleteOrder = async (orderId: string, orderNumber: string, testCount: number) => {
+    const msg =
+      locale === "ar"
+        ? `حذف الطلب ${orderNumber} وجميع تحاليله (${testCount})؟`
+        : `Delete order ${orderNumber} and all ${testCount} test(s)?`;
+    if (!confirm(msg)) return;
+    try {
+      await api.delete(`/results/orders/${orderId}`);
+      toast.success(locale === "ar" ? "تم حذف الطلب" : "Order deleted");
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
     }
   };
 
@@ -186,6 +216,10 @@ export default function ResultsPage() {
   };
 
   const isReleased = (status: string) => status === "released" || status === "verified";
+  const orderTestCounts = results.reduce<Record<string, number>>((acc, row) => {
+    acc[row.order_id] = (acc[row.order_id] ?? 0) + 1;
+    return acc;
+  }, {});
 
   const columns: ColumnDef<Result>[] = [
     { accessorKey: "order_number", header: "Order #" },
@@ -199,7 +233,25 @@ export default function ResultsPage() {
     {
       id: "actions",
       cell: ({ row }) => (
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
+          {row.original.order_status === "pending" && (
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={collectingId === row.original.order_id}
+              onClick={() => collectSample(row.original.order_id, orderTestCounts[row.original.order_id] ?? 1)}
+            >
+              <FlaskConical className="mr-1 h-3 w-3" />
+              {locale === "ar" ? "سحب عينة" : "Collect"}
+            </Button>
+          )}
+          {(row.original.order_status === "collected" || row.original.order_status === "in_lab") && (
+            <KitLabelPrintMenu
+              locale={locale}
+              orderId={row.original.order_id}
+              resultId={row.original.id}
+            />
+          )}
           {isReleased(row.original.status) && (
             <>
               <Button
@@ -236,6 +288,26 @@ export default function ResultsPage() {
               <CheckCircle className="mr-1 h-3 w-3" />{locale === "ar" ? "إدخال" : "Enter"}
             </Button>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+              <MoreHorizontal className="h-4 w-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() =>
+                  deleteOrder(
+                    row.original.order_id,
+                    row.original.order_number,
+                    orderTestCounts[row.original.order_id] ?? 1
+                  )
+                }
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {locale === "ar" ? "حذف الطلب" : "Delete order"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       ),
     },
