@@ -4,29 +4,30 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Stethoscope, FlaskConical, FileText,
-  Receipt, Wallet, Package,
+  Receipt, Wallet, Package, Truck,
   Calculator, BarChart3, Settings, UserCog, Building2, Microscope, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFeaturesStore } from "@/stores/features-store";
 import { useLocale } from "@/hooks/use-locale";
-import { t } from "@/lib/i18n";
+import { t, type TranslationKey } from "@/lib/i18n";
 import { AppBrand } from "./app-brand";
 
-const labModules = [
-  { href: "/dashboard", icon: LayoutDashboard, key: "dashboard" as const },
-  { href: "/patients", icon: Users, key: "patients" as const },
-  { href: "/doctors", icon: Stethoscope, key: "doctors" as const },
-  { href: "/tests", icon: FlaskConical, key: "tests" as const },
-  { href: "/results", icon: FileText, key: "results" as const },
-  { href: "/billing", icon: Receipt, key: "billing" as const },
-  { href: "/expenses", icon: Wallet, key: "expenses" as const },
-  { href: "/inventory", icon: Package, key: "inventory" as const },
-  { href: "/accounting", icon: Calculator, key: "accounting" as const },
-  { href: "/reports", icon: BarChart3, key: "reports" as const },
-  { href: "/users", icon: UserCog, key: "users" as const },
-  { href: "/branches", icon: Building2, key: "branches" as const },
-  { href: "/settings", icon: Settings, key: "settings" as const },
+const labModules: { href: string; icon: typeof LayoutDashboard; key: TranslationKey; labelKey?: TranslationKey }[] = [
+  { href: "/dashboard", icon: LayoutDashboard, key: "dashboard" },
+  { href: "/patients", icon: Users, key: "patients" },
+  { href: "/doctors", icon: Stethoscope, key: "doctors" },
+  { href: "/tests", icon: FlaskConical, key: "tests" },
+  { href: "/results", icon: FileText, key: "results" },
+  { href: "/billing", icon: Receipt, key: "billing" },
+  { href: "/expenses", icon: Wallet, key: "expenses" },
+  { href: "/inventory", icon: Package, key: "inventory" },
+  { href: "/suppliers", icon: Truck, key: "inventory", labelKey: "suppliers" },
+  { href: "/accounting", icon: Calculator, key: "accounting" },
+  { href: "/reports", icon: BarChart3, key: "reports" },
+  { href: "/users", icon: UserCog, key: "users" },
+  { href: "/branches", icon: Building2, key: "branches" },
+  { href: "/settings", icon: Settings, key: "settings" },
 ];
 
 const platformModules = [
@@ -72,11 +73,13 @@ export function AppSidebar({ variant = "lab", onNavigate }: AppSidebarProps) {
 
       <nav className="flex-1 overflow-y-auto p-3">
         <ul className="space-y-1">
-          {modules.map(({ href, icon: Icon, key }) => {
+          {modules.map((item) => {
+            const { href, icon: Icon, key } = item;
+            const labelKey = "labelKey" in item ? item.labelKey : undefined;
             const active =
               pathname === href ||
               (href !== "/platform" && href !== "/dashboard" && pathname.startsWith(href + "/"));
-            const label = t(locale, key);
+            const label = t(locale, labelKey || key);
 
             return (
               <li key={href}>

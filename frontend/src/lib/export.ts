@@ -2,9 +2,30 @@ import { downloadApiFile, openPdfInNewTab, printApiFile } from "./download";
 
 export type KitLabelLayout = "single" | "double";
 
-function labelPath(orderId: string, layout: KitLabelLayout) {
+export type KitLabelOverrides = {
+  lab_name?: string;
+  patient_name?: string;
+  test_name?: string;
+  collection_date?: string;
+  barcode?: string;
+  width_mm?: number;
+  height_mm?: number;
+};
+
+function labelQuery(layout: KitLabelLayout, overrides?: KitLabelOverrides) {
   const params = new URLSearchParams({ layout });
-  return `/results/orders/${orderId}/labels?${params}`;
+  if (overrides?.width_mm) params.set("width_mm", String(overrides.width_mm));
+  if (overrides?.height_mm) params.set("height_mm", String(overrides.height_mm));
+  if (overrides?.lab_name) params.set("lab_name", overrides.lab_name);
+  if (overrides?.patient_name) params.set("patient_name", overrides.patient_name);
+  if (overrides?.test_name) params.set("test_name", overrides.test_name);
+  if (overrides?.collection_date) params.set("collection_date", overrides.collection_date);
+  if (overrides?.barcode) params.set("barcode", overrides.barcode);
+  return params;
+}
+
+function labelPath(orderId: string, layout: KitLabelLayout, overrides?: KitLabelOverrides) {
+  return `/results/orders/${orderId}/labels?${labelQuery(layout, overrides)}`;
 }
 
 export async function downloadOrderKitLabels(orderId: string, layout: KitLabelLayout = "single") {
@@ -12,13 +33,20 @@ export async function downloadOrderKitLabels(orderId: string, layout: KitLabelLa
 }
 
 /** Auto-print kit labels after patient registration (opens browser print dialog). */
-export async function printOrderKitLabels(orderId: string, layout: KitLabelLayout = "single") {
-  await printApiFile(labelPath(orderId, layout));
+export async function printOrderKitLabels(
+  orderId: string,
+  layout: KitLabelLayout = "single",
+  overrides?: KitLabelOverrides,
+) {
+  await printApiFile(labelPath(orderId, layout, overrides));
 }
 
-export async function printResultKitLabel(resultId: string, layout: KitLabelLayout = "single") {
-  const params = new URLSearchParams({ layout });
-  await printApiFile(`/results/${resultId}/label?${params}`);
+export async function printResultKitLabel(
+  resultId: string,
+  layout: KitLabelLayout = "single",
+  overrides?: KitLabelOverrides,
+) {
+  await printApiFile(`/results/${resultId}/label?${labelQuery(layout, overrides)}`);
 }
 
 export async function printResultReport(resultId: string) {

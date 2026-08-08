@@ -4,11 +4,37 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.common import MessageResponse, PaginationParams
-from app.schemas.users import TenantUserCreate, TenantUserResponse
+from app.schemas.users import (
+    PermissionResponse,
+    RoleResponse,
+    TenantUserCreate,
+    TenantUserResponse,
+    TenantUserUpdate,
+)
 from app.services.user_service import UserService
 from app.utils.date_filter import parse_date_param
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+@router.get("/roles")
+async def list_roles(
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("users.manage"),
+):
+    roles = await UserService(db).list_roles(tenant.id)
+    return [RoleResponse.model_validate(r) for r in roles]
+
+
+@router.get("/permissions")
+async def list_permissions(
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("users.manage"),
+):
+    perms = await UserService(db).list_permissions()
+    return [PermissionResponse.model_validate(p) for p in perms]
 
 
 @router.get("")
@@ -43,20 +69,25 @@ async def create_user(
 ):
     try:
         new_user = await UserService(db).create_user(tenant.id, data)
-        return TenantUserResponse(
-            id=new_user.id,
-            username=new_user.username,
-            email=new_user.email,
-            full_name=new_user.full_name,
-            full_name_ar=new_user.full_name_ar,
-            phone=new_user.phone,
-            is_active=new_user.is_active,
-            is_tenant_admin=new_user.is_tenant_admin,
-            roles=[],
-            created_at=new_user.created_at,
-        )
+        payload = await UserService(db)._user_payload_with_roles(tenant.id, new_user.id)
+        return TenantUserResponse.model_validate(payload)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/{user_id}", response_model=TenantUserResponse)
+async def update_user(
+    user_id: UUID,
+    data: TenantUserUpdate,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("users.manage"),
+):
+    updated = await UserService(db).update_user(tenant.id, user_id, data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="User not found")
+    payload = await UserService(db)._user_payload_with_roles(tenant.id, updated.id)
+    return TenantUserResponse.model_validate(payload)
 
 
 @router.delete("/{user_id}", response_model=MessageResponse)

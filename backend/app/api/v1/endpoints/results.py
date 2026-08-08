@@ -6,7 +6,7 @@ from fastapi.responses import Response
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.results import LabOrderCreate, LabOrderListItem, ResultEntryCreate, ResultListItem
-from app.services.label_service import build_kit_labels_pdf
+from app.services.label_service import apply_label_overrides, build_kit_labels_pdf
 from app.services.results_service import ResultsService
 from app.utils.date_filter import parse_date_param
 
@@ -129,10 +129,12 @@ async def order_kit_labels(
     tenant: CurrentTenant,
     user: CurrentUser = require_permission("results.read"),
     layout: str = Query("single", description="single = one label per row, double = two labels per row (76mm)"),
+    width_mm: float = Query(38, ge=20, le=100),
+    height_mm: float = Query(25, ge=15, le=80),
 ):
     try:
         labels = await ResultsService(db).get_order_kit_labels(tenant.id, order_id)
-        content = build_kit_labels_pdf(labels, layout=layout)
+        content = build_kit_labels_pdf(labels, layout=layout, width_mm=width_mm, height_mm=height_mm)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     filename = f"kit_labels_{layout}.pdf"
@@ -141,6 +143,28 @@ async def order_kit_labels(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/{result_id}/label-preview")
+async def result_label_preview(
+    result_id: UUID,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: CurrentUser = require_permission("results.read"),
+):
+    try:
+        label = await ResultsService(db).get_result_kit_label(tenant.id, result_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {
+        "lab_name": label.lab_name,
+        "patient_name": label.patient_name,
+        "test_name": label.test_name,
+        "collection_date": label.collection_date,
+        "barcode": label.barcode,
+        "patient_code": label.patient_code,
+        "test_code": label.test_code,
+    }
 
 
 @router.get("/{result_id}/report")
@@ -171,10 +195,27 @@ async def result_kit_label(
     tenant: CurrentTenant,
     user: CurrentUser = require_permission("results.read"),
     layout: str = Query("single", description="single or double (one label centered on double-width page)"),
+    width_mm: float = Query(38, ge=20, le=100),
+    height_mm: float = Query(25, ge=15, le=80),
+    lab_name: str | None = None,
+    patient_name: str | None = None,
+    test_name: str | None = None,
+    collection_date: str | None = None,
+    barcode: str | None = None,
 ):
     try:
         label = await ResultsService(db).get_result_kit_label(tenant.id, result_id)
-        content = build_kit_labels_pdf([label], layout=layout)
+        label = apply_label_overrides(
+            label,
+            {
+                "lab_name": lab_name,
+                "patient_name": patient_name,
+                "test_name": test_name,
+                "collection_date": collection_date,
+                "barcode": barcode,
+            },
+        )
+        content = build_kit_labels_pdf([label], layout=layout, width_mm=width_mm, height_mm=height_mm)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return Response(

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, MoreHorizontal, Lock, Unlock, Ban, CheckCircle, Trash2, RefreshCw, Pencil } from "lucide-react";
+import { Plus, MoreHorizontal, Lock, Unlock, Ban, CheckCircle, Trash2, RefreshCw, Pencil, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -103,6 +103,19 @@ const emptyEditForm = {
 function toDateInput(value?: string | null) {
   if (!value) return "";
   return value.slice(0, 10);
+}
+
+function demoLoginUrl(code: string) {
+  if (typeof window === "undefined") return `/login?lab=${code}`;
+  return `${window.location.origin}/login?lab=${encodeURIComponent(code)}`;
+}
+
+function copyDemoLink(code: string, locale: string) {
+  const url = demoLoginUrl(code);
+  navigator.clipboard.writeText(url).then(
+    () => toast.success(locale === "ar" ? "تم نسخ رابط العرض" : "Demo link copied"),
+    () => toast.error(locale === "ar" ? "فشل النسخ" : "Copy failed"),
+  );
 }
 
 export default function TenantsPage() {
@@ -401,6 +414,11 @@ export default function TenantsPage() {
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => copyDemoLink(row.original.code, locale)}>
+                <Link2 className="mr-2 h-4 w-4" />
+                {locale === "ar" ? "نسخ رابط العرض" : "Copy demo link"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => action(row.original.id, "activate", "Activated")}>
                 <CheckCircle className="mr-2 h-4 w-4" /> {t(locale, "activate")}
               </DropdownMenuItem>
@@ -607,7 +625,23 @@ export default function TenantsPage() {
                   onCheckedChange={(v) => setEditForm({ ...editForm, subscription_auto_renew: v })}
                 />
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {locale === "ar"
+                  ? "حدّد تاريخ «صالح حتى» لتحديد مدة العرض التجاري للعميل."
+                  : "Set Valid to to control how long the customer demo remains active."}
+              </p>
             </div>
+
+            {editCode && (
+              <div className="rounded-lg border border-dashed p-3">
+                <Label>{locale === "ar" ? "رابط العرض التجريبي" : "Demo login link"}</Label>
+                <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{demoLoginUrl(editCode)}</p>
+                <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => copyDemoLink(editCode, locale)}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  {locale === "ar" ? "نسخ الرابط" : "Copy link"}
+                </Button>
+              </div>
+            )}
 
             <div className="border-t border-border/60 pt-4">
               <p className="mb-3 text-sm font-semibold">

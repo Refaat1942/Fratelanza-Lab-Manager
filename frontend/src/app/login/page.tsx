@@ -55,6 +55,14 @@ function LoginPageContent() {
   }, []);
 
   useEffect(() => {
+    const lab = searchParams.get("lab") || searchParams.get("tenant");
+    if (lab) {
+      setTenantCode(lab);
+      setStoreTenant(lab);
+    }
+  }, [searchParams, setStoreTenant]);
+
+  useEffect(() => {
     const timer = setTimeout(() => fetchBranding(tenantCode), 400);
     return () => clearTimeout(timer);
   }, [tenantCode, fetchBranding]);

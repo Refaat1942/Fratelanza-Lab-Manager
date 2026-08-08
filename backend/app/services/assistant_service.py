@@ -11,13 +11,15 @@ MODULES = {
         {"keys": ["patient", "patients", "register patient"], "reply": "Manage patients in Patients — add records, edit details, view history.", "href": "/patients", "label": "Patients"},
         {"keys": ["doctor", "doctors", "commission"], "reply": "Doctors module tracks referring physicians and commission rates.", "href": "/doctors", "label": "Doctors"},
         {"keys": ["test", "tests", "catalog", "price"], "reply": "Tests catalog lets you define lab tests, prices, and turnaround times.", "href": "/tests", "label": "Tests"},
-        {"keys": ["result", "results", "enter result", "release"], "reply": "Results module is for entering, verifying, and releasing lab results. You can also design result form templates.", "href": "/results", "label": "Results"},
-        {"keys": ["invoice", "billing", "payment", "pay"], "reply": "Billing handles invoices, payments, discounts, and financial summaries.", "href": "/billing", "label": "Billing"},
+        {"keys": ["result", "results", "enter result", "release", "collect", "sample", "label", "barcode"], "reply": "Results module is for creating orders, collecting samples, printing kit labels, entering and releasing lab results.", "href": "/results", "label": "Results"},
+        {"keys": ["invoice", "billing", "payment", "pay", "receipt"], "reply": "Billing handles invoices, payments, discounts, and financial summaries.", "href": "/billing", "label": "Billing"},
         {"keys": ["expense", "expenses", "cost"], "reply": "Track laboratory expenses by vendor, category, and payment method.", "href": "/expenses", "label": "Expenses"},
         {"keys": ["inventory", "stock", "excel", "import"], "reply": "Inventory manages consumables. Download the Excel template and bulk-import items.", "href": "/inventory", "label": "Inventory"},
+        {"keys": ["supplier", "suppliers", "vendor", "vendors"], "reply": "Suppliers module lets you register vendors for inventory and expenses.", "href": "/suppliers", "label": "Suppliers"},
         {"keys": ["accounting", "profit", "revenue"], "reply": "Accounting shows revenue vs expenses and net profit.", "href": "/accounting", "label": "Accounting"},
+        {"keys": ["report", "reports", "analytics"], "reply": "Reports provides financial and operational analytics for your laboratory.", "href": "/reports", "label": "Reports"},
         {"keys": ["setting", "branding", "logo", "lab name"], "reply": "Settings → Branding lets you upload your logo and set the lab name on the login page.", "href": "/settings", "label": "Settings"},
-        {"keys": ["user", "staff", "password"], "reply": "Users module manages lab staff accounts and access.", "href": "/users", "label": "Users"},
+        {"keys": ["user", "staff", "password", "role", "permission", "access"], "reply": "Users module manages lab staff accounts, roles, and feature access permissions.", "href": "/users", "label": "Users"},
         {"keys": ["branch", "branches"], "reply": "Branches module manages multi-location labs.", "href": "/branches", "label": "Branches"},
         {"keys": ["dashboard", "overview", "stats"], "reply": "The dashboard shows live stats, financial insights, and recent activity.", "href": "/dashboard", "label": "Dashboard"},
         {"keys": ["login", "sign in", "username"], "reply": "Sign in with your laboratory code, username, and password on the login page.", "href": "/login", "label": "Login"},
@@ -26,13 +28,15 @@ MODULES = {
         {"keys": ["مريض", "مرضى", "تسجيل مريض"], "reply": "إدارة المرضى من قسم المرضى — إضافة سجلات وتعديل البيانات.", "href": "/patients", "label": "المرضى"},
         {"keys": ["طبيب", "أطباء", "عمولة"], "reply": "قسم الأطباء لتتبع الأطباء المحولين ونسب العمولة.", "href": "/doctors", "label": "الأطباء"},
         {"keys": ["تحليل", "تحاليل", "كتالوج", "سعر"], "reply": "كتالوج التحاليل لتحديد الأسعار ومدة التسليم.", "href": "/tests", "label": "التحاليل"},
-        {"keys": ["نتيجة", "نتائج", "إدخال نتيجة"], "reply": "قسم النتائج لإدخال واعتماد وإصدار نتائج التحاليل وتصميم النماذج.", "href": "/results", "label": "النتائج"},
-        {"keys": ["فاتورة", "فواتير", "دفع", "محاسبة"], "reply": "الفواتير تشمل إنشاء الفواتير وتسجيل المدفوعات والملخص المالي.", "href": "/billing", "label": "الفواتير"},
+        {"keys": ["نتيجة", "نتائج", "إدخال نتيجة", "عينة", "ملصق", "باركود"], "reply": "قسم النتائج لإنشاء الطلبات وسحب العينات وطباعة الملصقات وإدخال وإصدار النتائج.", "href": "/results", "label": "النتائج"},
+        {"keys": ["فاتورة", "فواتير", "دفع", "إيصال"], "reply": "الفواتير تشمل إنشاء الفواتير وتسجيل المدفوعات والملخص المالي.", "href": "/billing", "label": "الفواتير"},
         {"keys": ["مصروف", "مصروفات"], "reply": "تتبع مصروفات المختبر حسب المورد والفئة.", "href": "/expenses", "label": "المصروفات"},
         {"keys": ["مخزون", "stock", "اكسل", "استيراد"], "reply": "المخزون لإدارة المستلزمات مع قالب Excel للاستيراد الجماعي.", "href": "/inventory", "label": "المخزون"},
+        {"keys": ["مورد", "موردين", "supplier"], "reply": "قسم الموردين لتسجيل شركات التوريد للمخزون والمصروفات.", "href": "/suppliers", "label": "الموردين"},
         {"keys": ["ربح", "إيراد", "محاسبة"], "reply": "المحاسبة تعرض الإيرادات مقابل المصروفات وصافي الربح.", "href": "/accounting", "label": "المحاسبة"},
+        {"keys": ["تقرير", "تقارير"], "reply": "التقارير توفر تحليلات مالية وتشغيلية للمختبر.", "href": "/reports", "label": "التقارير"},
         {"keys": ["إعداد", "شعار", "علامة", "اسم المختبر"], "reply": "الإعدادات → العلامة التجارية لرفع الشعار واسم المختبر.", "href": "/settings", "label": "الإعدادات"},
-        {"keys": ["مستخدم", "موظف", "كلمة مرور"], "reply": "إدارة حسابات موظفي المختبر.", "href": "/users", "label": "المستخدمين"},
+        {"keys": ["مستخدم", "موظف", "كلمة مرور", "صلاحية", "دور"], "reply": "إدارة حسابات موظفي المختبر والأدوار والصلاحيات.", "href": "/users", "label": "المستخدمين"},
         {"keys": ["فرع", "فروع"], "reply": "إدارة فروع المختبر.", "href": "/branches", "label": "الفروع"},
         {"keys": ["لوحة", "dashboard", "إحصاء"], "reply": "لوحة التحكم تعرض الإحصائيات والرؤى المالية والنشاط الأخير.", "href": "/dashboard", "label": "لوحة التحكم"},
         {"keys": ["دخول", "تسجيل دخول", "اسم مستخدم"], "reply": "تسجيل الدخول بكود المختبر واسم المستخدم وكلمة المرور.", "href": "/login", "label": "تسجيل الدخول"},
@@ -63,8 +67,7 @@ class AssistantService:
         if lang == "ar":
             return {
                 "reply": (
-                    "أنا مساعد لاب ماستر. اسألني عن: المرضى، التحاليل، النتائج، الفواتير، المخزون، "
-                    "المصروفات، الإعدادات، أو اطلب «ملخص المختبر» للحصول على أرقام حية."
+                    "أنا مساعد لاب ماستر. اسألني عن: المرضى، التحاليل، النتائج، الفواتير، المخزون، الموردين، التقارير، المستخدمين، المصروفات، الإعدادات، أو اطلب «ملخص المختبر» للحصول على أرقام حية."
                 ),
                 "links": [
                     {"label": "لوحة التحكم", "href": "/dashboard"},
@@ -74,8 +77,7 @@ class AssistantService:
             }
         return {
             "reply": (
-                "I'm the LabMaster assistant. Ask about patients, tests, results, billing, inventory, "
-                "expenses, settings — or say «lab summary» for live numbers."
+                    "I'm the LabMaster assistant. Ask about patients, tests, results, billing, inventory, suppliers, reports, users, expenses, settings — or say «lab summary» for live numbers."
             ),
             "links": [
                 {"label": "Dashboard", "href": "/dashboard"},

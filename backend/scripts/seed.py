@@ -145,6 +145,23 @@ async def seed_tenant_data(db, tenant: Tenant) -> None:
     for p in perm_objects:
         db.add(RolePermission(role_id=admin_role.id, permission_id=p.id))
 
+    reception_codes = {
+        "patients.read", "patients.create", "patients.update",
+        "doctors.read", "tests.read", "results.read",
+        "billing.read", "billing.create",
+    }
+    lab_codes = {
+        "results.read", "results.create", "results.verify",
+        "tests.read", "tests.update",
+        "inventory.read", "inventory.manage",
+        "patients.read",
+    }
+    for p in perm_objects:
+        if p.code in reception_codes:
+            db.add(RolePermission(role_id=reception_role.id, permission_id=p.id))
+        if p.code in lab_codes:
+            db.add(RolePermission(role_id=lab_role.id, permission_id=p.id))
+
     admin = User(
         tenant_id=tenant.id,
         username="labadmin",

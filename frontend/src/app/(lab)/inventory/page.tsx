@@ -68,6 +68,7 @@ export default function InventoryPage() {
     setSaving(true);
     const payload = {
       ...form,
+      name_ar: form.name,
       unit_cost: parseFloat(form.unit_cost) || 0,
       reorder_level: parseFloat(form.reorder_level) || 0,
     };
@@ -219,7 +220,7 @@ export default function InventoryPage() {
               <Plus className="mr-2 h-4 w-4" />
               {t(locale, "create")}
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editId ? (locale === "ar" ? "تعديل صنف" : "Edit Item") : (locale === "ar" ? "صنف جديد" : "New Item")}</DialogTitle>
               </DialogHeader>
@@ -239,15 +240,9 @@ export default function InventoryPage() {
                     </Select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{locale === "ar" ? "الاسم (إنجليزي)" : "Name (EN)"} *</Label>
-                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{locale === "ar" ? "الاسم (عربي)" : "Name (AR)"} *</Label>
-                    <Input value={form.name_ar} onChange={(e) => setForm({ ...form, name_ar: e.target.value })} required />
-                  </div>
+                <div className="space-y-2">
+                  <Label>{locale === "ar" ? "الاسم" : "Name"} *</Label>
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value, name_ar: e.target.value })} required />
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">

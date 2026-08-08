@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, CheckCircle, Settings2, FileText, Eye, Download, FlaskConical, Trash2, MoreHorizontal } from "lucide-react";
+import { Plus, CheckCircle, FileText, Eye, Download, FlaskConical, Trash2, MoreHorizontal } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,9 +49,6 @@ export default function ResultsPage() {
   const [enterId, setEnterId] = useState<string | null>(null);
   const [formMeta, setFormMeta] = useState<{ patient_name: string; test_name: string; order_number: string } | null>(null);
   const [fields, setFields] = useState<ResultField[]>([]);
-  const [designOpen, setDesignOpen] = useState(false);
-  const [designTestId, setDesignTestId] = useState<string | null>(null);
-  const [designFields, setDesignFields] = useState<ResultField[]>([]);
   const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
@@ -192,29 +189,6 @@ export default function ResultsPage() {
     }
   };
 
-  const openDesigner = async (testId: string) => {
-    try {
-      const { data } = await api.get(`/tests/${testId}/result-template`);
-      setDesignFields(data.length ? data : [{ parameter_name: "Result", parameter_name_ar: "النتيجة", unit: "", field_type: "numeric", sort_order: 0 }]);
-      setDesignTestId(testId);
-    } catch {
-      setDesignFields([{ parameter_name: "Result", parameter_name_ar: "النتيجة", unit: "", field_type: "numeric", sort_order: 0 }]);
-      setDesignTestId(testId);
-    }
-  };
-
-  const saveTemplate = async () => {
-    if (!designTestId) return;
-    try {
-      await api.put(`/tests/${designTestId}/result-template`, { fields: designFields });
-      toast.success(locale === "ar" ? "تم حفظ نموذج النتيجة" : "Result form saved");
-      setDesignOpen(false);
-      setDesignTestId(null);
-    } catch (err) {
-      toast.error(getApiError(err));
-    }
-  };
-
   const isReleased = (status: string) => status === "released" || status === "verified";
   const orderTestCounts = results.reduce<Record<string, number>>((acc, row) => {
     acc[row.order_id] = (acc[row.order_id] ?? 0) + 1;
@@ -321,43 +295,6 @@ export default function ResultsPage() {
           <p className="text-muted-foreground">{results.length} {locale === "ar" ? "نتيجة" : "results"}</p>
         </div>
         <div className="flex gap-2">
-          <Dialog
-            open={designOpen}
-            onOpenChange={(open) => {
-              setDesignOpen(open);
-              if (!open) {
-                setDesignTestId(null);
-                setDesignFields([]);
-              }
-            }}
-          >
-            <DialogTrigger render={<Button variant="outline" />}>
-              <Settings2 className="mr-2 h-4 w-4" />
-              {locale === "ar" ? "تصميم النموذج" : "Design Form"}
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{locale === "ar" ? "تصميم نموذج النتيجة" : "Design Result Form"}</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>{locale === "ar" ? "اختر التحليل" : "Select Test"}</Label>
-                  <Select value={designTestId || ""} onValueChange={(v) => v && openDesigner(v)}>
-                    <SelectTrigger><SelectValue placeholder="Select test" /></SelectTrigger>
-                    <SelectContent>
-                      {tests.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {designTestId && (
-                  <>
-                    <ResultFormBuilder fields={designFields} onChange={setDesignFields} locale={locale} mode="design" />
-                    <Button className="w-full" onClick={saveTemplate}>{t(locale, "save")}</Button>
-                  </>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger render={<Button />}>
               <Plus className="mr-2 h-4 w-4" />{t(locale, "create")}

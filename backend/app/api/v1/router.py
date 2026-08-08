@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from app.api.deps import require_module
 from app.api.v1.endpoints import (
     assistant, auth, billing, branches, dashboard, doctors, expenses, export, inventory, patients,
-    platform, public, reports, results, settings, tests, users,
+    platform, public, reports, results, settings, suppliers, tests, users,
 )
 
 api_router = APIRouter()
@@ -19,6 +19,7 @@ api_router.include_router(tests.router, dependencies=[require_module("tests")])
 api_router.include_router(results.router, dependencies=[require_module("results")])
 api_router.include_router(billing.router, dependencies=[require_module("billing")])
 api_router.include_router(inventory.router, dependencies=[require_module("inventory")])
+api_router.include_router(suppliers.router, dependencies=[require_module("inventory")])
 api_router.include_router(branches.router, dependencies=[require_module("branches")])
 api_router.include_router(users.router, dependencies=[require_module("users")])
 api_router.include_router(expenses.router, dependencies=[require_module("expenses")])
