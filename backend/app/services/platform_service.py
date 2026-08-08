@@ -447,27 +447,27 @@ class PlatformService:
             )
         )
         await self.db.flush()
-        await self._sync_subscription_branding(tenant, expires_at)
 
         await TenantFeatureService(self.db).seed_from_plan(tenant.id, plan)
 
         db_name = await TenantProvisioningService(self.db).provision_new_tenant(tenant)
         factory = await manager.get_tenant_session_factory(db_name)
         async with factory() as tenant_db:
-            tenant_db.add(
-                Branch(
-                    tenant_id=tenant.id,
-                    code="HQ",
-                    name="Headquarters",
-                    name_ar="الفرع الرئيسي",
-                    is_headquarters=True,
-                )
+            branch = Branch(
+                tenant_id=tenant.id,
+                code="HQ",
+                name="Headquarters",
+                name_ar="الفرع الرئيسي",
+                is_headquarters=True,
             )
+            tenant_db.add(branch)
+            await tenant_db.flush()
             tenant_db.add(
                 TenantBranding(
                     tenant_id=tenant.id,
                     company_name=data.name,
                     company_name_ar=data.name_ar or data.name,
+                    subscription_end_date=expires_at.date(),
                 )
             )
             await AuthService(self.db, tenant_db).create_user(
@@ -478,9 +478,12 @@ class PlatformService:
                     full_name=data.admin_name,
                     is_tenant_admin=True,
                     is_system=True,
+                    default_branch_id=branch.id,
                 ),
             )
             await tenant_db.commit()
+
+        await self._sync_subscription_branding(tenant, expires_at)
 
         await self.log_action(
             admin_id,

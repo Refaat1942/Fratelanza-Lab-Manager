@@ -254,6 +254,8 @@ async def create_demo_link(data: DemoLinkCreate, db: PlatformDbSession, admin: P
         return DemoLinkResponse.model_validate(item)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Demo creation failed: {e}") from e
 
 
 @router.patch("/demos/{tenant_id}", response_model=DemoLinkResponse)

@@ -277,15 +277,14 @@ export default function DemoLinksPage() {
               </div>
               <div className="space-y-2">
                 <Label>{isAr ? "باقة العرض" : "Demo plan"}</Label>
-                <Select value={createForm.plan_id} onValueChange={(v) => setCreateForm({ ...createForm, plan_id: v || "" })}>
-                  <SelectTrigger><SelectValue placeholder={isAr ? "افتراضي: Professional Monthly" : "Default: Professional Monthly"} /></SelectTrigger>
+                <Select value={createForm.plan_id || undefined} onValueChange={(v) => setCreateForm({ ...createForm, plan_id: v || "" })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={isAr ? "افتراضي: Professional Monthly" : "Default: Professional Monthly"} />
+                  </SelectTrigger>
                   <SelectContent>
                     {plans.filter((p) => p.tier === "professional" || p.tier === "enterprise").map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        <div>
-                          <div>{planSelectLabel(p, locale)}</div>
-                          <div className="text-xs text-muted-foreground">{planSelectDescription(p, locale)}</div>
-                        </div>
+                      <SelectItem key={p.id} value={p.id} title={planSelectDescription(p, locale)}>
+                        {planSelectLabel(p, locale)}
                       </SelectItem>
                     ))}
                   </SelectContent>
