@@ -27,8 +27,13 @@ git checkout main
 git pull origin main
 
 echo ""
-echo "Rebuilding backend and frontend (no cache)..."
-docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache backend frontend
+if [ "${FULL_REBUILD:-0}" = "1" ]; then
+  echo "Rebuilding backend and frontend (no cache — FULL_REBUILD=1)..."
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache backend frontend
+else
+  echo "Rebuilding backend and frontend (with cache — set FULL_REBUILD=1 for clean rebuild)..."
+  docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" build backend frontend
+fi
 docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --force-recreate backend frontend
 
 echo ""

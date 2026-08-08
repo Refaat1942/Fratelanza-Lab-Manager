@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import UUID
 
 from openpyxl import Workbook, load_workbook
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tests import Test, TestCategory, TestResultTemplate
