@@ -184,6 +184,40 @@ class TenantChangePlanRequest(BaseModel):
     auto_renew: Optional[bool] = None
 
 
+class DemoLinkCreate(BaseModel):
+    code: str = Field(min_length=2, max_length=50)
+    name: str
+    name_ar: Optional[str] = None
+    email: Optional[str] = None
+    valid_days: int = Field(default=14, ge=1, le=365)
+    plan_id: Optional[UUID] = None
+    admin_username: str = Field(default="demo", min_length=2, max_length=64)
+    admin_password: str = Field(min_length=8)
+    admin_name: str = "Demo Administrator"
+
+
+class DemoLinkUpdate(BaseModel):
+    valid_to: Optional[datetime] = None
+    valid_days: Optional[int] = Field(None, ge=1, le=365)
+    status: Optional[TenantStatus] = None
+    admin_password: Optional[str] = Field(None, min_length=8)
+
+
+class DemoLinkResponse(BaseModel):
+    tenant_id: UUID
+    code: str
+    name: str
+    name_ar: Optional[str] = None
+    admin_username: str
+    plan_name: Optional[str] = None
+    plan_tier: Optional[str] = None
+    valid_from: Optional[datetime] = None
+    valid_to: Optional[datetime] = None
+    days_remaining: Optional[int] = None
+    status: TenantStatus
+    login_path: str
+
+
 class TenantAdminResponse(BaseModel):
     id: UUID
     username: str

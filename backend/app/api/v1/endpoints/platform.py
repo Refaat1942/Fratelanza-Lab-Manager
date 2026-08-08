@@ -15,6 +15,9 @@ from app.models.platform import (
 )
 from app.schemas.common import MessageResponse
 from app.schemas.platform import (
+    DemoLinkCreate,
+    DemoLinkResponse,
+    DemoLinkUpdate,
     FeatureFlagUpdate,
     LabSubscriptionResponse,
     ModuleCatalogItem,
@@ -236,6 +239,35 @@ async def update_tenant_subscription(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return TenantSubscriptionResponse.model_validate(sub)
+
+
+@router.get("/demos", response_model=list[DemoLinkResponse])
+async def list_demo_links(db: PlatformDbSession, admin: PlatformAdmin):
+    items = await PlatformService(db).list_demo_links()
+    return [DemoLinkResponse.model_validate(i) for i in items]
+
+
+@router.post("/demos", response_model=DemoLinkResponse, status_code=status.HTTP_201_CREATED)
+async def create_demo_link(data: DemoLinkCreate, db: PlatformDbSession, admin: PlatformAdmin):
+    try:
+        item = await PlatformService(db).create_demo_link(data, admin.id)
+        return DemoLinkResponse.model_validate(item)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/demos/{tenant_id}", response_model=DemoLinkResponse)
+async def update_demo_link(
+    tenant_id: UUID,
+    data: DemoLinkUpdate,
+    db: PlatformDbSession,
+    admin: PlatformAdmin,
+):
+    try:
+        item = await PlatformService(db).update_demo_link(tenant_id, data, admin.id)
+        return DemoLinkResponse.model_validate(item)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.put("/tenants/{tenant_id}/features", response_model=MessageResponse)

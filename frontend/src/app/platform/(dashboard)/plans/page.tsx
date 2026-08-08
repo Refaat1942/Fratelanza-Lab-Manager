@@ -16,6 +16,7 @@ import {
 import { DataTable } from "@/components/data-table/data-table";
 import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
+import { planTierSummary } from "@/lib/plan-format";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
@@ -82,10 +83,17 @@ export default function PlansPage() {
     { accessorKey: "name", header: locale === "ar" ? "الاسم" : "Name" },
     {
       accessorKey: "tier",
-      header: "Tier",
-      cell: ({ row }) => <Badge variant="outline">{row.original.tier}</Badge>,
+      header: locale === "ar" ? "المستوى" : "Tier",
+      cell: ({ row }) => (
+        <div>
+          <Badge variant="outline" className="capitalize">{row.original.tier}</Badge>
+          <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+            {planTierSummary(row.original.tier, locale)}
+          </p>
+        </div>
+      ),
     },
-    { accessorKey: "billing_cycle", header: "Billing" },
+    { accessorKey: "billing_cycle", header: locale === "ar" ? "الدفع" : "Billing" },
     {
       accessorKey: "price_egp",
       header: "Price (EGP)",

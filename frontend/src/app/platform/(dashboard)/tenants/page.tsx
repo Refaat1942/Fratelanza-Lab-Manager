@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, MoreHorizontal, Lock, Unlock, Ban, CheckCircle, Trash2, RefreshCw, Pencil, Link2 } from "lucide-react";
+import { Plus, MoreHorizontal, Lock, Unlock, Ban, CheckCircle, Trash2, RefreshCw, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import { ModuleToggles, type ModuleCatalogItem } from "@/components/platform/mod
 import { useLocale } from "@/hooks/use-locale";
 import { t } from "@/lib/i18n";
 import { api, getApiError } from "@/lib/api";
+import { planSelectDescription, planSelectLabel } from "@/lib/plan-format";
 import { toast } from "sonner";
 
 interface Tenant {
@@ -40,8 +41,12 @@ interface Tenant {
 interface Plan {
   id: string;
   name: string;
+  name_ar?: string;
   tier: string;
+  billing_cycle: string;
   price_egp: number;
+  max_users: number;
+  max_branches: number;
 }
 
 interface TenantAdmin {
@@ -103,19 +108,6 @@ const emptyEditForm = {
 function toDateInput(value?: string | null) {
   if (!value) return "";
   return value.slice(0, 10);
-}
-
-function demoLoginUrl(code: string) {
-  if (typeof window === "undefined") return `/login?lab=${code}`;
-  return `${window.location.origin}/login?lab=${encodeURIComponent(code)}`;
-}
-
-function copyDemoLink(code: string, locale: string) {
-  const url = demoLoginUrl(code);
-  navigator.clipboard.writeText(url).then(
-    () => toast.success(locale === "ar" ? "تم نسخ رابط العرض" : "Demo link copied"),
-    () => toast.error(locale === "ar" ? "فشل النسخ" : "Copy failed"),
-  );
 }
 
 export default function TenantsPage() {
@@ -414,11 +406,6 @@ export default function TenantsPage() {
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => copyDemoLink(row.original.code, locale)}>
-                <Link2 className="mr-2 h-4 w-4" />
-                {locale === "ar" ? "نسخ رابط العرض" : "Copy demo link"}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => action(row.original.id, "activate", "Activated")}>
                 <CheckCircle className="mr-2 h-4 w-4" /> {t(locale, "activate")}
               </DropdownMenuItem>
@@ -462,8 +449,8 @@ export default function TenantsPage() {
           <h1 className="text-3xl font-bold">{t(locale, "tenants")}</h1>
           <p className="text-muted-foreground">
             {locale === "ar"
-              ? "إنشاء وتعديل المختبرات وبيانات دخول المدير"
-              : "Create, edit laboratories and manage admin login credentials"}
+              ? "إنشاء وتعديل المختبرات الدائمة وبيانات دخول المدير — للعروض التجريبية استخدم «روابط العرض»."
+              : "Create and manage permanent laboratories — use Demo Links for time-limited customer trials."}
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
@@ -484,10 +471,15 @@ export default function TenantsPage() {
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "الباقة" : "Plan"} *</Label>
                   <Select value={form.plan_id} onValueChange={(v) => v && setForm({ ...form, plan_id: v })}>
-                    <SelectTrigger><SelectValue placeholder="Select plan" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={locale === "ar" ? "اختر الباقة" : "Select plan"} /></SelectTrigger>
                     <SelectContent>
                       {plans.map((p) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name} — EGP {p.price_egp}</SelectItem>
+                        <SelectItem key={p.id} value={p.id}>
+                          <div>
+                            <div>{planSelectLabel(p, locale)}</div>
+                            <div className="text-xs text-muted-foreground">{planSelectDescription(p, locale)}</div>
+                          </div>
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -589,7 +581,10 @@ export default function TenantsPage() {
                     <SelectContent>
                       {plans.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.name} — EGP {p.price_egp}
+                          <div>
+                            <div>{planSelectLabel(p, locale)}</div>
+                            <div className="text-xs text-muted-foreground">{planSelectDescription(p, locale)}</div>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -625,23 +620,7 @@ export default function TenantsPage() {
                   onCheckedChange={(v) => setEditForm({ ...editForm, subscription_auto_renew: v })}
                 />
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {locale === "ar"
-                  ? "حدّد تاريخ «صالح حتى» لتحديد مدة العرض التجاري للعميل."
-                  : "Set Valid to to control how long the customer demo remains active."}
-              </p>
             </div>
-
-            {editCode && (
-              <div className="rounded-lg border border-dashed p-3">
-                <Label>{locale === "ar" ? "رابط العرض التجريبي" : "Demo login link"}</Label>
-                <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{demoLoginUrl(editCode)}</p>
-                <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => copyDemoLink(editCode, locale)}>
-                  <Link2 className="mr-2 h-4 w-4" />
-                  {locale === "ar" ? "نسخ الرابط" : "Copy link"}
-                </Button>
-              </div>
-            )}
 
             <div className="border-t border-border/60 pt-4">
               <p className="mb-3 text-sm font-semibold">

@@ -13,6 +13,7 @@ from app.models.tenant_config import Branch, TenantBranding
 from app.models.platform import (
     BillingCycle,
     PlatformAuditLog,
+    PlanTier,
     SubscriptionPlan,
     SubscriptionStatus,
     Tenant,
@@ -22,6 +23,8 @@ from app.models.platform import (
 )
 from app.schemas.auth import UserCreate
 from app.schemas.platform import (
+    DemoLinkCreate,
+    DemoLinkUpdate,
     RevenueDashboard,
     SubscriptionRenewRequest,
     TenantAdminResponse,
@@ -363,6 +366,209 @@ class PlatformService:
         await self.log_action(admin_id, "tenant_created", "tenant", tenant.id, str(tenant.id), {"code": code})
         await self.db.flush()
         return tenant
+
+    async def _resolve_demo_plan(self, plan_id: Optional[UUID]) -> SubscriptionPlan:
+        if plan_id:
+            plan = await self.db.get(SubscriptionPlan, plan_id)
+            if not plan:
+                raise ValueError("Plan not found")
+            return plan
+        result = await self.db.execute(
+            select(SubscriptionPlan).where(
+                SubscriptionPlan.tier == PlanTier.PROFESSIONAL,
+                SubscriptionPlan.billing_cycle == BillingCycle.MONTHLY,
+                SubscriptionPlan.is_active.is_(True),
+            ).limit(1)
+        )
+        plan = result.scalar_one_or_none()
+        if not plan:
+            raise ValueError("No active Professional Monthly plan found")
+        return plan
+
+    def _demo_payload(
+        self,
+        tenant: Tenant,
+        *,
+        admin_username: str,
+        plan: Optional[SubscriptionPlan],
+        starts_at: Optional[datetime],
+        expires_at: Optional[datetime],
+    ) -> dict:
+        days_remaining = None
+        if expires_at:
+            delta = expires_at - datetime.now(timezone.utc)
+            days_remaining = max(0, delta.days)
+        return {
+            "tenant_id": tenant.id,
+            "code": tenant.code,
+            "name": tenant.name,
+            "name_ar": tenant.name_ar,
+            "admin_username": admin_username,
+            "plan_name": plan.name if plan else None,
+            "plan_tier": plan.tier.value if plan else None,
+            "valid_from": starts_at,
+            "valid_to": expires_at,
+            "days_remaining": days_remaining,
+            "status": tenant.status,
+            "login_path": f"/login?lab={tenant.code}",
+        }
+
+    async def create_demo_link(self, data: DemoLinkCreate, admin_id: UUID) -> dict:
+        plan = await self._resolve_demo_plan(data.plan_id)
+        code = data.code.strip().lower()
+        existing = await self.db.execute(select(Tenant).where(Tenant.code == code, Tenant.deleted_at.is_(None)))
+        if existing.scalar_one_or_none():
+            raise ValueError("Laboratory code already exists")
+        admin_username = data.admin_username.strip().lower()
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=data.valid_days)
+
+        tenant = Tenant(
+            code=code,
+            name=data.name,
+            name_ar=data.name_ar,
+            email=(data.email or "").strip() or f"{code}@demo.labmaster.local",
+            status=TenantStatus.TRIAL,
+            database_name=tenant_database_name(code) if settings.TENANT_DATABASE_PER_CUSTOMER else None,
+        )
+        self.db.add(tenant)
+        await self.db.flush()
+
+        self.db.add(
+            TenantSubscription(
+                tenant_id=tenant.id,
+                plan_id=plan.id,
+                status=SubscriptionStatus.ACTIVE,
+                starts_at=now,
+                expires_at=expires_at,
+                grace_ends_at=expires_at + timedelta(days=settings.GRACE_PERIOD_DAYS),
+                auto_renew=False,
+                amount_paid=0,
+            )
+        )
+        await self.db.flush()
+        await self._sync_subscription_branding(tenant, expires_at)
+
+        await TenantFeatureService(self.db).seed_from_plan(tenant.id, plan)
+
+        db_name = await TenantProvisioningService(self.db).provision_new_tenant(tenant)
+        factory = await manager.get_tenant_session_factory(db_name)
+        async with factory() as tenant_db:
+            tenant_db.add(
+                Branch(
+                    tenant_id=tenant.id,
+                    code="HQ",
+                    name="Headquarters",
+                    name_ar="الفرع الرئيسي",
+                    is_headquarters=True,
+                )
+            )
+            tenant_db.add(
+                TenantBranding(
+                    tenant_id=tenant.id,
+                    company_name=data.name,
+                    company_name_ar=data.name_ar or data.name,
+                )
+            )
+            await AuthService(self.db, tenant_db).create_user(
+                tenant.id,
+                UserCreate(
+                    username=admin_username,
+                    password=data.admin_password,
+                    full_name=data.admin_name,
+                    is_tenant_admin=True,
+                    is_system=True,
+                ),
+            )
+            await tenant_db.commit()
+
+        await self.log_action(
+            admin_id,
+            "demo_link_created",
+            "tenant",
+            tenant.id,
+            str(tenant.id),
+            {"code": code, "valid_days": data.valid_days},
+        )
+        await self.db.flush()
+        return self._demo_payload(
+            tenant,
+            admin_username=admin_username,
+            plan=plan,
+            starts_at=now,
+            expires_at=expires_at,
+        )
+
+    async def list_demo_links(self) -> list[dict]:
+        result = await self.db.execute(
+            select(Tenant)
+            .where(Tenant.deleted_at.is_(None), Tenant.status == TenantStatus.TRIAL)
+            .order_by(Tenant.created_at.desc())
+        )
+        items: list[dict] = []
+        for tenant in result.scalars().all():
+            sub = await self.get_active_subscription(tenant.id)
+            plan = await self.db.get(SubscriptionPlan, sub.plan_id) if sub else None
+            admin = await self.get_tenant_admin(tenant.id)
+            items.append(
+                self._demo_payload(
+                    tenant,
+                    admin_username=admin.username if admin else "—",
+                    plan=plan,
+                    starts_at=sub.starts_at if sub else None,
+                    expires_at=sub.expires_at if sub else None,
+                )
+            )
+        return items
+
+    async def update_demo_link(self, tenant_id: UUID, data: DemoLinkUpdate, admin_id: UUID) -> dict:
+        tenant = await self.get_tenant(tenant_id)
+        if not tenant:
+            raise ValueError("Demo not found")
+        if tenant.status != TenantStatus.TRIAL:
+            raise ValueError("This laboratory is not a demo account")
+
+        if data.status is not None:
+            tenant.status = data.status
+        await self.db.flush()
+
+        sub = await self.get_active_subscription(tenant_id)
+        if sub and (data.valid_to is not None or data.valid_days is not None):
+            expires_at = data.valid_to
+            if data.valid_days is not None:
+                expires_at = datetime.now(timezone.utc) + timedelta(days=data.valid_days)
+            if expires_at is not None:
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                sub.expires_at = expires_at
+                sub.grace_ends_at = expires_at + timedelta(days=settings.GRACE_PERIOD_DAYS)
+                sub.auto_renew = False
+                await self._sync_subscription_branding(tenant, expires_at)
+
+        if data.admin_password:
+            admin = await self.get_tenant_admin(tenant_id)
+            if admin:
+                db_name = manager.resolve_tenant_database(tenant.code, tenant.database_name)
+                factory = await manager.get_tenant_session_factory(db_name)
+                async with factory() as tenant_db:
+                    user = await tenant_db.get(User, admin.id)
+                    if user:
+                        user.password_hash = get_password_hash(data.admin_password)
+                        await tenant_db.commit()
+
+        await self.log_action(admin_id, "demo_link_updated", "tenant", tenant.id, str(tenant.id))
+        await self.db.flush()
+
+        sub = await self.get_active_subscription(tenant_id)
+        plan = await self.db.get(SubscriptionPlan, sub.plan_id) if sub else None
+        admin = await self.get_tenant_admin(tenant_id)
+        return self._demo_payload(
+            tenant,
+            admin_username=admin.username if admin else "—",
+            plan=plan,
+            starts_at=sub.starts_at if sub else None,
+            expires_at=sub.expires_at if sub else None,
+        )
 
     async def _tenant_db_session(self, tenant: Tenant):
         db_name = manager.resolve_tenant_database(tenant.code, tenant.database_name)

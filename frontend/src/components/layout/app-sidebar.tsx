@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Stethoscope, FlaskConical, FileText,
-  Receipt, Wallet, Package, Truck,
+  Receipt, Wallet, Package, Truck, Link2,
   Calculator, BarChart3, Settings, UserCog, Building2, Microscope, CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,6 +33,7 @@ const labModules: { href: string; icon: typeof LayoutDashboard; key: Translation
 const platformModules = [
   { href: "/platform", icon: LayoutDashboard, key: "revenue" as const },
   { href: "/platform/tenants", icon: Microscope, key: "tenants" as const },
+  { href: "/platform/demos", icon: Link2, key: "demoLinks" as const },
   { href: "/platform/subscriptions", icon: CreditCard, key: "subscriptions" as const },
   { href: "/platform/plans", icon: Receipt, key: "plans" as const },
   { href: "/platform/audit", icon: FileText, key: "auditLogs" as const },
