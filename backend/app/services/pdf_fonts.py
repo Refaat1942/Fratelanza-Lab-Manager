@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import re
 from pathlib import Path
 
@@ -43,7 +44,6 @@ def ensure_lab_pdf_fonts() -> tuple[str, str]:
         _FONT_READY = True
         return FONT_REGULAR, FONT_BOLD
 
-    # Fallback — Arabic will not render correctly
     _FONT_READY = True
     return "Helvetica", "Helvetica-Bold"
 
@@ -52,7 +52,23 @@ def contains_arabic(text: str) -> bool:
     return bool(text and _ARABIC_RE.search(text))
 
 
+def reshape_arabic(text: str | None) -> str:
+    """Reshape Arabic glyphs for ReportLab Paragraph (no bidi reordering)."""
+    if not text:
+        return ""
+    raw = str(text).strip()
+    if not contains_arabic(raw):
+        return raw
+    try:
+        import arabic_reshaper
+
+        return arabic_reshaper.reshape(raw)
+    except Exception:
+        return raw
+
+
 def shape_for_pdf(text: str | None) -> str:
+    """Visual-order Arabic for canvas.drawString only — never mix with English labels."""
     if not text:
         return ""
     raw = str(text).strip()
@@ -62,7 +78,15 @@ def shape_for_pdf(text: str | None) -> str:
         import arabic_reshaper
         from bidi.algorithm import get_display
 
-        reshaped = arabic_reshaper.reshape(raw)
-        return get_display(reshaped)
+        return get_display(arabic_reshaper.reshape(raw))
     except Exception:
         return raw
+
+
+def pdf_escape(text: str | None) -> str:
+    return html.escape(str(text or ""), quote=True)
+
+
+def pdf_text(text: str | None) -> str:
+    """Safe text for Paragraph — reshape Arabic, keep English readable."""
+    return pdf_escape(reshape_arabic(text))
