@@ -8,7 +8,7 @@
 |------|---------|
 | `/opt/labmaster/` | LabMaster code only |
 | `/etc/nginx/sites-available/labmaster` | NEW file — LabMaster subdomain only |
-| `/etc/nginx/sites-enabled/labmaster` | Symlink to above |
+| `/etc/nginx/sites-enabled/00-labmaster` | Symlink to above (00- prefix loads early) |
 | Docker containers named `labmaster-*` | Isolated containers |
 | Docker network `labmaster_net` | Isolated network |
 | Docker volume `labmaster_postgres_data` | Isolated database |
@@ -44,6 +44,11 @@ docker ps
 
 This is **nginx routing**, not LabMaster editing Fratelanza.  
 Fratelanza's wildcard `*.fratelanza.com` catches the subdomain.  
-Fix: `sudo bash /opt/labmaster/deploy/hostinger/fix-nginx-routing.sh labmaster.fratelanza.com`
+Fix: `sudo bash /opt/labmaster/deploy/hostinger/apply-labmaster-nginx.sh labmaster.fratelanza.com`
 
-This adds LabMaster's own nginx block — still does not edit Fratelanza files.
+Or full repair: `sudo bash /opt/labmaster/deploy/hostinger/fix-nginx-routing.sh labmaster.fratelanza.com`
+
+**Never run `certbot --nginx`** on a shared VPS — it may edit Fratelanza's config.  
+Use `enable-ssl.sh` (certbot certonly + apply-labmaster-nginx.sh) instead.
+
+Reference config (saved): `deploy/hostinger/nginx-labmaster.conf.reference`
