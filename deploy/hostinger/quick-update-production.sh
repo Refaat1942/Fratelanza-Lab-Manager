@@ -40,5 +40,9 @@ source "$(dirname "$0")/wait-for-api.sh"
 wait_for_api "$API_PORT" || true
 
 echo ""
+echo "NOTE: admin passwords are no longer reset on restart. If superadmin still uses the old"
+echo "      default password, the platform panel shows a warning — change it from the account menu."
+
+echo ""
 echo "=== Quick update done ==="
 echo "Hard-refresh browser: Ctrl+Shift+R"

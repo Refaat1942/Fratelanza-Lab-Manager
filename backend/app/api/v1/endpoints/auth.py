@@ -25,7 +25,7 @@ from app.services.tenant_access_service import TenantAccessService
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 # Brute-force protection for credential endpoints (per client IP).
-LOGIN_RATE_LIMIT = "10/minute"
+LOGIN_RATE_LIMIT = "20/minute"
 
 
 @router.post("/login", response_model=TokenResponse)

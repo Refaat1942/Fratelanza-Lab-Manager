@@ -394,11 +394,12 @@ class PlatformService:
         plan: Optional[SubscriptionPlan],
         starts_at: Optional[datetime],
         expires_at: Optional[datetime],
+        paused: bool = False,
     ) -> dict:
         days_remaining = None
         if expires_at:
             delta = expires_at - datetime.now(timezone.utc)
-            days_remaining = max(0, delta.days)
+            days_remaining = max(0, -(-int(delta.total_seconds()) // 86400))
         return {
             "tenant_id": tenant.id,
             "code": tenant.code,
@@ -410,11 +411,11 @@ class PlatformService:
             "valid_from": starts_at,
             "valid_to": expires_at,
             "days_remaining": days_remaining,
-            "status": tenant.status,
+            "status": TenantStatus.SUSPENDED if paused else tenant.status,
             "login_path": f"/login?lab={tenant.code}",
             "access_path": (
                 f"/demo?token={create_demo_access_token(tenant.id, expires_at)}"
-                if expires_at and expires_at > datetime.now(timezone.utc)
+                if expires_at and expires_at > datetime.now(timezone.utc) and not paused
                 else None
             ),
         }
@@ -527,6 +528,7 @@ class PlatformService:
                     plan=plan,
                     starts_at=sub.starts_at if sub else None,
                     expires_at=sub.expires_at if sub else None,
+                    paused=bool(sub and sub.status == SubscriptionStatus.CANCELLED),
                 )
             )
         return items
@@ -538,11 +540,17 @@ class PlatformService:
         if tenant.status != TenantStatus.TRIAL:
             raise ValueError("This laboratory is not a demo account")
 
-        if data.status is not None:
-            tenant.status = data.status
+        sub = await self.get_active_subscription(tenant_id)
+        # Pausing a demo cancels its subscription but keeps the TRIAL status, which is what
+        # marks it as a demo — otherwise a paused demo disappears from this list for good.
+        if data.status is not None and sub:
+            if data.status in (TenantStatus.SUSPENDED, TenantStatus.LOCKED, TenantStatus.EXPIRED):
+                sub.status = SubscriptionStatus.CANCELLED
+                await TenantAccessService(self.db).revoke_tenant_sessions(tenant.id)
+            else:
+                sub.status = SubscriptionStatus.ACTIVE
         await self.db.flush()
 
-        sub = await self.get_active_subscription(tenant_id)
         if sub and (data.valid_to is not None or data.valid_days is not None):
             expires_at = data.valid_to
             if data.valid_days is not None:
@@ -578,6 +586,7 @@ class PlatformService:
             plan=plan,
             starts_at=sub.starts_at if sub else None,
             expires_at=sub.expires_at if sub else None,
+            paused=bool(sub and sub.status == SubscriptionStatus.CANCELLED),
         )
 
     async def _tenant_db_session(self, tenant: Tenant):

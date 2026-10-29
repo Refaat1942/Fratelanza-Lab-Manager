@@ -92,9 +92,6 @@ export default function PlatformLoginPage() {
                   autoComplete="username"
                   placeholder="superadmin"
                 />
-                <p className="text-xs text-muted-foreground">
-                  {isAr ? "الحساب الافتراضي: superadmin / Admin@123" : "Default owner account: superadmin / Admin@123"}
-                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="password">{isAr ? "كلمة المرور" : "Password"}</Label>

@@ -470,8 +470,12 @@ export default function TenantsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "الباقة" : "Plan"} *</Label>
-                  <Select value={form.plan_id} onValueChange={(v) => v && setForm({ ...form, plan_id: v })}>
-                    <SelectTrigger><SelectValue placeholder={locale === "ar" ? "اختر الباقة" : "Select plan"} /></SelectTrigger>
+                  <Select
+                    value={form.plan_id}
+                    onValueChange={(v) => v && setForm({ ...form, plan_id: v })}
+                    items={plans.map((p) => ({ value: p.id, label: planSelectLabel(p, locale) }))}
+                  >
+                    <SelectTrigger className="w-full"><SelectValue placeholder={locale === "ar" ? "اختر الباقة" : "Select plan"} /></SelectTrigger>
                     <SelectContent>
                       {plans.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
@@ -556,7 +560,7 @@ export default function TenantsPage() {
               <div className="space-y-2">
                 <Label>{locale === "ar" ? "الحالة" : "Status"}</Label>
                 <Select value={editForm.status} onValueChange={(v) => v && setEditForm({ ...editForm, status: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {["active", "trial", "suspended", "locked", "expired"].map((s) => (
                       <SelectItem key={s} value={s}>{s}</SelectItem>
@@ -576,8 +580,9 @@ export default function TenantsPage() {
                   <Select
                     value={editForm.subscription_plan_id}
                     onValueChange={(v) => v && setEditForm({ ...editForm, subscription_plan_id: v })}
+                    items={plans.map((p) => ({ value: p.id, label: planSelectLabel(p, locale) }))}
                   >
-                    <SelectTrigger><SelectValue placeholder={locale === "ar" ? "اختر الباقة" : "Select plan"} /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={locale === "ar" ? "اختر الباقة" : "Select plan"} /></SelectTrigger>
                     <SelectContent>
                       {plans.map((p) => (
                         <SelectItem key={p.id} value={p.id}>

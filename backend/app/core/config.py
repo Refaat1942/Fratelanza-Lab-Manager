@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     DEFAULT_LOCALE: str = "ar"
     SUPPORTED_LOCALES: List[str] = ["ar", "en"]
 
-    # Bootstrap admin passwords. Applied on every start when set (use to rotate or recover);
-    # when unset, existing passwords are never touched.
+    # Initial passwords for the bootstrap accounts, used only when the account is created.
+    # Existing passwords are never touched; recover with scripts/ensure_platform_admin.py --reset.
     PLATFORM_ADMIN_PASSWORD: str | None = None
     DEMO_ADMIN_PASSWORD: str | None = None
 

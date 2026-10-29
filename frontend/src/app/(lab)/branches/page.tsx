@@ -109,7 +109,7 @@ export default function BranchesPage() {
   };
 
   const columns: ColumnDef<Branch>[] = [
-    { accessorKey: "code", header: "Code" },
+    { accessorKey: "code", header: locale === "ar" ? "الكود" : "Code" },
     {
       accessorKey: "name",
       header: locale === "ar" ? "الاسم" : "Name",
@@ -120,8 +120,8 @@ export default function BranchesPage() {
     { accessorKey: "phone", header: locale === "ar" ? "الهاتف" : "Phone" },
     {
       accessorKey: "is_headquarters",
-      header: "HQ",
-      cell: ({ row }) => row.original.is_headquarters ? <Badge>HQ</Badge> : "—",
+      header: locale === "ar" ? "رئيسي" : "HQ",
+      cell: ({ row }) => row.original.is_headquarters ? <Badge>{locale === "ar" ? "الفرع الرئيسي" : "HQ"}</Badge> : "—",
     },
     {
       id: "actions",

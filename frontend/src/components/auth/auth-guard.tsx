@@ -8,6 +8,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useBrandingStore } from "@/stores/branding-store";
 import { useFeaturesStore } from "@/stores/features-store";
 import { pathnameToModule } from "@/lib/modules";
+import { clearSession } from "@/lib/session";
 
 export function LabAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -49,7 +50,7 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
         if (msg.startsWith("Tenant account is")) {
           sessionStorage.setItem("login_error", msg);
         }
-        localStorage.clear();
+        clearSession();
         clearFeatures();
         router.replace(msg.startsWith("Tenant account is") ? "/login?suspended=1" : "/login");
       });
@@ -76,6 +77,7 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
 
 export function PlatformAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const setPlatformAdmin = useAuthStore((s) => s.setPlatformAdmin);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -89,12 +91,15 @@ export function PlatformAuthGuard({ children }: { children: React.ReactNode }) {
 
     api
       .get("/auth/platform/me")
-      .then(() => setReady(true))
+      .then((res) => {
+        setPlatformAdmin(res.data);
+        setReady(true);
+      })
       .catch(() => {
-        localStorage.clear();
+        clearSession();
         router.replace("/platform/login");
       });
-  }, [router]);
+  }, [router, setPlatformAdmin]);
 
   if (!ready) {
     return (

@@ -138,7 +138,7 @@ export default function TestsPage() {
   };
 
   const columns: ColumnDef<Test>[] = [
-    { accessorKey: "code", header: "Code" },
+    { accessorKey: "code", header: locale === "ar" ? "الكود" : "Code" },
     {
       accessorKey: "name",
       header: locale === "ar" ? "الاسم" : "Name",
@@ -154,13 +154,13 @@ export default function TestsPage() {
       header: locale === "ar" ? "التكلفة" : "Cost (EGP)",
       cell: ({ row }) => row.original.cost.toLocaleString(),
     },
-    { accessorKey: "turnaround_hours", header: "TAT (hrs)" },
+    { accessorKey: "turnaround_hours", header: locale === "ar" ? "مدة النتيجة (ساعة)" : "TAT (hrs)" },
     {
       accessorKey: "is_active",
-      header: "Status",
+      header: locale === "ar" ? "الحالة" : "Status",
       cell: ({ row }) => (
         <Badge variant={row.original.is_active ? "default" : "secondary"}>
-          {row.original.is_active ? "Active" : "Inactive"}
+          {row.original.is_active ? (locale === "ar" ? "مفعّل" : "Active") : (locale === "ar" ? "موقوف" : "Inactive")}
         </Badge>
       ),
     },

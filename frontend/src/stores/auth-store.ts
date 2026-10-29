@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Locale } from "@/lib/i18n";
+import { clearSession } from "@/lib/session";
 
 interface User {
   id: string;
@@ -14,8 +15,16 @@ interface User {
   permissions: string[];
 }
 
+export interface PlatformAdminProfile {
+  username: string;
+  full_name: string;
+  using_default_password?: boolean;
+}
+
 interface AuthState {
   user: User | null;
+  platformAdmin: PlatformAdminProfile | null;
+  setPlatformAdmin: (admin: PlatformAdminProfile | null) => void;
   tenantCode: string | null;
   locale: Locale;
   platformLocale: Locale;
@@ -31,6 +40,8 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
+      platformAdmin: null,
+      setPlatformAdmin: (platformAdmin) => set({ platformAdmin }),
       tenantCode: null,
       locale: "ar",
       platformLocale: "en",
@@ -39,12 +50,9 @@ export const useAuthStore = create<AuthState>()(
       setLocale: (locale) => set({ locale }),
       setPlatformLocale: (platformLocale) => set({ platformLocale }),
       logout: () => {
-        localStorage.removeItem("access_token");
-        localStorage.removeItem("refresh_token");
-        localStorage.removeItem("tenant_id");
-        localStorage.removeItem("is_platform_admin");
-        localStorage.removeItem("labmaster-branding");
-        set({ user: null, tenantCode: null });
+        clearSession();
+        // Keep tenantCode so the login screen pre-fills the same laboratory next time.
+        set({ user: null, platformAdmin: null });
       },
       hasPermission: (perm) => {
         const { user } = get();

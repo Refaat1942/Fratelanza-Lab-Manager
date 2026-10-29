@@ -88,12 +88,28 @@ Open in browser: `http://187.124.15.14:13000`
    docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build frontend
    ```
 
-## Demo Credentials
+## Credentials
 
-| Portal | Email | Password | Tenant |
-|--------|-------|----------|--------|
-| Laboratory | admin@demo-lab.eg | Demo@123 | demo-lab |
-| SaaS Platform | admin@labmaster.eg | Admin@123 | — |
+| Portal | Username | Password | Tenant |
+|--------|----------|----------|--------|
+| SaaS Platform (`/platform/login`) | superadmin | Initial: `PLATFORM_ADMIN_PASSWORD` from `.env.production` (printed by `deploy.sh`) | — |
+| Demo laboratory | labadmin | Initial: `DEMO_ADMIN_PASSWORD`, or `Demo@123` | demo-lab |
+
+Passwords are **never reset on restart**. Change them any time from the account menu →
+**Change password**. To recover a lost platform password:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend \
+  python scripts/ensure_platform_admin.py --reset 'NewStrongPassword'
+```
+
+## Selling subscriptions & demo links
+
+- **Subscriptions** page: *Renew / sell* a monthly or yearly plan (enter months/years and amount paid);
+  *Suspend* or *Activate* any laboratory. Labs are cut off automatically once the subscription
+  passes its grace period (`GRACE_PERIOD_DAYS`, default 7); renewing restores access immediately.
+- **Demo Links** page: creates a trial lab and a link that opens it **without a password**. The link
+  stops working when the demo expires or is paused; extending the demo issues a new link.
 
 ## Update / Redeploy
 

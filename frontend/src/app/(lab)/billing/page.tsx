@@ -239,8 +239,14 @@ export default function BillingPage() {
             <form onSubmit={createInvoice} className="space-y-4">
               <div className="space-y-2">
                 <Label>{locale === "ar" ? "المريض" : "Patient"}</Label>
-                <Select value={patientId} onValueChange={(v) => v && setPatientId(v)}>
-                  <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
+                <Select
+                  value={patientId}
+                  onValueChange={(v) => v && setPatientId(v)}
+                  items={patients.map((p) => ({ value: p.id, label: p.full_name }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={locale === "ar" ? "اختر المريض" : "Select patient"} />
+                  </SelectTrigger>
                   <SelectContent>
                     {patients.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}
                   </SelectContent>

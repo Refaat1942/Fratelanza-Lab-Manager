@@ -39,9 +39,9 @@ def is_default_platform_password(user: PlatformUser) -> bool:
     return verify_password(PLATFORM_PASSWORD, user.password_hash)
 
 
-async def ensure_platform_admin() -> None:
-    """Create the platform superadmin if missing. Never resets an existing password
-    unless PLATFORM_ADMIN_PASSWORD is configured."""
+async def ensure_platform_admin(reset_password: str | None = None) -> None:
+    """Create the platform superadmin if missing (with PLATFORM_ADMIN_PASSWORD when set).
+    An existing password is only changed when reset_password is passed explicitly."""
     async with async_session_factory() as db:
         result = await db.execute(
             select(PlatformUser).where(func.lower(PlatformUser.username) == PLATFORM_USERNAME)
@@ -56,11 +56,11 @@ async def ensure_platform_admin() -> None:
 
         configured = settings.PLATFORM_ADMIN_PASSWORD
         if user:
-            if configured and not verify_password(configured, user.password_hash):
-                user.password_hash = get_password_hash(configured)
+            if reset_password:
+                user.password_hash = get_password_hash(reset_password)
                 user.is_active = True
                 user.is_superadmin = True
-                print(f"Applied PLATFORM_ADMIN_PASSWORD to platform admin: {user.username}")
+                print(f"Reset password for platform admin: {user.username}")
             elif settings.is_production and is_default_platform_password(user):
                 print(
                     f"WARNING: platform admin '{user.username}' still uses the public default password. "
@@ -81,7 +81,7 @@ async def ensure_platform_admin() -> None:
         await db.commit()
 
 
-async def ensure_demo_admin() -> None:
+async def ensure_demo_admin(reset_password: str | None = None) -> None:
     async with async_session_factory() as platform_db:
         tenant_result = await platform_db.execute(
             select(Tenant).where(Tenant.code == DEMO_TENANT_CODE, Tenant.deleted_at.is_(None))
@@ -146,11 +146,11 @@ async def ensure_demo_admin() -> None:
             configured = settings.DEMO_ADMIN_PASSWORD
 
             if user:
-                if configured and not verify_password(configured, user.password_hash):
-                    user.password_hash = get_password_hash(configured)
+                if reset_password:
+                    user.password_hash = get_password_hash(reset_password)
                     user.is_active = True
                     user.is_tenant_admin = True
-                    print(f"Applied DEMO_ADMIN_PASSWORD to {DEMO_USERNAME} @ {DEMO_TENANT_CODE}")
+                    print(f"Reset password for {DEMO_USERNAME} @ {DEMO_TENANT_CODE}")
                 if not user.default_branch_id:
                     user.default_branch_id = branch.id
             else:
