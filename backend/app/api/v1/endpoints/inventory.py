@@ -4,8 +4,9 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.schemas.common import MessageResponse, PaginationParams
-from app.schemas.inventory import InventoryItemCreate, InventoryItemResponse, InventoryItemUpdate
+from app.schemas.inventory import InventoryItemCreate, InventoryItemResponse, InventoryItemUpdate, StockMovement
 from app.services.inventory_service import InventoryService
 from app.utils.date_filter import parse_date_param
 
@@ -16,9 +17,9 @@ router = APIRouter(prefix="/inventory", tags=["Inventory"])
 async def list_inventory(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.read"),
+    user: User = require_permission("inventory.read"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     search: str | None = None,
     branch_id: UUID | None = None,
     sort_by: str | None = "name",
@@ -42,7 +43,7 @@ async def list_inventory(
 @router.get("/import/template")
 async def download_import_template(
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.read"),
+    user: User = require_permission("inventory.read"),
 ):
     content = InventoryService.generate_import_template()
     return Response(
@@ -56,7 +57,7 @@ async def download_import_template(
 async def import_inventory(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.manage"),
+    user: User = require_permission("inventory.manage"),
     file: UploadFile = File(...),
 ):
     if not file.filename or not file.filename.endswith((".xlsx", ".xls")):
@@ -74,10 +75,10 @@ async def create_inventory_item(
     data: InventoryItemCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.manage"),
+    user: User = require_permission("inventory.manage"),
 ):
     item = await InventoryService(db).create_item(tenant.id, data, user.id)
-    return InventoryItemResponse.model_validate({**{c.name: getattr(item, c.name) for c in item.__table__.columns}, "total_quantity": 0})
+    return InventoryItemResponse.model_validate(await InventoryService(db).item_payload(item))
 
 
 @router.get("/{item_id}", response_model=InventoryItemResponse)
@@ -85,12 +86,12 @@ async def get_inventory_item(
     item_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.read"),
+    user: User = require_permission("inventory.read"),
 ):
     item = await InventoryService(db).get_item(tenant.id, item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    return InventoryItemResponse.model_validate({**{c.name: getattr(item, c.name) for c in item.__table__.columns}, "total_quantity": 0})
+    return InventoryItemResponse.model_validate(await InventoryService(db).item_payload(item))
 
 
 @router.put("/{item_id}", response_model=InventoryItemResponse)
@@ -99,12 +100,28 @@ async def update_inventory_item(
     data: InventoryItemUpdate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.manage"),
+    user: User = require_permission("inventory.manage"),
 ):
     item = await InventoryService(db).update_item(tenant.id, item_id, data, user.id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    return InventoryItemResponse.model_validate({**{c.name: getattr(item, c.name) for c in item.__table__.columns}, "total_quantity": 0})
+    return InventoryItemResponse.model_validate(await InventoryService(db).item_payload(item))
+
+
+@router.post("/{item_id}/stock", response_model=InventoryItemResponse)
+async def move_stock(
+    item_id: UUID,
+    data: StockMovement,
+    db: DbSession,
+    tenant: CurrentTenant,
+    user: User = require_permission("inventory.manage"),
+):
+    svc = InventoryService(db)
+    try:
+        item = await svc.move_stock(tenant.id, item_id, data, user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return InventoryItemResponse.model_validate(await svc.item_payload(item))
 
 
 @router.delete("/{item_id}", response_model=MessageResponse)
@@ -112,7 +129,7 @@ async def delete_inventory_item(
     item_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.manage"),
+    user: User = require_permission("inventory.manage"),
 ):
     deleted = await InventoryService(db).delete_item(tenant.id, item_id, user.id)
     if not deleted:

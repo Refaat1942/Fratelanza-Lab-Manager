@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.results import LabOrderCreate, LabOrderListItem, ResultEntryCreate, ResultListItem
 from app.services.label_service import apply_label_overrides, build_kit_labels_pdf
@@ -17,9 +18,9 @@ router = APIRouter(prefix="/results", tags=["Results"])
 async def list_results(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.read"),
+    user: User = require_permission("results.read"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
 ):
@@ -40,9 +41,9 @@ async def list_results(
 async def list_orders(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.read"),
+    user: User = require_permission("results.read"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
 ):
@@ -64,7 +65,7 @@ async def create_order(
     data: LabOrderCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.create"),
+    user: User = require_permission("results.create"),
 ):
     try:
         order = await ResultsService(db).create_order(tenant.id, data, user.id)
@@ -78,7 +79,7 @@ async def collect_order(
     order_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.create"),
+    user: User = require_permission("results.create"),
 ):
     try:
         order = await ResultsService(db).collect_order(tenant.id, order_id)
@@ -97,7 +98,7 @@ async def delete_order(
     order_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.create"),
+    user: User = require_permission("results.create"),
 ):
     try:
         count = await ResultsService(db).delete_order(tenant.id, order_id)
@@ -114,7 +115,7 @@ async def delete_result(
     result_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.create"),
+    user: User = require_permission("results.create"),
 ):
     deleted = await ResultsService(db).delete_result(tenant.id, result_id)
     if not deleted:
@@ -127,7 +128,7 @@ async def order_kit_labels(
     order_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.read"),
+    user: User = require_permission("results.read"),
     layout: str = Query("single", description="single = one label per row, double = two labels per row (76mm)"),
     width_mm: float = Query(38, ge=20, le=100),
     height_mm: float = Query(25, ge=15, le=80),
@@ -150,7 +151,7 @@ async def result_label_preview(
     result_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.read"),
+    user: User = require_permission("results.read"),
 ):
     try:
         label = await ResultsService(db).get_result_kit_label(tenant.id, result_id)
@@ -172,7 +173,7 @@ async def result_report_pdf(
     result_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.read"),
+    user: User = require_permission("results.read"),
 ):
     try:
         content = await ResultsService(db).get_result_report_pdf(tenant.id, result_id)
@@ -193,7 +194,7 @@ async def result_kit_label(
     result_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.read"),
+    user: User = require_permission("results.read"),
     layout: str = Query("single", description="single or double (one label centered on double-width page)"),
     width_mm: float = Query(38, ge=20, le=100),
     height_mm: float = Query(25, ge=15, le=80),
@@ -230,7 +231,7 @@ async def get_result_form(
     result_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.read"),
+    user: User = require_permission("results.read"),
 ):
     try:
         return await ResultsService(db).get_result_form(tenant.id, result_id)
@@ -244,7 +245,7 @@ async def enter_result(
     data: ResultEntryCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.create"),
+    user: User = require_permission("results.create"),
 ):
     try:
         await ResultsService(db).enter_result(tenant.id, result_id, data, user.id)
@@ -258,7 +259,7 @@ async def release_result(
     result_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("results.verify"),
+    user: User = require_permission("results.verify"),
 ):
     try:
         await ResultsService(db).release_result(tenant.id, result_id)

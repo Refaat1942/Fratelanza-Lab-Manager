@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.doctors import DoctorCreate, DoctorResponse, DoctorUpdate
 from app.services.doctor_service import DoctorService
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/doctors", tags=["Doctors"])
 
 
 @router.get("/specialties")
-async def list_specialties(user: CurrentUser = require_permission("doctors.read")):
+async def list_specialties(user: User = require_permission("doctors.read")):
     return SPECIALTIES
 
 
@@ -21,9 +22,9 @@ async def list_specialties(user: CurrentUser = require_permission("doctors.read"
 async def list_doctors(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("doctors.read"),
+    user: User = require_permission("doctors.read"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     search: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "desc",
@@ -47,7 +48,7 @@ async def list_doctors(
 async def doctor_commissions_summary(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("doctors.read"),
+    user: User = require_permission("doctors.read"),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
 ):
@@ -61,7 +62,7 @@ async def create_doctor(
     data: DoctorCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("doctors.create"),
+    user: User = require_permission("doctors.create"),
 ):
     doctor = await DoctorService(db).create_doctor(tenant.id, data, user.id)
     return DoctorResponse.model_validate(doctor)
@@ -72,7 +73,7 @@ async def get_doctor(
     doctor_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("doctors.read"),
+    user: User = require_permission("doctors.read"),
 ):
     doctor = await DoctorService(db).get_doctor(tenant.id, doctor_id)
     if not doctor:
@@ -86,7 +87,7 @@ async def update_doctor(
     data: DoctorUpdate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("doctors.update"),
+    user: User = require_permission("doctors.update"),
 ):
     doctor = await DoctorService(db).update_doctor(tenant.id, doctor_id, data, user.id)
     if not doctor:
@@ -99,7 +100,7 @@ async def delete_doctor(
     doctor_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("doctors.delete"),
+    user: User = require_permission("doctors.delete"),
 ):
     deleted = await DoctorService(db).delete_doctor(tenant.id, doctor_id, user.id)
     if not deleted:

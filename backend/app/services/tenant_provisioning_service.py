@@ -21,6 +21,8 @@ settings = get_settings()
 # so doing them on every login makes logins slow and lets anyone who knows a lab code
 # spawn alembic processes.
 _ready_databases: set[str] = set()
+# (database, tenant) pairs whose permissions/default roles were ensured by this process.
+_rbac_ready: set[tuple[str, UUID]] = set()
 
 
 class TenantProvisioningService:
@@ -31,6 +33,7 @@ class TenantProvisioningService:
     async def ensure_tenant_database(self, tenant: Tenant) -> str:
         """Create DB + migrations if needed; return database_name."""
         if not settings.TENANT_DATABASE_PER_CUSTOMER:
+            await self._ensure_rbac(tenant, self.manager.platform_database_name)
             return self.manager.platform_database_name
 
         db_name = tenant.database_name or tenant_database_name(tenant.code)
@@ -43,7 +46,20 @@ class TenantProvisioningService:
             self.manager.run_migrations(db_name)
             _ready_databases.add(db_name)
         await self._sync_tenant_registry_row(tenant)
+        await self._ensure_rbac(tenant, db_name)
         return db_name
+
+    async def _ensure_rbac(self, tenant: Tenant, db_name: str) -> None:
+        """Every laboratory needs the permission catalogue and default roles to assign staff roles."""
+        from app.core.rbac import ensure_rbac
+
+        if (db_name, tenant.id) in _rbac_ready:
+            return
+        factory = await self.manager.get_tenant_session_factory(db_name)
+        async with factory() as tenant_db:
+            await ensure_rbac(tenant_db, tenant.id)
+            await tenant_db.commit()
+        _rbac_ready.add((db_name, tenant.id))
 
     async def _registry_id_conflict(self, tenant: Tenant) -> bool:
         factory = await self.manager.get_tenant_session_factory(tenant.database_name)

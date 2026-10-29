@@ -30,6 +30,16 @@ class InventoryItemUpdate(BaseModel):
     description: Optional[str] = None
 
 
+class StockMovement(BaseModel):
+    """Positive quantity = stock in (new batch); negative = stock out (consumed, expired...)."""
+    quantity: float = Field(..., description="Units in (+) or out (-)")
+    reason: str = Field("purchase", pattern="^(purchase|consumption|adjustment|expired|return)$")
+    unit_cost: Optional[float] = Field(None, ge=0)
+    batch_number: Optional[str] = Field(None, max_length=100)
+    expiry_date: Optional[date] = None
+    notes: Optional[str] = None
+
+
 class InventoryItemResponse(BaseModel):
     id: UUID
     sku: str

@@ -180,6 +180,13 @@ export default function UsersPage() {
           </label>
         ))}
       </div>
+      {!disabled && form.role_ids.length === 0 && (
+        <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+          {locale === "ar"
+            ? "بدون دور لن يستطيع المستخدم فتح أي شاشة. اختر دوراً واحداً على الأقل."
+            : "Without a role the user can't open any screen. Pick at least one role."}
+        </p>
+      )}
     </div>
   );
 

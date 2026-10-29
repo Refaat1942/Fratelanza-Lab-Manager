@@ -18,7 +18,7 @@ from app.models.tenant_config import Branch
 from app.services.billing_service import BillingService
 from app.services.daily_operations_labels import DAILY_OPERATIONS_LABELS_AR
 from app.services.expense_service import ExpenseService
-from app.utils.date_filter import apply_date_range, date_end, date_start
+from app.utils.date_filter import LAB_TIMEZONE, apply_date_range, date_end, date_start
 
 
 REPORT_TYPES = {"daily", "monthly", "profitability", "inventory", "patients", "branches", "labs_done"}
@@ -83,7 +83,7 @@ class ReportsService:
     async def _daily_operations_metrics(
         self, tenant_id: UUID, date_from: date | None, date_to: date | None
     ) -> dict:
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(LAB_TIMEZONE).date()
         d_from = date_from or today
         d_to = date_to or today
         date_col = func.coalesce(Invoice.issued_at, Invoice.created_at)
@@ -294,7 +294,7 @@ class ReportsService:
             items_result = await self.db.execute(
                 select(Test.name)
                 .join(LabOrderItem, LabOrderItem.test_id == Test.id)
-                .where(LabOrderItem.order_id == order.id)
+                .where(LabOrderItem.order_id == order.id, LabOrderItem.status != OrderStatus.CANCELLED)
             )
             test_names = ", ".join(t[0] for t in items_result.all())
 

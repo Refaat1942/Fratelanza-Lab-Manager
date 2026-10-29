@@ -6,11 +6,13 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.billing import Invoice, InvoiceItem
 from app.models.orders import LabOrder, LabOrderItem, LabResult, LabResultValue, OrderStatus, ResultStatus
 from app.models.patients import Patient, PatientVisit, VisitStatus
 from app.constants.standard_result_templates import form_fields_for_test, is_generic_result_template
 from app.models.tests import Test, TestResultTemplate
 from app.models.tenant_config import Branch, TenantBranding
+from app.services.billing_service import BillingService
 from app.services.label_service import KitLabelData
 from app.schemas.common import PaginatedResponse, PaginationParams
 from app.schemas.results import LabOrderCreate, ResultEntryCreate
@@ -208,9 +210,44 @@ class ResultsService:
         lab_result = result.scalar_one_or_none()
         if not lab_result:
             return False
+
+        # Removing a test from an order also removes it from the bill.
+        invoice = await self._order_invoice(lab_result.order_id)
+        item = await self.db.get(LabOrderItem, lab_result.order_item_id) if lab_result.order_item_id else None
+        remaining = await self.db.scalar(
+            select(func.count()).select_from(LabResult).where(
+                LabResult.order_id == lab_result.order_id,
+                LabResult.deleted_at.is_(None),
+                LabResult.id != lab_result.id,
+            )
+        )
+        if not remaining:
+            # Last test of the order: cancel the whole order (and its invoice).
+            await self.delete_order(tenant_id, lab_result.order_id)
+            return True
+
+        if invoice is not None:
+            line = await self.db.scalar(
+                select(InvoiceItem).where(
+                    InvoiceItem.invoice_id == invoice.id, InvoiceItem.test_id == lab_result.test_id
+                ).limit(1)
+            )
+            if line is not None:
+                await self.db.delete(line)
+                await self.db.flush()
+                await BillingService(self.db).recalculate(invoice)
         lab_result.deleted_at = func.now()
+        if item is not None:
+            # Kept for history; cancelled lines are excluded from sales and cost totals.
+            item.status = OrderStatus.CANCELLED
         await self.db.flush()
+        await self._refresh_order_status(lab_result.order_id)
         return True
+
+    async def _order_invoice(self, order_id: UUID) -> Invoice | None:
+        return await self.db.scalar(
+            select(Invoice).where(Invoice.order_id == order_id, Invoice.deleted_at.is_(None)).limit(1)
+        )
 
     async def delete_order(self, tenant_id: UUID, order_id: UUID) -> int:
         order_result = await self.db.execute(
@@ -238,6 +275,10 @@ class ResultsService:
             count += 1
         order.deleted_at = now
         order.status = OrderStatus.CANCELLED
+        # The order's invoice (and doctor commission) must not keep counting as revenue.
+        invoice = await self._order_invoice(order_id)
+        if invoice is not None:
+            await BillingService(self.db).cancel_invoice(invoice)
         await self.db.flush()
         return count
 
@@ -273,6 +314,7 @@ class ResultsService:
         lab_result.verified_at = datetime.now(timezone.utc)
         lab_result.notes = data.notes
         await self.db.flush()
+        await self._refresh_order_status(lab_result.order_id)
         return lab_result
 
     async def get_result_form(self, tenant_id: UUID, result_id: UUID) -> dict:
@@ -341,7 +383,33 @@ class ResultsService:
         lab_result.status = ResultStatus.RELEASED
         lab_result.released_at = datetime.now(timezone.utc)
         await self.db.flush()
+        await self._refresh_order_status(lab_result.order_id)
         return lab_result
+
+    async def _refresh_order_status(self, order_id: UUID) -> None:
+        """Move the order along as its results progress: in lab → completed when all are released."""
+        order = await self.db.get(LabOrder, order_id)
+        if not order or order.deleted_at is not None or order.status in (OrderStatus.CANCELLED, OrderStatus.DELIVERED):
+            return
+        statuses = [
+            row[0]
+            for row in (
+                await self.db.execute(
+                    select(LabResult.status).where(LabResult.order_id == order_id, LabResult.deleted_at.is_(None))
+                )
+            ).all()
+        ]
+        if not statuses:
+            return
+        if all(s == ResultStatus.RELEASED for s in statuses):
+            if order.status != OrderStatus.COMPLETED:
+                order.status = OrderStatus.COMPLETED
+                order.completed_at = datetime.now(timezone.utc)
+        elif any(s != ResultStatus.PENDING for s in statuses):
+            order.status = OrderStatus.IN_LAB
+            order.collected_at = order.collected_at or datetime.now(timezone.utc)
+            order.completed_at = None
+        await self.db.flush()
 
     async def _lab_name(self, tenant_id: UUID) -> str:
         branding = await self.db.execute(

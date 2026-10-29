@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.patients import (
     PatientCreate,
@@ -30,9 +31,9 @@ def _patient_response(patient) -> PatientResponse:
 async def list_patients(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("patients.read"),
+    user: User = require_permission("patients.read"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     search: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "desc",
@@ -58,7 +59,7 @@ async def create_patient(
     data: PatientCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("patients.create"),
+    user: User = require_permission("patients.create"),
 ):
     patient = await PatientService(db).create_patient(tenant.id, data, user.id)
     return _patient_response(patient)
@@ -69,7 +70,7 @@ async def quick_visit(
     data: PatientQuickVisitCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("patients.create"),
+    user: User = require_permission("patients.create"),
 ):
     try:
         return await PatientService(db).quick_visit(tenant.id, data, user.id)
@@ -82,7 +83,7 @@ async def get_patient(
     patient_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("patients.read"),
+    user: User = require_permission("patients.read"),
 ):
     patient = await PatientService(db).get_patient(tenant.id, patient_id)
     if not patient:
@@ -96,7 +97,7 @@ async def update_patient(
     data: PatientUpdate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("patients.update"),
+    user: User = require_permission("patients.update"),
 ):
     patient = await PatientService(db).update_patient(tenant.id, patient_id, data, user.id)
     if not patient:
@@ -109,7 +110,7 @@ async def delete_patient(
     patient_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("patients.delete"),
+    user: User = require_permission("patients.delete"),
 ):
     deleted = await PatientService(db).delete_patient(tenant.id, patient_id, user.id)
     if not deleted:
@@ -122,7 +123,7 @@ async def create_visit(
     data: PatientVisitCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("patients.create"),
+    user: User = require_permission("patients.create"),
 ):
     visit = await PatientService(db).create_visit(tenant.id, data, user.id)
     return PatientVisitResponse.model_validate(visit)

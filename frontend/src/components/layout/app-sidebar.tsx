@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useFeaturesStore } from "@/stores/features-store";
+import { useAuthStore } from "@/stores/auth-store";
+import { pagePermission } from "@/lib/modules";
 import { useLocale } from "@/hooks/use-locale";
 import { t, type TranslationKey } from "@/lib/i18n";
 import { AppBrand } from "./app-brand";
@@ -49,10 +51,19 @@ export function AppSidebar({ variant = "lab", onNavigate }: AppSidebarProps) {
   const { locale } = useLocale(variant);
   const isModuleEnabled = useFeaturesStore((s) => s.isModuleEnabled);
   const featuresLoaded = useFeaturesStore((s) => s.loaded);
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  useAuthStore((s) => s.user); // re-render once the user (and permissions) load
+  const hasPagePermission = (href: string) => {
+    const perm = pagePermission(href);
+    return !perm || hasPermission(perm);
+  };
   const modules =
     variant === "platform"
       ? platformModules
-      : labModules.filter((m) => !featuresLoaded || isModuleEnabled(m.key));
+      : labModules.filter(
+          // Hide pages the user has no permission to open.
+          (m) => (!featuresLoaded || isModuleEnabled(m.key)) && hasPagePermission(m.href)
+        );
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-e border-sidebar-border bg-sidebar">

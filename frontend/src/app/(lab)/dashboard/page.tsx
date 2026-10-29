@@ -38,10 +38,11 @@ interface Insights {
     invoice_count: number;
   };
   expenses: { total_expenses: number; expense_count: number };
-  orders: { pending_orders: number; in_lab_orders: number; completed_orders: number };
+  orders: { pending_orders: number; collected_orders?: number; in_lab_orders: number; completed_orders: number };
   laboratory: {
     tests_ordered: number;
     sales_total: number;
+    discount_total?: number;
     cost_total: number;
     margin: number;
   };
@@ -49,13 +50,15 @@ interface Insights {
   recent_invoices: { id: string; invoice_number: string; patient_name: string; total: number; status: string }[];
   low_stock: { id: string; sku: string; name: string; total_quantity: number; reorder_level: number }[];
   net_profit: number;
+  show_financials?: boolean;
 }
 
-const PIE_COLORS = ["#10b981", "#3b82f6", "#8b5cf6", "#f59e0b"];
+const PIE_COLORS = ["#f59e0b", "#3b82f6", "#8b5cf6", "#10b981"];
 
 export default function DashboardPage() {
   const locale = useAuthStore((s) => s.locale);
   const user = useAuthStore((s) => s.user);
+  const canExport = useAuthStore((s) => s.hasPermission("reports.read"));
   const [data, setData] = useState<Insights | null>(null);
   const [loading, setLoading] = useState(true);
   const [printing, setPrinting] = useState(false);
@@ -93,6 +96,7 @@ export default function DashboardPage() {
 
   const stats = data?.stats;
   const fin = data?.financial;
+  const showMoney = data?.show_financials !== false;
 
   const statCards = [
     { title: "Patients", titleAr: "المرضى", value: stats?.patients ?? 0, icon: Users, color: "text-emerald-600", bg: "from-emerald-500/15 to-emerald-500/5" },
@@ -104,6 +108,7 @@ export default function DashboardPage() {
   const orderChart = data
     ? [
         { name: locale === "ar" ? "معلق" : "Pending", value: data.orders.pending_orders },
+        { name: locale === "ar" ? "تم سحب العينة" : "Collected", value: data.orders.collected_orders ?? 0 },
         { name: locale === "ar" ? "في المختبر" : "In Lab", value: data.orders.in_lab_orders },
         { name: locale === "ar" ? "مكتمل" : "Done", value: data.orders.completed_orders },
       ]
@@ -136,15 +141,18 @@ export default function DashboardPage() {
             onDateToChange={setDateTo}
             onReset={reset}
           />
+          {canExport && (
           <Button variant="outline" size="sm" onClick={exportDailyExcel} disabled={printing}>
             {printing
               ? locale === "ar" ? "جاري التصدير..." : "Exporting..."
               : locale === "ar" ? "تصدير العمليات اليومية Excel" : "Export Daily Operations Excel"}
           </Button>
+          )}
         </div>
       </div>
 
-      {/* Financial KPIs */}
+      {/* Financial KPIs (hidden for roles without billing/reports access) */}
+      {showMoney && (
       <AnimatedStagger className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <AnimatedItem>
           <Card className="border-emerald-200/60 bg-gradient-to-br from-emerald-500/10 to-transparent shadow-card">
@@ -209,9 +217,10 @@ export default function DashboardPage() {
           </Card>
         </AnimatedItem>
       </AnimatedStagger>
+      )}
 
       {/* Laboratory sales vs cost (internal) */}
-      {data?.laboratory && (
+      {showMoney && data?.laboratory && (
         <AnimatedStagger className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <AnimatedItem>
             <Card className="border-violet-200/60 bg-gradient-to-br from-violet-500/10 to-transparent shadow-card">
@@ -235,6 +244,11 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-xl font-bold sm:text-2xl text-emerald-700">EGP {data.laboratory.sales_total.toLocaleString()}</p>
+                {(data.laboratory.discount_total ?? 0) > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {locale === "ar" ? "خصومات" : "Discounts"}: EGP {(data.laboratory.discount_total ?? 0).toLocaleString()}
+                  </p>
+                )}
               </CardContent>
             </Card>
           </AnimatedItem>
@@ -254,7 +268,7 @@ export default function DashboardPage() {
             <Card className="border-teal-200/60 bg-gradient-to-br from-teal-500/10 to-transparent shadow-card">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {locale === "ar" ? "هامش التحاليل" : "Test Margin"}
+                  {locale === "ar" ? "هامش التحاليل (بعد الخصم)" : "Test Margin (after discount)"}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -287,7 +301,8 @@ export default function DashboardPage() {
       </AnimatedStagger>
 
       {/* Charts */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={`grid gap-4 ${showMoney ? "lg:grid-cols-2" : ""}`}>
+        {showMoney && (
         <AnimatedItem>
           <Card className="shadow-card">
             <CardHeader>
@@ -317,6 +332,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </AnimatedItem>
+        )}
 
         <AnimatedItem>
           <Card className="shadow-card">
@@ -395,6 +411,7 @@ export default function DashboardPage() {
           </Card>
         </AnimatedItem>
 
+        {showMoney && (
         <AnimatedItem>
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between">
@@ -419,6 +436,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </AnimatedItem>
+        )}
 
         <AnimatedItem>
           <Card className="shadow-card border-amber-200/50">

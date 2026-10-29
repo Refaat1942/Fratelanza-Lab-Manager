@@ -25,3 +25,25 @@ export function pathnameToModule(pathname: string): LabModuleKey | null {
   }
   return null;
 }
+
+/** Permission a lab page's main data needs (server enforces the same codes). */
+const PAGE_PERMISSIONS: Record<string, string> = {
+  patients: "patients.read",
+  doctors: "doctors.read",
+  tests: "tests.read",
+  results: "results.read",
+  billing: "billing.read",
+  expenses: "billing.read",
+  accounting: "billing.read",
+  inventory: "inventory.read",
+  suppliers: "inventory.read",
+  reports: "reports.read",
+  users: "users.manage",
+  branches: "settings.manage",
+  settings: "settings.manage",
+};
+
+export function pagePermission(pathname: string): string | null {
+  const segment = pathname.split("/").filter(Boolean)[0];
+  return (segment && PAGE_PERMISSIONS[segment]) || null;
+}

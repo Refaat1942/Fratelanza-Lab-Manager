@@ -39,7 +39,7 @@ class BillingService:
         result = await self.db.execute(query)
         items = []
         for inv, patient in result.all():
-            total = float(inv.total)
+            inv_total = float(inv.total)
             paid = float(inv.paid_amount)
             items.append({
                 "id": inv.id,
@@ -50,9 +50,9 @@ class BillingService:
                 "status": inv.status,
                 "subtotal": float(inv.subtotal),
                 "discount": float(inv.discount),
-                "total": total,
+                "total": inv_total,
                 "paid_amount": paid,
-                "balance": max(total - paid, 0),
+                "balance": max(inv_total - paid, 0),
                 "issued_at": inv.issued_at,
                 "created_at": inv.created_at,
             })
@@ -79,8 +79,10 @@ class BillingService:
         num = (count_result.scalar() or 0) + 1
         invoice_number = f"INV-{num:05d}"
 
-        subtotal = sum(i.unit_price * i.quantity for i in data.items)
-        total = subtotal - data.discount
+        subtotal = round(sum(i.unit_price * i.quantity for i in data.items), 2)
+        if data.discount > subtotal:
+            raise ValueError("Discount cannot be more than the invoice subtotal")
+        total = round(subtotal - data.discount, 2)
         now = datetime.now(timezone.utc)
 
         invoice = Invoice(
@@ -161,10 +163,43 @@ class BillingService:
         invoice = result.scalar_one_or_none()
         if not invoice:
             return False
+        await self.cancel_invoice(invoice)
+        return True
+
+    async def cancel_invoice(self, invoice: Invoice) -> None:
+        """Cancel an invoice and the unpaid doctor commission accrued on it."""
+        from sqlalchemy import delete
+
+        from app.models.doctors import DoctorCommission
+
         invoice.deleted_at = func.now()
         invoice.status = InvoiceStatus.CANCELLED
+        await self.db.execute(
+            delete(DoctorCommission).where(
+                DoctorCommission.invoice_id == invoice.id, DoctorCommission.is_paid.is_(False)
+            )
+        )
         await self.db.flush()
-        return True
+
+    async def recalculate(self, invoice: Invoice) -> None:
+        """Recompute totals and status from the invoice's current lines."""
+        lines = (
+            await self.db.execute(select(InvoiceItem).where(InvoiceItem.invoice_id == invoice.id))
+        ).scalars().all()
+        subtotal = round(sum(float(i.total) for i in lines), 2)
+        discount = min(float(invoice.discount or 0), subtotal)
+        total = round(subtotal - discount + float(invoice.tax or 0), 2)
+        paid = float(invoice.paid_amount or 0)
+        if paid > total:
+            raise ValueError("The patient already paid more than the new total — adjust the payment first")
+        invoice.subtotal, invoice.discount, invoice.total = subtotal, discount, total
+        if paid >= total and total > 0:
+            invoice.status = InvoiceStatus.PAID
+        elif paid > 0:
+            invoice.status = InvoiceStatus.PARTIALLY_PAID
+        else:
+            invoice.status = InvoiceStatus.ISSUED
+        await self.db.flush()
 
     async def get_invoice_detail(self, tenant_id: UUID, invoice_id: UUID) -> dict | None:
         result = await self.db.execute(
@@ -223,9 +258,22 @@ class BillingService:
             inv_q = inv_q.where(clause)
         inv_result = await self.db.execute(inv_q)
         total, paid, count = inv_result.one()
+
+        # Collected = money actually received in the period (by payment date), so a balance
+        # paid today on last week's invoice counts today — matching the cash drawer.
+        pay_q = (
+            select(func.coalesce(func.sum(Payment.amount), 0))
+            .join(Invoice, Payment.invoice_id == Invoice.id)
+            .where(Invoice.tenant_id == tenant_id, Invoice.deleted_at.is_(None))
+        )
+        for clause in apply_date_range(Payment.paid_at, date_from, date_to):
+            pay_q = pay_q.where(clause)
+        collected = float(await self.db.scalar(pay_q) or 0)
+
         return {
             "total_invoiced": float(total),
-            "total_collected": float(paid),
-            "outstanding": float(total) - float(paid),
+            "total_collected": collected,
+            # Still owed on the invoices issued in the period.
+            "outstanding": max(float(total) - float(paid), 0),
             "invoice_count": count,
         }

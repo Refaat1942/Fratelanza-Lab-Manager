@@ -65,9 +65,9 @@ export default function PatientsPage() {
   const load = useCallback(() => {
     setLoading(true);
     Promise.all([
-      api.get(`/patients?page_size=100${queryParams}`),
-      api.get("/tests?page_size=100"),
-      api.get("/doctors?page_size=100&sort_by=full_name&sort_order=asc"),
+      api.get(`/patients?page_size=1000${queryParams}`),
+      api.get("/tests?page_size=1000"),
+      api.get("/doctors?page_size=1000&sort_by=full_name&sort_order=asc"),
     ])
       .then(([patRes, testsRes, docRes]) => {
         setPatients(patRes.data.items || []);

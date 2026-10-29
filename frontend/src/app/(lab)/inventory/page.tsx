@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
-import { Plus, MoreHorizontal, Pencil, Trash2, Download, Upload } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, Download, Upload, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -50,12 +50,46 @@ export default function InventoryPage() {
   const [form, setForm] = useState(emptyItem);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canManage = hasPermission("inventory.manage");
+  // Stock movement dialog: direction "in" adds a batch, "out" consumes stock (FEFO on the server).
+  const [moveItem, setMoveItem] = useState<InventoryItem | null>(null);
+  const [move, setMove] = useState({ direction: "in" as "in" | "out", quantity: "", unit_cost: "", reason: "consumption", batch_number: "", notes: "" });
+
+  const openMove = (item: InventoryItem, direction: "in" | "out") => {
+    setMove({ direction, quantity: "", unit_cost: String(item.unit_cost ?? ""), reason: "consumption", batch_number: "", notes: "" });
+    setMoveItem(item);
+  };
+
+  const saveMove = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!moveItem) return;
+    const qty = parseFloat(move.quantity);
+    if (!qty || qty <= 0) return;
+    setSaving(true);
+    try {
+      await api.post(`/inventory/${moveItem.id}/stock`, {
+        quantity: move.direction === "in" ? qty : -qty,
+        reason: move.direction === "in" ? "purchase" : move.reason,
+        unit_cost: move.direction === "in" && move.unit_cost !== "" ? parseFloat(move.unit_cost) : null,
+        batch_number: move.batch_number || null,
+        notes: move.notes || null,
+      });
+      toast.success(locale === "ar" ? "تم تسجيل حركة المخزون" : "Stock updated");
+      setMoveItem(null);
+      load();
+    } catch (err) {
+      toast.error(getApiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
   const fileRef = useRef<HTMLInputElement>(null);
   const { dateFrom, dateTo, setDateFrom, setDateTo, queryParams, reset } = useDateRange();
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get(`/inventory?page_size=100${queryParams}`)
+    api.get(`/inventory?page_size=1000${queryParams}`)
       .then((res) => setItems(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
@@ -175,6 +209,16 @@ export default function InventoryPage() {
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {canManage && (
+              <>
+                <DropdownMenuItem onClick={() => openMove(row.original, "in")}>
+                  <ArrowDownToLine className="mr-2 h-4 w-4" />{locale === "ar" ? "إضافة مخزون (وارد)" : "Stock in"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openMove(row.original, "out")}>
+                  <ArrowUpFromLine className="mr-2 h-4 w-4" />{locale === "ar" ? "صرف مخزون (منصرف)" : "Stock out"}
+                </DropdownMenuItem>
+              </>
+            )}
             <DropdownMenuItem onClick={() => openEdit(row.original)}>
               <Pencil className="mr-2 h-4 w-4" />{t(locale, "edit")}
             </DropdownMenuItem>
@@ -266,6 +310,82 @@ export default function InventoryPage() {
           </Dialog>
         </div>
       </div>
+
+      <Dialog open={!!moveItem} onOpenChange={(o) => !o && setMoveItem(null)}>
+        <DialogContent className="sm:max-w-md" dir={locale === "ar" ? "rtl" : "ltr"}>
+          <DialogHeader>
+            <DialogTitle>
+              {move.direction === "in"
+                ? (locale === "ar" ? "إضافة مخزون" : "Stock in")
+                : (locale === "ar" ? "صرف مخزون" : "Stock out")}
+              {moveItem && ` — ${locale === "ar" ? moveItem.name_ar || moveItem.name : moveItem.name}`}
+            </DialogTitle>
+          </DialogHeader>
+          {moveItem && (
+            <form onSubmit={saveMove} className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {locale === "ar" ? "الرصيد الحالي" : "Current stock"}: <span className="font-semibold text-foreground">{moveItem.total_quantity} {moveItem.unit}</span>
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="mv-qty">{locale === "ar" ? "الكمية" : "Quantity"} *</Label>
+                  <Input
+                    id="mv-qty"
+                    type="number"
+                    min="0.01"
+                    step="any"
+                    max={move.direction === "out" ? moveItem.total_quantity : undefined}
+                    value={move.quantity}
+                    onChange={(e) => setMove({ ...move, quantity: e.target.value })}
+                    required
+                    autoFocus
+                  />
+                </div>
+                {move.direction === "in" ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="mv-cost">{locale === "ar" ? "سعر الوحدة" : "Unit cost"}</Label>
+                    <Input id="mv-cost" type="number" min="0" step="0.01" value={move.unit_cost} onChange={(e) => setMove({ ...move, unit_cost: e.target.value })} />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>{locale === "ar" ? "السبب" : "Reason"}</Label>
+                    <Select value={move.reason} onValueChange={(v) => v && setMove({ ...move, reason: v })}
+                      items={[
+                        { value: "consumption", label: locale === "ar" ? "استهلاك" : "Used" },
+                        { value: "expired", label: locale === "ar" ? "منتهي الصلاحية" : "Expired" },
+                        { value: "return", label: locale === "ar" ? "مرتجع للمورد" : "Returned" },
+                        { value: "adjustment", label: locale === "ar" ? "تسوية جرد" : "Count adjustment" },
+                      ]}
+                    >
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="consumption">{locale === "ar" ? "استهلاك" : "Used"}</SelectItem>
+                        <SelectItem value="expired">{locale === "ar" ? "منتهي الصلاحية" : "Expired"}</SelectItem>
+                        <SelectItem value="return">{locale === "ar" ? "مرتجع للمورد" : "Returned"}</SelectItem>
+                        <SelectItem value="adjustment">{locale === "ar" ? "تسوية جرد" : "Count adjustment"}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+              {move.direction === "in" && (
+                <div className="space-y-2">
+                  <Label htmlFor="mv-batch">{locale === "ar" ? "رقم التشغيلة (اختياري)" : "Batch number (optional)"}</Label>
+                  <Input id="mv-batch" value={move.batch_number} onChange={(e) => setMove({ ...move, batch_number: e.target.value })} />
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="mv-notes">{locale === "ar" ? "ملاحظات" : "Notes"}</Label>
+                <Input id="mv-notes" value={move.notes} onChange={(e) => setMove({ ...move, notes: e.target.value })} />
+              </div>
+              <Button type="submit" className="w-full" disabled={saving}>
+                {saving ? (locale === "ar" ? "جارٍ الحفظ…" : "Saving…") : t(locale, "save")}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {loading ? (
         <div className="flex h-40 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />

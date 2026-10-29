@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.services.export_service import EXPORT_MODULES, ExportService
 from app.utils.date_filter import parse_date_param
 
@@ -13,7 +14,7 @@ async def export_module_excel(
     module: str,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("reports.read"),
+    user: User = require_permission("reports.read"),
     date_from: str | None = Query(None, description="YYYY-MM-DD"),
     date_to: str | None = Query(None, description="YYYY-MM-DD"),
 ):
