@@ -65,3 +65,24 @@ def test_client_ip_prefers_proxy_header():
     assert client_ip(req) == "41.33.1.2"
     req = SimpleNamespace(headers={}, client=SimpleNamespace(host="10.0.0.5"))
     assert client_ip(req) == "10.0.0.5"
+
+
+def test_demo_access_key_is_short_safe_and_verifiable():
+    from app.core.security import create_demo_access_key, verify_demo_access_key
+
+    tenant_id = uuid4()
+    key = create_demo_access_key(tenant_id)
+    # Only hex digits and dashes: survives WhatsApp/SMS formatting.
+    assert set(key) <= set("0123456789abcdef-")
+    assert verify_demo_access_key(key) == tenant_id
+    assert verify_demo_access_key(key[:-1] + ("0" if key[-1] != "0" else "1")) is None
+    assert verify_demo_access_key(f"{uuid4()}-{key.rsplit('-', 1)[1]}") is None
+    assert verify_demo_access_key("not-a-key") is None
+
+
+def test_tokens_issued_in_same_second_are_unique():
+    from app.core.security import create_access_token, create_refresh_token
+
+    subject = str(uuid4())
+    assert create_refresh_token(subject) != create_refresh_token(subject)
+    assert create_access_token(subject) != create_access_token(subject)

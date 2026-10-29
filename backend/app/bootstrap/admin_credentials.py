@@ -64,7 +64,7 @@ async def ensure_platform_admin(reset_password: str | None = None) -> None:
             elif settings.is_production and is_default_platform_password(user):
                 print(
                     f"WARNING: platform admin '{user.username}' still uses the public default password. "
-                    "Change it from the platform panel or set PLATFORM_ADMIN_PASSWORD."
+                    "Change it from the platform panel (account menu) or run scripts/ensure_platform_admin.py --reset."
                 )
         else:
             password = _initial_password(configured, PLATFORM_PASSWORD, f"platform admin '{PLATFORM_USERNAME}'")

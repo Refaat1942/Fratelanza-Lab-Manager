@@ -1,6 +1,6 @@
 import axios, { AxiosError } from "axios";
 import { getApiBaseUrl } from "./api-base";
-import { clearSession } from "./session";
+import { clearSession, currentScope, getAccessToken, getRefreshToken, setTokens } from "./session";
 
 const API_URL = getApiBaseUrl();
 
@@ -18,8 +18,8 @@ api.interceptors.request.use((config) => {
     delete config.headers["Content-Type"];
   }
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("access_token");
-    const isPlatform = localStorage.getItem("is_platform_admin") === "true";
+    const token = getAccessToken();
+    const isPlatform = currentScope() === "platform";
     const url = config.url || "";
 
     if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -39,12 +39,11 @@ let refreshInFlight: Promise<string> | null = null;
 
 function refreshAccessToken(): Promise<string> {
   if (!refreshInFlight) {
-    const refresh_token = localStorage.getItem("refresh_token");
+    const refresh_token = getRefreshToken();
     refreshInFlight = axios
       .post(`${getApiBaseUrl()}/auth/refresh`, { refresh_token })
       .then(({ data }) => {
-        localStorage.setItem("access_token", data.access_token);
-        localStorage.setItem("refresh_token", data.refresh_token);
+        setTokens(data.access_token, data.refresh_token);
         return data.access_token as string;
       })
       .finally(() => {
@@ -88,8 +87,8 @@ api.interceptors.response.use(
       }
     }
     if (error.response?.status === 401 && typeof window !== "undefined" && config) {
-      const isPlatform = localStorage.getItem("is_platform_admin") === "true";
-      if (localStorage.getItem("refresh_token") && !config._retry && !isAuthCall) {
+      const isPlatform = currentScope() === "platform";
+      if (getRefreshToken() && !config._retry && !isAuthCall) {
         config._retry = true;
         try {
           const accessToken = await refreshAccessToken();

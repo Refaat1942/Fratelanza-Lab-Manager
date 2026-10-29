@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { FlaskConical, Loader2, LinkIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api, getApiError } from "@/lib/api";
-import { clearSession } from "@/lib/session";
+import { clearSession, setTokens } from "@/lib/session";
 import { useAuthStore } from "@/stores/auth-store";
 import { useBrandingStore } from "@/stores/branding-store";
 
@@ -24,17 +24,16 @@ function DemoEntry() {
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    const token = params.get("token");
+    const token = params.get("key") || params.get("token");
     if (!token) {
       setError(isAr ? "رابط العرض غير مكتمل" : "This demo link is incomplete");
       return;
     }
     (async () => {
       try {
-        clearSession();
+        clearSession("lab");
         const { data: tokens } = await api.post("/auth/demo-login", { token });
-        localStorage.setItem("access_token", tokens.access_token);
-        localStorage.setItem("refresh_token", tokens.refresh_token);
+        setTokens(tokens.access_token, tokens.refresh_token, "lab");
         const { data: user } = await api.get("/auth/me");
         setUser(user);
         if (user.tenant_id) localStorage.setItem("tenant_id", user.tenant_id);

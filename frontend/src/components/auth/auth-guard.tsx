@@ -10,7 +10,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useBrandingStore } from "@/stores/branding-store";
 import { useFeaturesStore } from "@/stores/features-store";
 import { pathnameToModule } from "@/lib/modules";
-import { clearSession } from "@/lib/session";
+import { clearSession, getAccessToken } from "@/lib/session";
 
 export function LabAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -28,10 +28,7 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
   // Verify the session once per app load — not on every navigation. Each page's own
   // requests still go through the 401/403 handling in lib/api.
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    const isPlatform = localStorage.getItem("is_platform_admin") === "true";
-
-    if (!token || isPlatform) {
+    if (!getAccessToken("lab")) {
       router.replace(`/login?redirect=${encodeURIComponent(pathnameRef.current)}`);
       return;
     }
@@ -42,7 +39,6 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
       .then(async (res) => {
         setUser(res.data);
         if (res.data.tenant_id) localStorage.setItem("tenant_id", res.data.tenant_id);
-        localStorage.removeItem("is_platform_admin");
         try {
           const [brandRes, featuresRes] = await Promise.all([
             api.get("/settings/branding"),
@@ -111,10 +107,7 @@ export function PlatformAuthGuard({ children }: { children: React.ReactNode }) {
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    const token = localStorage.getItem("access_token");
-    const isPlatform = localStorage.getItem("is_platform_admin") === "true";
-
-    if (!token || !isPlatform) {
+    if (!getAccessToken("platform")) {
       router.replace("/platform/login");
       return;
     }
