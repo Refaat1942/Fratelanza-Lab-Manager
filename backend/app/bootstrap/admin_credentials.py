@@ -1,7 +1,9 @@
+import secrets
+
 from sqlalchemy import func, select
 
 from app.core.config import get_settings
-from app.core.security import get_password_hash
+from app.core.security import get_password_hash, verify_password
 from app.db.manager import get_database_manager
 from app.db.session import async_session_factory
 from app.models.auth import Permission, Role, RolePermission, User, UserRole
@@ -19,7 +21,27 @@ PLATFORM_USERNAME = "superadmin"
 PLATFORM_PASSWORD = "Admin@123"
 
 
+def _initial_password(configured: str | None, default: str, label: str) -> str:
+    """Password for a newly created bootstrap account."""
+    if configured:
+        return configured
+    if not settings.is_production:
+        return default
+    generated = secrets.token_urlsafe(12)
+    print("=" * 64)
+    print(f"Created {label} with a generated password: {generated}")
+    print("Log in and change it, or set the password in .env.production.")
+    print("=" * 64)
+    return generated
+
+
+def is_default_platform_password(user: PlatformUser) -> bool:
+    return verify_password(PLATFORM_PASSWORD, user.password_hash)
+
+
 async def ensure_platform_admin() -> None:
+    """Create the platform superadmin if missing. Never resets an existing password
+    unless PLATFORM_ADMIN_PASSWORD is configured."""
     async with async_session_factory() as db:
         result = await db.execute(
             select(PlatformUser).where(func.lower(PlatformUser.username) == PLATFORM_USERNAME)
@@ -32,19 +54,24 @@ async def ensure_platform_admin() -> None:
             )
             user = super_result.scalar_one_or_none()
 
-        password_hash = get_password_hash(PLATFORM_PASSWORD)
-
+        configured = settings.PLATFORM_ADMIN_PASSWORD
         if user:
-            user.username = PLATFORM_USERNAME
-            user.password_hash = password_hash
-            user.is_active = True
-            user.is_superadmin = True
-            print(f"Reset platform admin credentials: {PLATFORM_USERNAME}")
+            if configured and not verify_password(configured, user.password_hash):
+                user.password_hash = get_password_hash(configured)
+                user.is_active = True
+                user.is_superadmin = True
+                print(f"Applied PLATFORM_ADMIN_PASSWORD to platform admin: {user.username}")
+            elif settings.is_production and is_default_platform_password(user):
+                print(
+                    f"WARNING: platform admin '{user.username}' still uses the public default password. "
+                    "Change it from the platform panel or set PLATFORM_ADMIN_PASSWORD."
+                )
         else:
+            password = _initial_password(configured, PLATFORM_PASSWORD, f"platform admin '{PLATFORM_USERNAME}'")
             db.add(
                 PlatformUser(
                     username=PLATFORM_USERNAME,
-                    password_hash=password_hash,
+                    password_hash=get_password_hash(password),
                     full_name="Platform Administrator",
                     is_superadmin=True,
                 )
@@ -116,20 +143,21 @@ async def ensure_demo_admin() -> None:
                 )
             )
             user = user_result.scalar_one_or_none()
-            password_hash = get_password_hash(DEMO_PASSWORD)
+            configured = settings.DEMO_ADMIN_PASSWORD
 
             if user:
-                user.password_hash = password_hash
-                user.is_active = True
-                user.is_tenant_admin = True
+                if configured and not verify_password(configured, user.password_hash):
+                    user.password_hash = get_password_hash(configured)
+                    user.is_active = True
+                    user.is_tenant_admin = True
+                    print(f"Applied DEMO_ADMIN_PASSWORD to {DEMO_USERNAME} @ {DEMO_TENANT_CODE}")
                 if not user.default_branch_id:
                     user.default_branch_id = branch.id
-                print(f"Reset password for {DEMO_USERNAME} @ {DEMO_TENANT_CODE}")
             else:
                 user = User(
                     tenant_id=tenant.id,
                     username=DEMO_USERNAME,
-                    password_hash=password_hash,
+                    password_hash=get_password_hash(configured or DEMO_PASSWORD),
                     full_name="Lab Administrator",
                     full_name_ar="مدير المختبر",
                     is_tenant_admin=True,

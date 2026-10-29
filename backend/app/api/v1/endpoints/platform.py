@@ -60,9 +60,25 @@ async def revenue_dashboard(db: PlatformDbSession, admin: PlatformAdmin):
     return await PlatformService(db).get_revenue_dashboard()
 
 
+def _access_state(tenant: Tenant, sub: TenantSubscription) -> tuple[str, int]:
+    """What the laboratory experiences now, plus whole days until access ends."""
+    now = datetime.now(timezone.utc)
+    is_trial = tenant.status == TenantStatus.TRIAL
+    cutoff = sub.expires_at if is_trial else (sub.grace_ends_at or sub.expires_at)
+    days_remaining = max(0, -(-int((sub.expires_at - now).total_seconds()) // 86400))
+    if tenant.status in (TenantStatus.SUSPENDED, TenantStatus.LOCKED):
+        return "suspended", days_remaining
+    if sub.status in (SubscriptionStatus.CANCELLED, SubscriptionStatus.EXPIRED) or now > cutoff:
+        return "expired", 0
+    if now > sub.expires_at:
+        return "grace", max(0, (cutoff - now).days)
+    return ("trial" if is_trial else "active"), days_remaining
+
+
 @router.get("/subscriptions", response_model=list[SubscriptionListItem])
 async def list_subscriptions(db: PlatformDbSession, admin: PlatformAdmin):
     rows = await PlatformService(db).list_subscriptions()
+    states = {row["subscription"].id: _access_state(row["tenant"], row["subscription"]) for row in rows}
     return [
         SubscriptionListItem(
             subscription_id=row["subscription"].id,
@@ -78,6 +94,9 @@ async def list_subscriptions(db: PlatformDbSession, admin: PlatformAdmin):
             auto_renew=row["subscription"].auto_renew,
             amount_paid=float(row["subscription"].amount_paid or 0),
             price_egp=float(row["plan"].price_egp),
+            billing_cycle=row["plan"].billing_cycle.value,
+            access_state=states[row["subscription"].id][0],
+            days_remaining=states[row["subscription"].id][1],
         )
         for row in rows
     ]
@@ -186,7 +205,11 @@ async def suspend_tenant(tenant_id: UUID, db: PlatformDbSession, admin: Platform
 
 @router.post("/tenants/{tenant_id}/activate", response_model=MessageResponse)
 async def activate_tenant(tenant_id: UUID, db: PlatformDbSession, admin: PlatformAdmin):
-    if not await PlatformService(db).activate_tenant(tenant_id, admin.id):
+    try:
+        activated = await PlatformService(db).activate_tenant(tenant_id, admin.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if not activated:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return MessageResponse(message="Tenant activated", message_ar="تم تفعيل المختبر")
 

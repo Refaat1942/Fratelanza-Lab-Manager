@@ -52,10 +52,25 @@ class Settings(BaseSettings):
     DEFAULT_LOCALE: str = "ar"
     SUPPORTED_LOCALES: List[str] = ["ar", "en"]
 
+    # Bootstrap admin passwords. Applied on every start when set (use to rotate or recover);
+    # when unset, existing passwords are never touched.
+    PLATFORM_ADMIN_PASSWORD: str | None = None
+    DEMO_ADMIN_PASSWORD: str | None = None
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.lower() == "production"
+
     GRACE_PERIOD_DAYS: int = 7
     RENEWAL_REMINDER_DAYS: int = 14
 
 
+DEFAULT_SECRET_KEYS = {"change-me-in-production-use-openssl-rand-hex-32", "change-me-in-production"}
+
+
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    if settings.is_production and (settings.SECRET_KEY in DEFAULT_SECRET_KEYS or len(settings.SECRET_KEY) < 32):
+        raise RuntimeError("SECRET_KEY must be set to a random value of at least 32 characters in production")
+    return settings

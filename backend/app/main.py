@@ -5,15 +5,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.rate_limit import limiter
 
 settings = get_settings()
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.RATE_LIMIT])
 
 
 @asynccontextmanager

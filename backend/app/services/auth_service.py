@@ -68,8 +68,14 @@ class AuthService:
                 tokens = None
 
         if tokens is None:
-            # User may still exist in the shared platform DB from an older create path — copy then retry once.
-            if settings.TENANT_DATABASE_PER_CUSTOMER and database_name != manager.platform_database_name:
+            # Laboratories created before per-tenant databases still have their users in the
+            # shared platform DB. Copy them over once — only when the dedicated DB has no users
+            # yet, so a mistyped password can never overwrite a live laboratory's data.
+            if (
+                settings.TENANT_DATABASE_PER_CUSTOMER
+                and database_name != manager.platform_database_name
+                and not await cls._tenant_has_users(factory, tenant.id)
+            ):
                 await TenantProvisioningService(platform_db).migrate_existing_tenant(tenant.id)
                 await platform_db.commit()
                 async with factory() as tenant_db:
@@ -82,6 +88,14 @@ class AuthService:
             await TenantProvisioningService(platform_db).sync_missing_data_from_platform(tenant, database_name)
             await platform_db.commit()
         return tokens
+
+    @staticmethod
+    async def _tenant_has_users(factory, tenant_id: UUID) -> bool:
+        async with factory() as tenant_db:
+            count = await tenant_db.scalar(
+                select(func.count()).select_from(User).where(User.tenant_id == tenant_id)
+            )
+        return bool(count)
 
     async def _find_lab_user(self, username: str, tenant_id: UUID) -> User | None:
         result = await self.tenant_db.execute(
@@ -164,7 +178,9 @@ class AuthService:
             raise ValueError("Invalid credentials")
         if not user.is_active:
             raise ValueError("Account is inactive")
+        return await self._issue_lab_tokens(user, database_name)
 
+    async def _issue_lab_tokens(self, user: User, database_name: str) -> TokenResponse:
         permissions = self._extract_permissions(user)
         access_token = create_access_token(
             str(user.id),
@@ -189,6 +205,47 @@ class AuthService:
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         )
 
+    @classmethod
+    async def demo_login(cls, platform_db: AsyncSession, tenant: Tenant) -> TokenResponse:
+        """Sign in to a demo laboratory as its administrator (passwordless demo link)."""
+        database_name = await TenantProvisioningService(platform_db).ensure_tenant_database(tenant)
+        await platform_db.commit()
+        factory = await manager.get_tenant_session_factory(database_name)
+        async with factory() as tenant_db:
+            service = cls(platform_db, tenant_db)
+            result = await tenant_db.execute(
+                select(User)
+                .options(
+                    selectinload(User.roles)
+                    .selectinload(UserRole.role)
+                    .selectinload(Role.permissions)
+                    .selectinload(RolePermission.permission)
+                )
+                .where(
+                    User.tenant_id == tenant.id,
+                    User.is_tenant_admin.is_(True),
+                    User.is_active.is_(True),
+                    User.deleted_at.is_(None),
+                )
+                .order_by(User.created_at.asc())
+                .limit(1)
+            )
+            user = result.scalar_one_or_none()
+            if not user:
+                raise ValueError("Demo administrator account not found")
+            return await service._issue_lab_tokens(user, database_name)
+
+    @staticmethod
+    async def change_password(
+        db: AsyncSession, user: User | PlatformUser, current_password: str, new_password: str
+    ) -> None:
+        if not verify_password(current_password, user.password_hash):
+            raise ValueError("Current password is incorrect")
+        if current_password == new_password:
+            raise ValueError("New password must be different from the current password")
+        user.password_hash = get_password_hash(new_password)
+        await db.flush()
+
     async def platform_login(self, data: PlatformLoginRequest) -> TokenResponse:
         if self.platform_db is None:
             raise ValueError("Platform database session required")
@@ -202,8 +259,12 @@ class AuthService:
         user = result.scalar_one_or_none()
         if not user or not verify_password(data.password, user.password_hash):
             raise ValueError("Invalid credentials")
+        return self._issue_platform_tokens(user)
+
+    @staticmethod
+    def _issue_platform_tokens(user: PlatformUser) -> TokenResponse:
         access_token = create_access_token(str(user.id), role="platform_admin")
-        refresh_token = create_refresh_token(str(user.id))
+        refresh_token = create_refresh_token(str(user.id), role="platform_admin")
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
@@ -215,6 +276,18 @@ class AuthService:
         payload = verify_token(refresh_token, token_type="refresh")
         if not payload:
             raise ValueError("Invalid refresh token")
+
+        if payload.get("role") == "platform_admin":
+            admin = (
+                await platform_db.execute(
+                    select(PlatformUser).where(
+                        PlatformUser.id == UUID(payload["sub"]), PlatformUser.is_active.is_(True)
+                    )
+                )
+            ).scalar_one_or_none()
+            if not admin:
+                raise ValueError("User not found")
+            return cls._issue_platform_tokens(admin)
 
         database_name = payload.get("database_name")
         tenant_id = payload.get("tenant_id")

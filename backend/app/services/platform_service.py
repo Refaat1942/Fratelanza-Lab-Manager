@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
@@ -7,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
-from app.core.security import get_password_hash
+from app.core.security import create_demo_access_token, get_password_hash
 from app.models.auth import User
 from app.models.tenant_config import Branch, TenantBranding
 from app.models.platform import (
@@ -411,12 +412,18 @@ class PlatformService:
             "days_remaining": days_remaining,
             "status": tenant.status,
             "login_path": f"/login?lab={tenant.code}",
+            "access_path": (
+                f"/demo?token={create_demo_access_token(tenant.id, expires_at)}"
+                if expires_at and expires_at > datetime.now(timezone.utc)
+                else None
+            ),
         }
 
     async def create_demo_link(self, data: DemoLinkCreate, admin_id: UUID) -> dict:
         plan = await self._resolve_demo_plan(data.plan_id)
         code = data.code.strip().lower()
-        existing = await self.db.execute(select(Tenant).where(Tenant.code == code, Tenant.deleted_at.is_(None)))
+        # tenants.code is unique across deleted rows too
+        existing = await self.db.execute(select(Tenant).where(Tenant.code == code))
         if existing.scalar_one_or_none():
             raise ValueError("Laboratory code already exists")
         admin_username = data.admin_username.strip().lower()
@@ -474,7 +481,7 @@ class PlatformService:
                 tenant.id,
                 UserCreate(
                     username=admin_username,
-                    password=data.admin_password,
+                    password=data.admin_password or secrets.token_urlsafe(16),
                     full_name=data.admin_name,
                     is_tenant_admin=True,
                     is_system=True,
@@ -732,8 +739,13 @@ class PlatformService:
         tenant = await self.get_tenant(tenant_id)
         if not tenant:
             return False
-        tenant.status = TenantStatus.ACTIVE
         sub = await self.get_active_subscription(tenant_id)
+        if sub and sub.expires_at < datetime.now(timezone.utc) and tenant.status != TenantStatus.TRIAL:
+            grace_end = sub.grace_ends_at or sub.expires_at
+            if grace_end < datetime.now(timezone.utc):
+                raise ValueError("Subscription has expired — renew it to restore access")
+        if tenant.status != TenantStatus.TRIAL:
+            tenant.status = TenantStatus.ACTIVE
         if sub:
             sub.status = SubscriptionStatus.ACTIVE
         await self.log_action(admin_id, "tenant_activated", "tenant", tenant.id, str(tenant.id))
@@ -768,6 +780,7 @@ class PlatformService:
             raise ValueError("Plan not found")
 
         days = data.days or (30 if plan.billing_cycle == BillingCycle.MONTHLY else 365)
+        paid = float(data.amount_paid if data.amount_paid is not None else plan.price_egp)
         now = datetime.now(timezone.utc)
         base = sub.expires_at if sub and sub.expires_at > now else now
 
@@ -776,7 +789,7 @@ class PlatformService:
             sub.status = SubscriptionStatus.ACTIVE
             sub.expires_at = base + timedelta(days=days)
             sub.grace_ends_at = sub.expires_at + timedelta(days=settings.GRACE_PERIOD_DAYS)
-            sub.amount_paid = float(sub.amount_paid or 0) + (data.amount_paid or plan.price_egp)
+            sub.amount_paid = float(sub.amount_paid or 0) + paid
             sub.auto_renew = data.auto_renew if data.auto_renew is not None else sub.auto_renew
         else:
             sub = TenantSubscription(
@@ -785,7 +798,7 @@ class PlatformService:
                 status=SubscriptionStatus.ACTIVE,
                 expires_at=now + timedelta(days=days),
                 grace_ends_at=now + timedelta(days=days + settings.GRACE_PERIOD_DAYS),
-                amount_paid=data.amount_paid or plan.price_egp,
+                amount_paid=paid,
                 auto_renew=data.auto_renew if data.auto_renew is not None else True,
             )
             self.db.add(sub)
@@ -793,9 +806,10 @@ class PlatformService:
         tenant.status = TenantStatus.ACTIVE
         await self.log_action(
             admin_id, "subscription_renewed", "subscription", tenant_id, str(tenant_id),
-            {"days": days, "plan_id": str(plan.id), "amount": data.amount_paid or plan.price_egp},
+            {"days": days, "plan_id": str(plan.id), "amount": paid},
         )
         await self.db.flush()
+        await self._sync_subscription_branding(tenant, sub.expires_at)
         return sub
 
     async def change_plan(self, tenant_id: UUID, data: TenantChangePlanRequest, admin_id: UUID) -> Optional[TenantSubscription]:
