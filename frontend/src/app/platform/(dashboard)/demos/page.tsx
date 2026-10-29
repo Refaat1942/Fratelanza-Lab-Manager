@@ -3,8 +3,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import {
-  Plus, Copy, Pencil, Link2, CalendarClock, Pause, Play, MessageCircle, Check, KeyRound, Zap,
+  Plus, Copy, Pencil, Link2, CalendarClock, Pause, Play, MessageCircle, Check, KeyRound, ExternalLink,
 } from "lucide-react";
+import { copyToClipboard } from "@/lib/clipboard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -87,7 +88,9 @@ export default function DemoLinksPage() {
   const [createForm, setCreateForm] = useState(emptyCreate);
   const [editForm, setEditForm] = useState({ valid_to: "", admin_password: "" });
   const [saving, setSaving] = useState(false);
+  // Share dialog: opened right after creating a demo, or for any demo when copying fails.
   const [created, setCreated] = useState<DemoLink | null>(null);
+  const [createdIsNew, setCreatedIsNew] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const load = useCallback(() => {
@@ -111,18 +114,32 @@ export default function DemoLinksPage() {
       : `Try the laboratory system free until ${until}:\n${url}\nThe link opens the system directly — no password needed.`;
   };
 
-  const copyText = (text: string, done: string) =>
-    navigator.clipboard.writeText(text).then(
-      () => toast.success(done),
-      () => toast.error(isAr ? "فشل النسخ" : "Copy failed"),
-    );
+  const copyText = async (text: string, done: string) => {
+    const ok = await copyToClipboard(text);
+    if (ok) toast.success(done);
+    return ok;
+  };
 
-  const copyInstantLink = (demo: DemoLink) => {
-    if (!demo.access_path) {
-      toast.error(isAr ? "العرض متوقف أو منتهي — فعّله أو مدّده أولاً" : "Demo is paused or expired — resume or extend it first");
-      return;
+  const requireActive = (demo: DemoLink) => {
+    if (demo.access_path) return true;
+    toast.error(isAr ? "العرض متوقف أو منتهي — فعّله أو مدّده أولاً" : "Demo is paused or expired — resume or extend it first");
+    return false;
+  };
+
+  const copyInstantLink = async (demo: DemoLink) => {
+    if (!requireActive(demo)) return false;
+    const ok = await copyText(absoluteUrl(demo.access_path!), isAr ? "تم نسخ الرابط — الصقه للعميل" : "Link copied — paste it to your prospect");
+    if (!ok) {
+      // Clipboard blocked: show the link so it can be copied by hand.
+      setCreatedIsNew(false);
+      setCreated(demo);
     }
-    copyText(absoluteUrl(demo.access_path), isAr ? "تم نسخ الرابط المباشر" : "Instant link copied");
+    return ok;
+  };
+
+  const openDemo = (demo: DemoLink) => {
+    if (!requireActive(demo)) return;
+    window.open(absoluteUrl(demo.access_path!), "_blank", "noopener");
   };
 
   const copyLoginDetails = (demo: DemoLink) => {
@@ -156,6 +173,7 @@ export default function DemoLinksPage() {
       setOpen(false);
       setCreateForm(emptyCreate);
       setCopied(false);
+      setCreatedIsNew(true);
       setCreated(data);
       load();
     } catch (err) {
@@ -257,8 +275,12 @@ export default function DemoLinksPage() {
         const state = demoState(demo);
         return (
           <div className="flex items-center justify-end gap-1">
-            <Button size="sm" onClick={() => copyInstantLink(demo)} disabled={state !== "active"}>
-              <Zap className="h-3.5 w-3.5" />
+            <Button size="sm" onClick={() => openDemo(demo)} disabled={state !== "active"}>
+              <ExternalLink className="h-3.5 w-3.5" />
+              {isAr ? "فتح العرض" : "Open demo"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => copyInstantLink(demo)} disabled={state !== "active"}>
+              <Copy className="h-3.5 w-3.5" />
               {isAr ? "نسخ الرابط" : "Copy link"}
             </Button>
             <Button
@@ -447,10 +469,14 @@ export default function DemoLinksPage() {
       </div>
 
       {/* Shown right after creation: the link is the whole point, so put it front and center. */}
-      <Dialog open={!!created} onOpenChange={(o) => !o && setCreated(null)}>
+      <Dialog open={!!created} onOpenChange={(o) => { if (!o) { setCreated(null); setCopied(false); } }}>
         <DialogContent className="sm:max-w-lg" dir={isAr ? "rtl" : "ltr"}>
           <DialogHeader>
-            <DialogTitle>{isAr ? "الرابط جاهز للإرسال" : "Your demo link is ready"}</DialogTitle>
+            <DialogTitle>
+              {createdIsNew
+                ? (isAr ? "الرابط جاهز للإرسال" : "Your demo link is ready")
+                : (isAr ? "رابط العرض" : "Demo link")}
+            </DialogTitle>
             <DialogDescription>
               {created &&
                 (isAr
@@ -460,21 +486,35 @@ export default function DemoLinksPage() {
           </DialogHeader>
           {created?.access_path && (
             <div className="space-y-3">
-              <div dir="ltr" className="break-all rounded-lg border bg-muted/50 p-3 font-mono text-xs">
-                {absoluteUrl(created.access_path)}
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <Input
+                dir="ltr"
+                readOnly
+                aria-label={isAr ? "رابط العرض" : "Demo link"}
+                value={absoluteUrl(created.access_path)}
+                onFocus={(e) => e.currentTarget.select()}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground">
+                {isAr
+                  ? "لو زر النسخ لم يعمل: اضغط على الرابط ثم Ctrl+C."
+                  : "If the copy button doesn't work: click the link, then press Ctrl+C."}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-3">
                 <Button
-                  onClick={() => {
-                    copyInstantLink(created);
-                    setCopied(true);
+                  onClick={async () => {
+                    const ok = await copyToClipboard(absoluteUrl(created.access_path!));
+                    setCopied(ok);
+                    if (!ok) toast.error(isAr ? "اضغط على الرابط ثم Ctrl+C" : "Click the link, then press Ctrl+C");
                   }}
                 >
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  {copied ? (isAr ? "تم النسخ" : "Copied") : (isAr ? "نسخ الرابط" : "Copy link")}
+                  {copied ? (isAr ? "تم النسخ" : "Copied") : (isAr ? "نسخ" : "Copy")}
+                </Button>
+                <Button variant="outline" onClick={() => openDemo(created)}>
+                  <ExternalLink className="h-4 w-4" /> {isAr ? "فتح" : "Open"}
                 </Button>
                 <Button variant="outline" onClick={() => shareWhatsApp(created)}>
-                  <MessageCircle className="h-4 w-4" /> {isAr ? "إرسال واتساب" : "Send on WhatsApp"}
+                  <MessageCircle className="h-4 w-4" /> {isAr ? "واتساب" : "WhatsApp"}
                 </Button>
               </div>
             </div>

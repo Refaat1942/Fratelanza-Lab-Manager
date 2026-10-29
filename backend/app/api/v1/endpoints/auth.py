@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from app.api.deps import CurrentUser, DbSession, PlatformDbSession
 from app.bootstrap.admin_credentials import is_default_platform_password
 from app.core.rate_limit import limiter
-from app.core.security import verify_token
+from app.core.security import verify_demo_access_key, verify_token
 from app.models.platform import Tenant, TenantStatus
 from app.schemas.common import MessageResponse
 from app.schemas.auth import (
@@ -64,14 +64,21 @@ async def refresh_token(data: RefreshTokenRequest, platform_db: PlatformDbSessio
 @limiter.limit("20/minute")
 async def demo_login(request: Request, data: DemoLoginRequest, platform_db: PlatformDbSession):
     """Exchange a passwordless demo link for a session. Works only while the demo is valid."""
-    payload = verify_token(data.token, token_type="demo_access")
-    if not payload:
+    tenant_id = verify_demo_access_key(data.token)
+    if tenant_id is None:
+        payload = verify_token(data.token, token_type="demo_access")  # older JWT links
+        tenant_id = UUID(payload["sub"]) if payload else None
+    if tenant_id is None:
         raise HTTPException(status_code=401, detail="Demo link is invalid or has expired")
-    tenant = await platform_db.get(Tenant, UUID(payload["sub"]))
+    tenant = await platform_db.get(Tenant, tenant_id)
     if not tenant or tenant.deleted_at is not None or tenant.status != TenantStatus.TRIAL:
         raise HTTPException(status_code=403, detail="This demo link is no longer active")
     try:
         await TenantAccessService(platform_db).assert_tenant_active(tenant.id)
+    except ValueError:
+        # Expired or paused demo.
+        raise HTTPException(status_code=403, detail="This demo link is no longer active")
+    try:
         return await AuthService.demo_login(platform_db, tenant)
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))

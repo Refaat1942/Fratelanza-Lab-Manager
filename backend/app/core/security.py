@@ -1,3 +1,6 @@
+import hashlib
+import hmac
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -30,7 +33,9 @@ def create_access_token(
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    payload: dict[str, Any] = {"sub": subject, "exp": expire, "type": "access"}
+    # jti makes every token unique — two logins in the same second would otherwise
+    # produce identical refresh tokens and collide on refresh_tokens.token_hash.
+    payload: dict[str, Any] = {"sub": subject, "exp": expire, "type": "access", "jti": secrets.token_hex(8)}
     if tenant_id:
         payload["tenant_id"] = str(tenant_id)
     if database_name:
@@ -50,7 +55,7 @@ def create_refresh_token(
     role: Optional[str] = None,
 ) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    payload: dict[str, Any] = {"sub": subject, "exp": expire, "type": "refresh"}
+    payload: dict[str, Any] = {"sub": subject, "exp": expire, "type": "refresh", "jti": secrets.token_hex(8)}
     if tenant_id:
         payload["tenant_id"] = str(tenant_id)
     if database_name:
@@ -61,9 +66,31 @@ def create_refresh_token(
 
 
 def create_demo_access_token(tenant_id: UUID, expires_at: datetime) -> str:
-    """Passwordless demo link — valid until the demo expires."""
+    """Legacy passwordless demo link (JWT). Still accepted for links already sent."""
     payload: dict[str, Any] = {"sub": str(tenant_id), "exp": expires_at, "type": "demo_access"}
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def _demo_signature(tenant_id: UUID) -> str:
+    digest = hmac.new(settings.SECRET_KEY.encode(), f"demo-access:{tenant_id}".encode(), hashlib.sha256)
+    return digest.hexdigest()[:20]
+
+
+def create_demo_access_key(tenant_id: UUID) -> str:
+    """Short demo link key: only [0-9a-f-], so WhatsApp and SMS can't mangle it.
+    Validity (expiry, pause) is enforced by the demo's subscription, not the key."""
+    return f"{tenant_id}-{_demo_signature(tenant_id)}"
+
+
+def verify_demo_access_key(key: str) -> Optional[UUID]:
+    tenant_part, _, signature = key.strip().rpartition("-")
+    try:
+        tenant_id = UUID(tenant_part)
+    except ValueError:
+        return None
+    if not hmac.compare_digest(signature, _demo_signature(tenant_id)):
+        return None
+    return tenant_id
 
 
 def decode_token(token: str) -> dict[str, Any]:

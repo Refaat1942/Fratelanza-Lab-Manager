@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
-from app.core.security import create_demo_access_token, get_password_hash
+from app.core.security import create_demo_access_key, get_password_hash
 from app.models.auth import User
 from app.models.tenant_config import Branch, TenantBranding
 from app.models.platform import (
@@ -414,7 +414,7 @@ class PlatformService:
             "status": TenantStatus.SUSPENDED if paused else tenant.status,
             "login_path": f"/login?lab={tenant.code}",
             "access_path": (
-                f"/demo?token={create_demo_access_token(tenant.id, expires_at)}"
+                f"/demo?key={create_demo_access_key(tenant.id)}"
                 if expires_at and expires_at > datetime.now(timezone.utc) and not paused
                 else None
             ),

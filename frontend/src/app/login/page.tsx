@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { api, getApiError, localizeApiMessage } from "@/lib/api";
+import { setTokens } from "@/lib/session";
 import { useAuthStore } from "@/stores/auth-store";
 import { useBrandingStore } from "@/stores/branding-store";
 import { BrandingLogo } from "@/components/branding/branding-logo";
@@ -83,7 +84,6 @@ function LoginPageContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    localStorage.removeItem("is_platform_admin");
     localStorage.removeItem("tenant_id");
     const normalizedTenantCode = tenantCode.trim().toLowerCase();
     try {
@@ -92,8 +92,7 @@ function LoginPageContent() {
         password,
         tenant_code: normalizedTenantCode,
       });
-      localStorage.setItem("access_token", tokens.access_token);
-      localStorage.setItem("refresh_token", tokens.refresh_token);
+      setTokens(tokens.access_token, tokens.refresh_token, "lab");
       const { data: user } = await api.get("/auth/me");
       setUser(user);
       setStoreTenant(normalizedTenantCode);

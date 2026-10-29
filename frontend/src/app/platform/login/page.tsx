@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Shield, Loader2 } from "lucide-react";
 import { api, getApiError } from "@/lib/api";
+import { clearSession, setTokens } from "@/lib/session";
 import { useLocale } from "@/hooks/use-locale";
 import type { Locale } from "@/lib/i18n";
 import { toast } from "sonner";
@@ -29,16 +30,10 @@ export default function PlatformLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    localStorage.removeItem("tenant_id");
-    localStorage.removeItem("is_platform_admin");
-    localStorage.removeItem("labmaster-branding");
+    clearSession("platform");
     try {
       const { data } = await api.post("/auth/platform/login", { username, password });
-      localStorage.setItem("access_token", data.access_token);
-      localStorage.setItem("refresh_token", data.refresh_token);
-      localStorage.setItem("is_platform_admin", "true");
+      setTokens(data.access_token, data.refresh_token, "platform");
       await api.get("/auth/platform/me");
       toast.success(isAr ? "مرحباً بك في منصة المالك" : "Welcome, Platform Admin!");
       router.push("/platform");
