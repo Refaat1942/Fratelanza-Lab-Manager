@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { isAxiosError } from "axios";
 import { useRouter, usePathname } from "next/navigation";
-import { Loader2 } from "lucide-react";
-import { api, getApiError } from "@/lib/api";
+import { Loader2, WifiOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useBrandingStore } from "@/stores/branding-store";
 import { useFeaturesStore } from "@/stores/features-store";
@@ -13,20 +15,28 @@ import { clearSession } from "@/lib/session";
 export function LabAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
   const { setUser } = useAuthStore();
+  const locale = useAuthStore((s) => s.locale);
   const { setBranding } = useBrandingStore();
   const { setFeatures, clearFeatures, isModuleEnabled, loaded: featuresLoaded } = useFeaturesStore();
   const [ready, setReady] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
+  // Verify the session once per app load — not on every navigation. Each page's own
+  // requests still go through the 401/403 handling in lib/api.
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     const isPlatform = localStorage.getItem("is_platform_admin") === "true";
 
     if (!token || isPlatform) {
-      router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
+      router.replace(`/login?redirect=${encodeURIComponent(pathnameRef.current)}`);
       return;
     }
 
+    setOffline(false);
     api
       .get("/auth/me")
       .then(async (res) => {
@@ -46,15 +56,20 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
         setReady(true);
       })
       .catch((err) => {
-        const msg = getApiError(err);
-        if (msg.startsWith("Tenant account is")) {
-          sessionStorage.setItem("login_error", msg);
+        const status = isAxiosError(err) ? err.response?.status : undefined;
+        // A dropped connection is not a reason to sign the user out.
+        if (status === undefined || status >= 500) {
+          setOffline(true);
+          return;
         }
+        const detail = isAxiosError(err) ? (err.response?.data as { detail?: unknown })?.detail : undefined;
+        const blocked = typeof detail === "string" && detail.startsWith("Tenant account is");
+        if (blocked) sessionStorage.setItem("login_error", detail);
         clearSession();
         clearFeatures();
-        router.replace(msg.startsWith("Tenant account is") ? "/login?suspended=1" : "/login");
+        router.replace(blocked ? "/login?suspended=1" : "/login");
       });
-  }, [router, pathname, setUser, setBranding, setFeatures, clearFeatures]);
+  }, [attempt, router, setUser, setBranding, setFeatures, clearFeatures]);
 
   useEffect(() => {
     if (!ready || !featuresLoaded) return;
@@ -63,6 +78,20 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
       router.replace("/dashboard");
     }
   }, [ready, featuresLoaded, pathname, isModuleEnabled, router]);
+
+  if (offline) {
+    const isAr = locale === "ar";
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-3 bg-background p-6 text-center" dir={isAr ? "rtl" : "ltr"}>
+        <WifiOff className="h-10 w-10 text-muted-foreground" />
+        <p className="font-semibold">{isAr ? "تعذّر الاتصال بالخادم" : "Can't reach the server"}</p>
+        <p className="text-sm text-muted-foreground">
+          {isAr ? "تحقق من الإنترنت ثم أعد المحاولة." : "Check your internet connection and try again."}
+        </p>
+        <Button onClick={() => setAttempt((a) => a + 1)}>{isAr ? "إعادة المحاولة" : "Try again"}</Button>
+      </div>
+    );
+  }
 
   if (!ready) {
     return (
@@ -79,6 +108,7 @@ export function PlatformAuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const setPlatformAdmin = useAuthStore((s) => s.setPlatformAdmin);
   const [ready, setReady] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -95,11 +125,17 @@ export function PlatformAuthGuard({ children }: { children: React.ReactNode }) {
         setPlatformAdmin(res.data);
         setReady(true);
       })
-      .catch(() => {
+      .catch((err) => {
+        const status = isAxiosError(err) ? err.response?.status : undefined;
+        if (status === undefined || status >= 500) {
+          // Transient failure: keep the session and try again shortly.
+          setTimeout(() => setAttempt((a) => a + 1), 3000);
+          return;
+        }
         clearSession();
         router.replace("/platform/login");
       });
-  }, [router, setPlatformAdmin]);
+  }, [attempt, router, setPlatformAdmin]);
 
   if (!ready) {
     return (

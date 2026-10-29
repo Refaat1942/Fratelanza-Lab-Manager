@@ -56,10 +56,26 @@ function refreshAccessToken(): Promise<string> {
 
 const SIGN_IN_URLS = ["/auth/login", "/auth/platform/login", "/auth/demo-login"];
 
+const TRANSIENT_STATUSES = new Set([502, 503, 504]);
+
 api.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
-    const config = error.config as typeof error.config & { _retry?: boolean };
+    const config = error.config as typeof error.config & { _retry?: boolean; _netRetry?: boolean };
+    // Retry read-only requests once after a dropped connection or a gateway hiccup
+    // (e.g. the backend restarting) instead of showing "Network Error" straight away.
+    const transient = !error.response || TRANSIENT_STATUSES.has(error.response.status);
+    if (
+      transient &&
+      config &&
+      !config._netRetry &&
+      (config.method || "get").toLowerCase() === "get" &&
+      error.code !== "ERR_CANCELED"
+    ) {
+      config._netRetry = true;
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      return api(config);
+    }
     // Sign-in screens show their own errors; never redirect away from them.
     const isAuthCall = SIGN_IN_URLS.some((u) => (config?.url || "").includes(u));
     if (error.response?.status === 403 && typeof window !== "undefined" && !isAuthCall) {
@@ -108,6 +124,9 @@ const ARABIC_MESSAGES: Record<string, string> = {
   "Subscription has expired — renew it to restore access": "انتهى الاشتراك — جدّده لاستعادة الدخول",
   "Enter the result values before releasing": "أدخل قيم النتيجة قبل الإصدار",
   "Laboratory code already exists": "كود المختبر مستخدم بالفعل",
+  "Can't reach the server. Check your internet connection and try again.": "تعذّر الاتصال بالخادم. تحقق من الإنترنت وأعد المحاولة.",
+  "The server took too long to respond. Try again.": "الخادم تأخر في الرد. حاول مرة أخرى.",
+  "The server is restarting. Try again in a moment.": "الخادم يُعاد تشغيله. حاول بعد لحظات.",
   "Tenant code already exists": "كود المختبر مستخدم بالفعل",
 };
 
@@ -134,6 +153,15 @@ export function localizeApiMessage(message: string, locale: "ar" | "en" = curren
 
 export function getApiError(error: unknown): string {
   if (axios.isAxiosError(error)) {
+    if (!error.response) {
+      if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
+        return localizeApiMessage("The server took too long to respond. Try again.");
+      }
+      return localizeApiMessage("Can't reach the server. Check your internet connection and try again.");
+    }
+    if (error.response.status >= 502 && error.response.status <= 504) {
+      return localizeApiMessage("The server is restarting. Try again in a moment.");
+    }
     if (error.response?.status === 429) {
       return localizeApiMessage("Too many attempts. Wait a minute and try again.");
     }

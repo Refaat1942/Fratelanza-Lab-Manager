@@ -59,8 +59,9 @@ export function DashboardLayout({
         )}
         <main className="relative flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
-            <div className="animate-float absolute -top-20 end-0 h-56 w-56 rounded-full bg-emerald-400/10 blur-3xl" />
-            <div className="animate-float absolute bottom-0 start-0 h-64 w-64 rounded-full bg-violet-400/10 blur-3xl [animation-delay:2s]" />
+            {/* Static on purpose: animating large blurred layers behind the scroll area makes scrolling janky on modest PCs. */}
+            <div className="absolute -top-20 end-0 h-56 w-56 rounded-full bg-emerald-400/10 blur-3xl" />
+            <div className="absolute bottom-0 start-0 h-64 w-64 rounded-full bg-violet-400/10 blur-3xl" />
           </div>
           <div className="relative mx-auto max-w-[1600px]">
             <AnimatedPage>{children}</AnimatedPage>
