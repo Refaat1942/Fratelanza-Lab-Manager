@@ -45,7 +45,7 @@ export default function SuppliersPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get(`/suppliers?page_size=100${queryParams}`)
+    api.get(`/suppliers?page_size=1000${queryParams}`)
       .then((res) => setSuppliers(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));

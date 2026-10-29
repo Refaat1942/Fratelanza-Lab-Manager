@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.referrals import ReferralCreate, ReferralResponse
 from app.services.referral_service import ReferralService
@@ -14,8 +15,8 @@ router = APIRouter(prefix="/referrals", tags=["Referrals"])
 @router.get("")
 async def list_referrals(
     db: DbSession, tenant: CurrentTenant,
-    user: CurrentUser = require_permission("doctors.read"),
-    page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    user: User = require_permission("doctors.read"),
+    page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=1000),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
 ):
@@ -29,13 +30,13 @@ async def list_referrals(
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-async def create_referral(data: ReferralCreate, db: DbSession, tenant: CurrentTenant, user: CurrentUser = require_permission("doctors.create")):
+async def create_referral(data: ReferralCreate, db: DbSession, tenant: CurrentTenant, user: User = require_permission("doctors.create")):
     ref = await ReferralService(db).create_referral(tenant.id, data)
     return {"id": str(ref.id)}
 
 
 @router.delete("/{referral_id}", response_model=MessageResponse)
-async def delete_referral(referral_id: UUID, db: DbSession, tenant: CurrentTenant, user: CurrentUser = require_permission("doctors.delete")):
+async def delete_referral(referral_id: UUID, db: DbSession, tenant: CurrentTenant, user: User = require_permission("doctors.delete")):
     if not await ReferralService(db).delete_referral(tenant.id, referral_id):
         raise HTTPException(status_code=404, detail="Referral not found")
     return MessageResponse(message="Referral deleted", message_ar="تم حذف الإحالة")

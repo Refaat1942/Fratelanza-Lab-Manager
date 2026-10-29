@@ -51,7 +51,7 @@ export default function TestsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get(`/tests?page_size=100${queryParams}`)
+    api.get(`/tests?page_size=1000${queryParams}`)
       .then((testsRes) => {
         setTests(testsRes.data.items || []);
       })

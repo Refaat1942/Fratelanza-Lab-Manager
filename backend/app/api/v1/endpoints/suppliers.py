@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.suppliers import SupplierCreate, SupplierResponse, SupplierUpdate
 from app.services.supplier_service import SupplierService
@@ -15,9 +16,9 @@ router = APIRouter(prefix="/suppliers", tags=["Suppliers"])
 async def list_suppliers(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.read"),
+    user: User = require_permission("inventory.read"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     search: str | None = None,
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
@@ -40,7 +41,7 @@ async def create_supplier(
     data: SupplierCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.manage"),
+    user: User = require_permission("inventory.manage"),
 ):
     supplier = await SupplierService(db).create_supplier(tenant.id, data, user.id)
     return SupplierResponse.model_validate(supplier)
@@ -52,7 +53,7 @@ async def update_supplier(
     data: SupplierUpdate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.manage"),
+    user: User = require_permission("inventory.manage"),
 ):
     supplier = await SupplierService(db).update_supplier(tenant.id, supplier_id, data, user.id)
     if not supplier:
@@ -65,7 +66,7 @@ async def delete_supplier(
     supplier_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("inventory.manage"),
+    user: User = require_permission("inventory.manage"),
 ):
     deleted = await SupplierService(db).delete_supplier(tenant.id, supplier_id, user.id)
     if not deleted:

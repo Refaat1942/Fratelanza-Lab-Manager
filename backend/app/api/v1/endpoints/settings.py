@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, PlatformDbSession, require_permission
+from app.models.auth import User
 from app.schemas.branding import BrandingResponse, BrandingUpdate
 from app.schemas.platform import TenantFeaturesResponse, TenantLimitsResponse, LabSubscriptionResponse
 from app.services.branding_service import BrandingService
@@ -81,7 +82,7 @@ async def update_branding(
     data: BrandingUpdate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("settings.manage"),
+    user: User = require_permission("settings.manage"),
 ):
     branding = await BrandingService(db).update(tenant.id, data)
     await db.commit()
@@ -92,7 +93,7 @@ async def update_branding(
 async def upload_logo(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("settings.manage"),
+    user: User = require_permission("settings.manage"),
     file: UploadFile = File(...),
 ):
     ext = Path(file.filename or "").suffix.lower()

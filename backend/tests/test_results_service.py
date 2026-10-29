@@ -117,6 +117,7 @@ async def test_delete_order_soft_deletes_results():
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=[order_result, results_result])
     db.flush = AsyncMock()
+    db.scalar = AsyncMock(return_value=None)  # no invoice linked
 
     count = await ResultsService(db).delete_order(tenant_id, order_id)
 
@@ -125,3 +126,24 @@ async def test_delete_order_soft_deletes_results():
     assert order.deleted_at is not None
     assert r1.deleted_at is not None
     assert r2.deleted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_order_cancels_its_invoice():
+    from unittest.mock import patch
+
+    order = MagicMock(deleted_at=None)
+    order_result = MagicMock()
+    order_result.scalar_one_or_none.return_value = order
+    results_result = MagicMock()
+    results_result.scalars.return_value = iter([])
+    invoice = MagicMock(deleted_at=None)
+
+    db = AsyncMock()
+    db.execute = AsyncMock(side_effect=[order_result, results_result])
+    db.scalar = AsyncMock(return_value=invoice)
+
+    with patch("app.services.results_service.BillingService") as billing:
+        billing.return_value.cancel_invoice = AsyncMock()
+        await ResultsService(db).delete_order(uuid4(), uuid4())
+        billing.return_value.cancel_invoice.assert_awaited_once_with(invoice)

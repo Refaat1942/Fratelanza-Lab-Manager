@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import select
 
 from app.core.config import get_settings
+from app.core.rbac import ensure_rbac
 from app.core.security import get_password_hash
 from app.db.manager import get_database_manager, tenant_database_name
 from app.db.session import async_session_factory
@@ -38,30 +39,6 @@ from app.services.tenant_provisioning_service import TenantProvisioningService
 settings = get_settings()
 manager = get_database_manager()
 
-PERMISSIONS = [
-    ("patients.read", "patients", "read", "View patients", "عرض المرضى"),
-    ("patients.create", "patients", "create", "Create patients", "إضافة مرضى"),
-    ("patients.update", "patients", "update", "Update patients", "تعديل المرضى"),
-    ("patients.delete", "patients", "delete", "Delete patients", "حذف المرضى"),
-    ("doctors.read", "doctors", "read", "View doctors", "عرض الأطباء"),
-    ("doctors.create", "doctors", "create", "Create doctors", "إضافة أطباء"),
-    ("doctors.update", "doctors", "update", "Update doctors", "تعديل الأطباء"),
-    ("doctors.delete", "doctors", "delete", "Delete doctors", "حذف الأطباء"),
-    ("tests.read", "tests", "read", "View tests", "عرض التحاليل"),
-    ("tests.create", "tests", "create", "Create tests", "إضافة تحاليل"),
-    ("tests.update", "tests", "update", "Update tests", "تعديل التحاليل"),
-    ("tests.delete", "tests", "delete", "Delete tests", "حذف التحاليل"),
-    ("results.read", "results", "read", "View results", "عرض النتائج"),
-    ("results.create", "results", "create", "Enter results", "إدخال النتائج"),
-    ("results.verify", "results", "verify", "Verify results", "اعتماد النتائج"),
-    ("billing.read", "billing", "read", "View billing", "عرض الفواتير"),
-    ("billing.create", "billing", "create", "Create invoices", "إنشاء فواتير"),
-    ("inventory.read", "inventory", "read", "View inventory", "عرض المخزون"),
-    ("inventory.manage", "inventory", "manage", "Manage inventory", "إدارة المخزون"),
-    ("reports.read", "reports", "read", "View reports", "عرض التقارير"),
-    ("settings.manage", "settings", "manage", "Manage settings", "إدارة الإعدادات"),
-    ("users.manage", "users", "manage", "Manage users", "إدارة المستخدمين"),
-]
 
 PLANS = [
     ("Starter Monthly", "الباقة الأساسية شهري", PlanTier.STARTER, BillingCycle.MONTHLY, 999, 1, 5),
@@ -110,12 +87,7 @@ EGYPTIAN_TESTS = [
 
 
 async def seed_tenant_data(db, tenant: Tenant) -> None:
-    perm_objects = []
-    for code, module, action, desc, desc_ar in PERMISSIONS:
-        p = Permission(code=code, module=module, action=action, description=desc, description_ar=desc_ar)
-        db.add(p)
-        perm_objects.append(p)
-    await db.flush()
+    await ensure_rbac(db, tenant.id)
 
     branch = Branch(
         tenant_id=tenant.id,
@@ -137,31 +109,11 @@ async def seed_tenant_data(db, tenant: Tenant) -> None:
     )
     await db.flush()
 
-    admin_role = Role(tenant_id=tenant.id, name="Administrator", name_ar="مدير النظام", is_system=True)
-    reception_role = Role(tenant_id=tenant.id, name="Receptionist", name_ar="الاستقبال", is_system=True)
-    lab_role = Role(tenant_id=tenant.id, name="Lab Technician", name_ar="فني المختبر", is_system=True)
-    db.add_all([admin_role, reception_role, lab_role])
-    await db.flush()
-
-    for p in perm_objects:
-        db.add(RolePermission(role_id=admin_role.id, permission_id=p.id))
-
-    reception_codes = {
-        "patients.read", "patients.create", "patients.update",
-        "doctors.read", "tests.read", "results.read",
-        "billing.read", "billing.create",
+    roles = {
+        r.name: r
+        for r in (await db.execute(select(Role).where(Role.tenant_id == tenant.id))).scalars().all()
     }
-    lab_codes = {
-        "results.read", "results.create", "results.verify",
-        "tests.read", "tests.update",
-        "inventory.read", "inventory.manage",
-        "patients.read",
-    }
-    for p in perm_objects:
-        if p.code in reception_codes:
-            db.add(RolePermission(role_id=reception_role.id, permission_id=p.id))
-        if p.code in lab_codes:
-            db.add(RolePermission(role_id=lab_role.id, permission_id=p.id))
+    admin_role = roles["Administrator"]
 
     admin = User(
         tenant_id=tenant.id,

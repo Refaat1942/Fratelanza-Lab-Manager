@@ -73,10 +73,10 @@ export default function BillingPage() {
     setLoading(true);
     const qp = queryParams.replace(/^&/, "?");
     Promise.all([
-      api.get(`/billing/invoices?page_size=100${queryParams}`),
+      api.get(`/billing/invoices?page_size=1000${queryParams}`),
       api.get(`/billing/summary${qp}`),
-      api.get("/patients?page_size=100"),
-      api.get("/tests?page_size=100"),
+      api.get("/patients?page_size=1000"),
+      api.get("/tests?page_size=1000"),
     ])
       .then(([inv, sum, pat, tst]) => {
         setInvoices(inv.data.items || []);

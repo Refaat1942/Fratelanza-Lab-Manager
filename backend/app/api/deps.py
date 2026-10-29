@@ -125,13 +125,19 @@ def get_user_permissions(user: User) -> set[str]:
 
 
 def require_permission(permission_code: str):
+    """Use as a parameter default: `user: User = require_permission("billing.read")`.
+
+    It must be the parameter's only dependency. Pairing it with an Annotated dependency such
+    as CurrentUser makes FastAPI ignore it, which silently disables the check.
+    """
+
     async def _checker(user: Annotated[User, Depends(get_current_user)]) -> User:
         perms = get_user_permissions(user)
         if "*" not in perms and permission_code not in perms:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
         return user
 
-    return _checker
+    return Depends(_checker)
 
 
 def require_module(module_key: str):

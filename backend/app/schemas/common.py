@@ -12,7 +12,7 @@ class BaseSchema(BaseModel):
 
 class PaginationParams(BaseModel):
     page: int = Field(1, ge=1)
-    page_size: int = Field(20, ge=1, le=100)
+    page_size: int = Field(20, ge=1, le=1000)
     sort_by: Optional[str] = None
     sort_order: str = Field("desc", pattern="^(asc|desc)$")
     search: Optional[str] = None

@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import Response
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.schemas.billing import InvoiceCreate, InvoiceListItem, PaymentCreate
 from app.schemas.common import MessageResponse, PaginationParams
 from app.services.billing_service import BillingService
@@ -17,9 +18,9 @@ router = APIRouter(prefix="/billing", tags=["Billing"])
 async def list_invoices(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("billing.read"),
+    user: User = require_permission("billing.read"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
 ):
@@ -41,7 +42,7 @@ async def create_invoice(
     data: InvoiceCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("billing.create"),
+    user: User = require_permission("billing.create"),
 ):
     try:
         invoice = await BillingService(db).create_invoice(tenant.id, data, user.id)
@@ -56,7 +57,7 @@ async def record_payment(
     data: PaymentCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("billing.create"),
+    user: User = require_permission("billing.create"),
 ):
     try:
         invoice = await BillingService(db).add_payment(tenant.id, invoice_id, data, user.id)
@@ -69,7 +70,7 @@ async def record_payment(
 async def financial_summary(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("billing.read"),
+    user: User = require_permission("billing.read"),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
 ):
@@ -83,7 +84,7 @@ async def download_receipt(
     invoice_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("billing.read"),
+    user: User = require_permission("billing.read"),
 ):
     try:
         content = await PdfService(db).invoice_receipt_pdf(tenant.id, invoice_id)
@@ -101,7 +102,7 @@ async def get_invoice_detail(
     invoice_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("billing.read"),
+    user: User = require_permission("billing.read"),
 ):
     detail = await BillingService(db).get_invoice_detail(tenant.id, invoice_id)
     if not detail:
@@ -114,7 +115,7 @@ async def delete_invoice(
     invoice_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("billing.create"),
+    user: User = require_permission("billing.create"),
 ):
     deleted = await BillingService(db).delete_invoice(tenant.id, invoice_id)
     if not deleted:

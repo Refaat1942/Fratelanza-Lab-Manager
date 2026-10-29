@@ -28,6 +28,7 @@ interface Expense {
   vendor?: string;
   reference?: string;
   notes?: string;
+  category_name?: string | null;
 }
 
 const emptyForm = {
@@ -46,7 +47,7 @@ export default function ExpensesPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    api.get(`/expenses?page_size=100${queryParams}`)
+    api.get(`/expenses?page_size=1000${queryParams}`)
       .then((res) => setExpenses(res.data.items || []))
       .catch((err) => toast.error(getApiError(err)))
       .finally(() => setLoading(false));
@@ -96,7 +97,7 @@ export default function ExpensesPage() {
       vendor: exp.vendor || "",
       reference: exp.reference || "",
       notes: exp.notes || "",
-      category_name: "",
+      category_name: exp.category_name || "",
     });
     setOpen(true);
   };
@@ -115,6 +116,7 @@ export default function ExpensesPage() {
   const columns: ColumnDef<Expense>[] = [
     { accessorKey: "expense_number", header: "#" },
     { accessorKey: "description", header: locale === "ar" ? "الوصف" : "Description" },
+    { accessorKey: "category_name", header: locale === "ar" ? "البند" : "Category", cell: ({ row }) => row.original.category_name || "—" },
     { accessorKey: "vendor", header: locale === "ar" ? "المورد" : "Vendor" },
     { accessorKey: "amount", header: locale === "ar" ? "المبلغ" : "Amount", cell: ({ row }) => `EGP ${row.original.amount.toLocaleString()}` },
     { accessorKey: "expense_date", header: locale === "ar" ? "التاريخ" : "Date", cell: ({ row }) => new Date(row.original.expense_date).toLocaleDateString() },

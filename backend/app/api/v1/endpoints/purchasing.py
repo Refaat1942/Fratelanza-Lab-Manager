@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.models.tenant_config import Branch
 from app.schemas.common import MessageResponse, PaginationParams
 from app.services.purchase_service import PurchaseService
@@ -21,8 +22,8 @@ class POCreate(BaseModel):
 
 @router.get("/orders")
 async def list_purchase_orders(
-    db: DbSession, tenant: CurrentTenant, user: CurrentUser = require_permission("inventory.read"),
-    page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    db: DbSession, tenant: CurrentTenant, user: User = require_permission("inventory.read"),
+    page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=1000),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
 ):
@@ -36,7 +37,7 @@ async def list_purchase_orders(
 
 
 @router.post("/orders", status_code=status.HTTP_201_CREATED)
-async def create_purchase_order(data: POCreate, db: DbSession, tenant: CurrentTenant, user: CurrentUser = require_permission("inventory.manage")):
+async def create_purchase_order(data: POCreate, db: DbSession, tenant: CurrentTenant, user: User = require_permission("inventory.manage")):
     branch_id = data.branch_id
     if not branch_id:
         branch_id = await db.scalar(select(Branch.id).where(Branch.tenant_id == tenant.id, Branch.deleted_at.is_(None)).limit(1))
@@ -45,7 +46,7 @@ async def create_purchase_order(data: POCreate, db: DbSession, tenant: CurrentTe
 
 
 @router.delete("/orders/{po_id}", response_model=MessageResponse)
-async def delete_purchase_order(po_id: UUID, db: DbSession, tenant: CurrentTenant, user: CurrentUser = require_permission("inventory.manage")):
+async def delete_purchase_order(po_id: UUID, db: DbSession, tenant: CurrentTenant, user: User = require_permission("inventory.manage")):
     if not await PurchaseService(db).delete_order(tenant.id, po_id):
         raise HTTPException(status_code=404, detail="Purchase order not found")
     return MessageResponse(message="PO deleted", message_ar="تم حذف أمر الشراء")

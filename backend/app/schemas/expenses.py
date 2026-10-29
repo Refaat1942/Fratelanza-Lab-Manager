@@ -25,6 +25,7 @@ class ExpenseUpdate(BaseModel):
     vendor: Optional[str] = None
     reference: Optional[str] = None
     notes: Optional[str] = None
+    category_name: Optional[str] = None
 
 
 class ExpenseResponse(BaseModel):
@@ -37,6 +38,7 @@ class ExpenseResponse(BaseModel):
     vendor: Optional[str] = None
     reference: Optional[str] = None
     notes: Optional[str] = None
+    category_name: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

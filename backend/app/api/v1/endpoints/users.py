@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.schemas.common import MessageResponse, PaginationParams
 from app.schemas.users import (
     PermissionResponse,
@@ -21,7 +22,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 async def list_roles(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("users.manage"),
+    user: User = require_permission("users.manage"),
 ):
     roles = await UserService(db).list_roles(tenant.id)
     return [RoleResponse.model_validate(r) for r in roles]
@@ -31,7 +32,7 @@ async def list_roles(
 async def list_permissions(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("users.manage"),
+    user: User = require_permission("users.manage"),
 ):
     perms = await UserService(db).list_permissions()
     return [PermissionResponse.model_validate(p) for p in perms]
@@ -41,9 +42,9 @@ async def list_permissions(
 async def list_users(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("users.manage"),
+    user: User = require_permission("users.manage"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=1000),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
 ):
@@ -65,7 +66,7 @@ async def create_user(
     data: TenantUserCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("users.manage"),
+    user: User = require_permission("users.manage"),
 ):
     try:
         new_user = await UserService(db).create_user(tenant.id, data)
@@ -81,7 +82,7 @@ async def update_user(
     data: TenantUserUpdate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("users.manage"),
+    user: User = require_permission("users.manage"),
 ):
     updated = await UserService(db).update_user(tenant.id, user_id, data)
     if not updated:
@@ -95,7 +96,7 @@ async def deactivate_user(
     user_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("users.manage"),
+    user: User = require_permission("users.manage"),
 ):
     if str(user.id) == str(user_id):
         raise HTTPException(status_code=400, detail="Cannot deactivate yourself")

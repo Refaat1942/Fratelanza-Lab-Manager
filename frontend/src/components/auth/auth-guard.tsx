@@ -9,7 +9,7 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useBrandingStore } from "@/stores/branding-store";
 import { useFeaturesStore } from "@/stores/features-store";
-import { pathnameToModule } from "@/lib/modules";
+import { pagePermission, pathnameToModule } from "@/lib/modules";
 import { clearSession, getAccessToken } from "@/lib/session";
 
 export function LabAuthGuard({ children }: { children: React.ReactNode }) {
@@ -67,13 +67,15 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
       });
   }, [attempt, router, setUser, setBranding, setFeatures, clearFeatures]);
 
+  const hasPermission = useAuthStore((s) => s.hasPermission);
   useEffect(() => {
     if (!ready || !featuresLoaded) return;
     const moduleKey = pathnameToModule(pathname);
-    if (moduleKey && !isModuleEnabled(moduleKey)) {
+    const perm = pagePermission(pathname);
+    if ((moduleKey && !isModuleEnabled(moduleKey)) || (perm && !hasPermission(perm))) {
       router.replace("/dashboard");
     }
-  }, [ready, featuresLoaded, pathname, isModuleEnabled, router]);
+  }, [ready, featuresLoaded, pathname, isModuleEnabled, hasPermission, router]);
 
   if (offline) {
     const isAr = locale === "ar";
@@ -89,7 +91,11 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!ready) {
+  const perm = pagePermission(pathname);
+  const forbidden = ready && featuresLoaded && !!perm && !hasPermission(perm);
+
+  // Don't mount a page the user can't open (it would fire requests that 403) while redirecting.
+  if (!ready || forbidden) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

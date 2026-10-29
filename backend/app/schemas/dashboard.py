@@ -47,13 +47,15 @@ class LowStockItem(BaseModel):
 
 class OrderInsight(BaseModel):
     pending_orders: int
-    completed_orders: int
+    collected_orders: int = 0
     in_lab_orders: int
+    completed_orders: int
 
 
 class LaboratoryInsight(BaseModel):
     tests_ordered: int
     sales_total: float
+    discount_total: float = 0
     cost_total: float
     margin: float
 
@@ -68,3 +70,5 @@ class DashboardInsights(BaseModel):
     recent_invoices: list[RecentInvoice]
     low_stock: list[LowStockItem]
     net_profit: float
+    # False when the user may not see money figures; financial values are then zeroed.
+    show_financials: bool = True

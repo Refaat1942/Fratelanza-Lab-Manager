@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CurrentTenant, CurrentUser, DbSession, require_permission
+from app.models.auth import User
 from app.schemas.branches import BranchCreate, BranchResponse, BranchUpdate
 from app.schemas.common import MessageResponse
 from app.services.branch_service import BranchService
@@ -15,7 +16,7 @@ router = APIRouter(prefix="/branches", tags=["Branches"])
 async def list_branches(
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("settings.manage"),
+    user: User = require_permission("settings.manage"),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
 ):
@@ -30,7 +31,7 @@ async def create_branch(
     data: BranchCreate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("settings.manage"),
+    user: User = require_permission("settings.manage"),
 ):
     branch = await BranchService(db).create_branch(tenant.id, data)
     await db.commit()
@@ -43,7 +44,7 @@ async def update_branch(
     data: BranchUpdate,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("settings.manage"),
+    user: User = require_permission("settings.manage"),
 ):
     branch = await BranchService(db).update_branch(tenant.id, branch_id, data)
     if not branch:
@@ -57,7 +58,7 @@ async def delete_branch(
     branch_id: UUID,
     db: DbSession,
     tenant: CurrentTenant,
-    user: CurrentUser = require_permission("settings.manage"),
+    user: User = require_permission("settings.manage"),
 ):
     deleted = await BranchService(db).delete_branch(tenant.id, branch_id)
     if not deleted:
