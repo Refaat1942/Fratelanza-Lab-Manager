@@ -109,7 +109,7 @@ export function DataTable<TData, TValue>({
 
       <Card className="overflow-hidden py-0 shadow-card">
         <CardContent className="p-0">
-          <Table className="table-fixed w-full">
+          <Table className="w-full">
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id} className="bg-muted/40 hover:bg-muted/40">
@@ -133,7 +133,7 @@ export function DataTable<TData, TValue>({
                 table.getRowModel().rows.map((row) => (
                   <TableRow key={row.id} className="hover:bg-muted/30">
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell key={cell.id} className="whitespace-nowrap">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </TableCell>
                     ))}

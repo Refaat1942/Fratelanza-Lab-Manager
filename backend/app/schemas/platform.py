@@ -192,7 +192,9 @@ class DemoLinkCreate(BaseModel):
     valid_days: int = Field(default=14, ge=1, le=365)
     plan_id: Optional[UUID] = None
     admin_username: str = Field(default="demo", min_length=2, max_length=64)
-    admin_password: str = Field(min_length=8)
+    # Optional: demos open through the passwordless access link; a password only
+    # matters if the visitor should also be able to sign in from the login page.
+    admin_password: Optional[str] = Field(None, min_length=8)
     admin_name: str = "Demo Administrator"
 
 
@@ -216,6 +218,7 @@ class DemoLinkResponse(BaseModel):
     days_remaining: Optional[int] = None
     status: TenantStatus
     login_path: str
+    access_path: Optional[str] = None
 
 
 class TenantAdminResponse(BaseModel):
@@ -260,6 +263,10 @@ class SubscriptionListItem(BaseModel):
     auto_renew: bool
     amount_paid: float
     price_egp: float
+    billing_cycle: Optional[str] = None
+    # active | grace | expired | suspended | trial — what the laboratory experiences right now
+    access_state: str = "active"
+    days_remaining: Optional[int] = None
 
 
 class PlatformAuditLogResponse(BaseModel):
@@ -280,5 +287,6 @@ class PlatformAdminResponse(BaseModel):
     email: Optional[str] = None
     full_name: str
     is_superadmin: bool
+    using_default_password: bool = False
 
     model_config = {"from_attributes": True}

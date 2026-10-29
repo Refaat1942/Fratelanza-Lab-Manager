@@ -129,7 +129,7 @@ class InventoryService:
             sku, name, name_ar, category, unit, unit_cost, quantity, reorder, batch = (
                 str(row[0]).strip(),
                 str(row[1] or "").strip(),
-                str(row[2] or name or "").strip(),
+                str(row[2] or row[1] or "").strip(),
                 str(row[3] or "other").strip().lower(),
                 str(row[4] or "piece").strip(),
                 float(row[5] or 0),

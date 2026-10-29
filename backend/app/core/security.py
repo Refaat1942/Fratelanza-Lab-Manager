@@ -47,6 +47,7 @@ def create_refresh_token(
     *,
     tenant_id: Optional[UUID] = None,
     database_name: Optional[str] = None,
+    role: Optional[str] = None,
 ) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     payload: dict[str, Any] = {"sub": subject, "exp": expire, "type": "refresh"}
@@ -54,6 +55,14 @@ def create_refresh_token(
         payload["tenant_id"] = str(tenant_id)
     if database_name:
         payload["database_name"] = database_name
+    if role:
+        payload["role"] = role
+    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def create_demo_access_token(tenant_id: UUID, expires_at: datetime) -> str:
+    """Passwordless demo link — valid until the demo expires."""
+    payload: dict[str, Any] = {"sub": str(tenant_id), "exp": expires_at, "type": "demo_access"}
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 

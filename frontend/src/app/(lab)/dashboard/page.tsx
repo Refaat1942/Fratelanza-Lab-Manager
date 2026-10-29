@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, Legend,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -145,7 +145,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Financial KPIs */}
-      <AnimatedStagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <AnimatedStagger className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <AnimatedItem>
           <Card className="border-emerald-200/60 bg-gradient-to-br from-emerald-500/10 to-transparent shadow-card">
             <CardHeader className="pb-2">
@@ -155,7 +155,7 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-emerald-700">EGP {fin?.total_invoiced.toLocaleString() ?? 0}</p>
+              <p className="text-xl font-bold sm:text-2xl text-emerald-700">EGP {fin?.total_invoiced.toLocaleString() ?? 0}</p>
               <p className="text-xs text-muted-foreground">{fin?.invoice_count} {locale === "ar" ? "فاتورة" : "invoices"}</p>
             </CardContent>
           </Card>
@@ -169,7 +169,7 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-blue-700">EGP {fin?.total_collected.toLocaleString() ?? 0}</p>
+              <p className="text-xl font-bold sm:text-2xl text-blue-700">EGP {fin?.total_collected.toLocaleString() ?? 0}</p>
             </CardContent>
           </Card>
         </AnimatedItem>
@@ -182,7 +182,7 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-amber-700">EGP {fin?.outstanding.toLocaleString() ?? 0}</p>
+              <p className="text-xl font-bold sm:text-2xl text-amber-700">EGP {fin?.outstanding.toLocaleString() ?? 0}</p>
             </CardContent>
           </Card>
         </AnimatedItem>
@@ -199,7 +199,7 @@ export default function DashboardPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className={`text-2xl font-bold ${(data?.net_profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+              <p className={`text-xl font-bold sm:text-2xl ${(data?.net_profit ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                 EGP {data?.net_profit.toLocaleString() ?? 0}
               </p>
               <p className="text-xs text-muted-foreground">
@@ -212,7 +212,7 @@ export default function DashboardPage() {
 
       {/* Laboratory sales vs cost (internal) */}
       {data?.laboratory && (
-        <AnimatedStagger className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <AnimatedStagger className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <AnimatedItem>
             <Card className="border-violet-200/60 bg-gradient-to-br from-violet-500/10 to-transparent shadow-card">
               <CardHeader className="pb-2">
@@ -222,7 +222,7 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-violet-700">{data.laboratory.tests_ordered}</p>
+                <p className="text-xl font-bold sm:text-2xl text-violet-700">{data.laboratory.tests_ordered}</p>
               </CardContent>
             </Card>
           </AnimatedItem>
@@ -234,7 +234,7 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-emerald-700">EGP {data.laboratory.sales_total.toLocaleString()}</p>
+                <p className="text-xl font-bold sm:text-2xl text-emerald-700">EGP {data.laboratory.sales_total.toLocaleString()}</p>
               </CardContent>
             </Card>
           </AnimatedItem>
@@ -246,7 +246,7 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-slate-700">EGP {data.laboratory.cost_total.toLocaleString()}</p>
+                <p className="text-xl font-bold sm:text-2xl text-slate-700">EGP {data.laboratory.cost_total.toLocaleString()}</p>
               </CardContent>
             </Card>
           </AnimatedItem>
@@ -258,7 +258,7 @@ export default function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold text-teal-700">EGP {data.laboratory.margin.toLocaleString()}</p>
+                <p className="text-xl font-bold sm:text-2xl text-teal-700">EGP {data.laboratory.margin.toLocaleString()}</p>
               </CardContent>
             </Card>
           </AnimatedItem>
@@ -266,7 +266,7 @@ export default function DashboardPage() {
       )}
 
       {/* Entity stats */}
-      <AnimatedStagger className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <AnimatedStagger className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {statCards.map((s) => (
           <AnimatedItem key={s.title}>
             <Card className={`border bg-gradient-to-br shadow-card transition-all hover:-translate-y-0.5 hover:shadow-card-md ${s.bg}`}>
@@ -279,7 +279,7 @@ export default function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
+                <div className={`text-2xl font-bold sm:text-3xl ${s.color}`}>{s.value}</div>
               </CardContent>
             </Card>
           </AnimatedItem>
@@ -295,10 +295,17 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="h-64">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={financeChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
+                <BarChart data={financeChart} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} reversed={locale === "ar"} tickLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    orientation={locale === "ar" ? "right" : "left"}
+                    width={56}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => Number(v).toLocaleString()}
+                  />
                   <Tooltip formatter={(v) => `EGP ${Number(v ?? 0).toLocaleString()}`} />
                   <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
                     {financeChart.map((_, i) => (
@@ -317,24 +324,42 @@ export default function DashboardPage() {
               <CardTitle className="text-base">{locale === "ar" ? "حالة الطلبات" : "Order Pipeline"}</CardTitle>
             </CardHeader>
             <CardContent className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={orderChart}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    label={({ name, value }) => `${name}: ${value}`}
-                  >
-                    {orderChart.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              {orderChart.every((d) => !d.value) ? (
+                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                  {locale === "ar" ? "لا توجد طلبات في هذه الفترة" : "No orders in this period"}
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={orderChart.filter((d) => d.value > 0)}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="45%"
+                      innerRadius={52}
+                      outerRadius={84}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      {orderChart.filter((d) => d.value > 0).map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend
+                      verticalAlign="bottom"
+                      iconType="circle"
+                      iconSize={8}
+                      formatter={(value, entry) => (
+                        <span className="mx-1 text-xs text-foreground">
+                          {value} ({(entry.payload as { value?: number })?.value ?? 0})
+                        </span>
+                      )}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </AnimatedItem>
@@ -346,7 +371,7 @@ export default function DashboardPage() {
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">{locale === "ar" ? "أحدث المرضى" : "Recent Patients"}</CardTitle>
-              <Button variant="ghost" size="sm" render={<Link href="/patients" />}>
+              <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/patients" />}>
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </CardHeader>
@@ -374,7 +399,7 @@ export default function DashboardPage() {
           <Card className="shadow-card">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-base">{locale === "ar" ? "أحدث الفواتير" : "Recent Invoices"}</CardTitle>
-              <Button variant="ghost" size="sm" render={<Link href="/billing" />}>
+              <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/billing" />}>
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </CardHeader>
@@ -402,7 +427,7 @@ export default function DashboardPage() {
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                 {locale === "ar" ? "تنبيه مخزون" : "Low Stock Alerts"}
               </CardTitle>
-              <Button variant="ghost" size="sm" render={<Link href="/inventory" />}>
+              <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/inventory" />}>
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </CardHeader>

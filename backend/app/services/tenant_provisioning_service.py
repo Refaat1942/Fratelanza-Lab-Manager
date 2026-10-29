@@ -17,6 +17,11 @@ from app.models.platform import Tenant
 
 settings = get_settings()
 
+# Databases already created + migrated by this process. Migrations run in a subprocess,
+# so doing them on every login makes logins slow and lets anyone who knows a lab code
+# spawn alembic processes.
+_ready_databases: set[str] = set()
+
 
 class TenantProvisioningService:
     def __init__(self, platform_db: AsyncSession):
@@ -33,8 +38,10 @@ class TenantProvisioningService:
             tenant.database_name = db_name
             await self.platform_db.flush()
 
-        self.manager.create_database_if_not_exists(db_name)
-        self.manager.run_migrations(db_name)
+        if db_name not in _ready_databases:
+            self.manager.create_database_if_not_exists(db_name)
+            self.manager.run_migrations(db_name)
+            _ready_databases.add(db_name)
         await self._sync_tenant_registry_row(tenant)
         return db_name
 
@@ -48,17 +55,39 @@ class TenantProvisioningService:
             ).scalar_one_or_none()
             return bool(by_code and by_code.id != tenant.id)
 
+    async def _stale_tenant_row_count(self, tenant: Tenant) -> int:
+        """Rows in the dedicated DB that belong to a different tenant id with the same code."""
+        factory = await self.manager.get_tenant_session_factory(tenant.database_name)
+        total = 0
+        async with factory() as tenant_db:
+            stale = (
+                await tenant_db.execute(select(Tenant).where(Tenant.code == tenant.code))
+            ).scalar_one_or_none()
+            if not stale:
+                return 0
+            for table in Base.metadata.sorted_tables:
+                if table.name == "tenants" or "tenant_id" not in table.c:
+                    continue
+                total += await tenant_db.scalar(
+                    select(func.count()).select_from(table).where(table.c.tenant_id == stale.id)
+                ) or 0
+        return total
+
     async def _rebuild_tenant_database(self, tenant: Tenant) -> None:
-        """Safe repair: dedicated DB only. All laboratory data is re-copied from platform DB."""
+        """Repair a half-finished setup. Refuses when the database holds real data."""
         db_name = tenant.database_name
         if not db_name:
             raise ValueError("Tenant has no database_name")
-        print(
-            f"  repair: resetting {db_name} (partial setup removed; "
-            f"data will be copied from platform DB '{self.manager.platform_database_name}')"
-        )
+        stale_rows = await self._stale_tenant_row_count(tenant)
+        if stale_rows:
+            raise RuntimeError(
+                f"Database {db_name} already holds {stale_rows} row(s) for another laboratory "
+                f"with code '{tenant.code}'. Refusing to drop it — back it up and remove it manually."
+            )
+        print(f"  repair: resetting empty database {db_name} left by a partial setup")
         await self.manager.dispose_tenant_engine(db_name)
         self.manager.rebuild_tenant_database(db_name)
+        _ready_databases.add(db_name)
 
     async def _sync_tenant_registry_row(self, tenant: Tenant) -> None:
         """Ensure tenant DB has a tenants row (FK target for users, branches, etc.)."""

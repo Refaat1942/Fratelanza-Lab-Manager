@@ -1,6 +1,7 @@
 "use client";
 
-import { Globe, LogOut, Menu, User } from "lucide-react";
+import { useState } from "react";
+import { Globe, KeyRound, LogOut, Menu, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,6 +15,7 @@ import { useLocale } from "@/hooks/use-locale";
 import { useRouter, usePathname } from "next/navigation";
 import type { Locale } from "@/lib/i18n";
 import { AppBrand } from "./app-brand";
+import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { t, type TranslationKey } from "@/lib/i18n";
 
 interface AppHeaderProps {
@@ -39,6 +41,8 @@ const pathTitles: Record<string, TranslationKey> = {
   "/platform/tenants": "tenants",
   "/platform/subscriptions": "subscriptions",
   "/platform/plans": "plans",
+  "/platform/demos": "demoLinks",
+  "/suppliers": "suppliers",
   "/platform/audit": "auditLogs",
 };
 
@@ -49,7 +53,9 @@ function resolveTitle(pathname: string): TranslationKey | null {
 }
 
 export function AppHeader({ onMenuClick, variant = "lab" }: AppHeaderProps) {
-  const { user, logout } = useAuthStore();
+  const { user, platformAdmin, setPlatformAdmin, logout } = useAuthStore();
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const profile = variant === "platform" ? platformAdmin : user;
   const { locale, setLocale } = useLocale(variant);
   const router = useRouter();
   const pathname = usePathname();
@@ -61,7 +67,7 @@ export function AppHeader({ onMenuClick, variant = "lab" }: AppHeaderProps) {
     router.push(isPlatform ? "/platform/login" : "/login");
   };
 
-  const initials = user?.full_name
+  const initials = profile?.full_name
     ?.split(" ")
     .map((n) => n[0])
     .join("")
@@ -126,13 +132,17 @@ export function AppHeader({ onMenuClick, variant = "lab" }: AppHeaderProps) {
               </AvatarFallback>
             </Avatar>
             <span className="hidden max-w-[120px] truncate text-sm font-medium sm:inline">
-              {user?.full_name}
+              {profile?.full_name}
             </span>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuItem>
               <User className="h-4 w-4" />
-              {user?.username || user?.email}
+              {profile?.username}
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setPasswordOpen(true)}>
+              <KeyRound className="h-4 w-4" />
+              {locale === "ar" ? "تغيير كلمة المرور" : "Change password"}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
               <LogOut className="h-4 w-4" />
@@ -141,6 +151,17 @@ export function AppHeader({ onMenuClick, variant = "lab" }: AppHeaderProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <ChangePasswordDialog
+        open={passwordOpen}
+        onOpenChange={setPasswordOpen}
+        variant={variant}
+        locale={locale}
+        onChanged={() => {
+          if (variant === "platform" && platformAdmin) {
+            setPlatformAdmin({ ...platformAdmin, using_default_password: false });
+          }
+        }}
+      />
     </header>
   );
 }

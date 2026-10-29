@@ -27,6 +27,15 @@ class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
 
+class DemoLoginRequest(BaseModel):
+    token: str = Field(min_length=10)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 RESERVED_USERNAMES = frozenset({"superadmin", "admin", "labadmin", "platform"})
 
 

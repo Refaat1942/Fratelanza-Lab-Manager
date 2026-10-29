@@ -34,6 +34,14 @@ interface Result {
   ordered_at: string;
 }
 
+const RESULT_STATUS: Record<string, { ar: string; en: string; cls: string }> = {
+  pending: { ar: "بانتظار الإدخال", en: "Pending", cls: "bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200" },
+  in_progress: { ar: "قيد التنفيذ", en: "In progress", cls: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300" },
+  verified: { ar: "تم الإدخال", en: "Verified", cls: "bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300" },
+  released: { ar: "صدرت", en: "Released", cls: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
+  amended: { ar: "معدّلة", en: "Amended", cls: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
+};
+
 export default function ResultsPage() {
   const locale = useAuthStore((s) => s.locale);
   const [results, setResults] = useState<Result[]>([]);
@@ -196,18 +204,21 @@ export default function ResultsPage() {
   }, {});
 
   const columns: ColumnDef<Result>[] = [
-    { accessorKey: "order_number", header: "Order #" },
+    { accessorKey: "order_number", header: locale === "ar" ? "رقم الطلب" : "Order #" },
     { accessorKey: "patient_name", header: locale === "ar" ? "المريض" : "Patient" },
     { accessorKey: "test_name", header: locale === "ar" ? "التحليل" : "Test" },
     {
       accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => <Badge variant={isReleased(row.original.status) ? "default" : "secondary"}>{row.original.status}</Badge>,
+      header: locale === "ar" ? "الحالة" : "Status",
+      cell: ({ row }) => {
+        const st = RESULT_STATUS[row.original.status] ?? { ar: row.original.status, en: row.original.status, cls: "" };
+        return <Badge className={`border-0 ${st.cls}`}>{locale === "ar" ? st.ar : st.en}</Badge>;
+      },
     },
     {
       id: "actions",
       cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-nowrap items-center gap-1">
           {row.original.order_status === "pending" && (
             <Button
               size="sm"
@@ -304,8 +315,14 @@ export default function ResultsPage() {
               <form onSubmit={createOrder} className="space-y-4">
                 <div className="space-y-2">
                   <Label>{locale === "ar" ? "المريض" : "Patient"}</Label>
-                  <Select value={patientId} onValueChange={(v) => v && setPatientId(v)}>
-                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <Select
+                    value={patientId}
+                    onValueChange={(v) => v && setPatientId(v)}
+                    items={patients.map((p) => ({ value: p.id, label: p.full_name }))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={locale === "ar" ? "اختر المريض" : "Select patient"} />
+                    </SelectTrigger>
                     <SelectContent>{patients.map((p) => <SelectItem key={p.id} value={p.id}>{p.full_name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>

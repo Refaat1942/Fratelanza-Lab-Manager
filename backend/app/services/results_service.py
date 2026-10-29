@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -252,7 +252,11 @@ class ResultsService:
         lab_result = result.scalar_one_or_none()
         if not lab_result:
             raise ValueError("Result not found")
+        if not data.values:
+            raise ValueError("Enter at least one result value")
 
+        # Re-entry corrects the result: replace previous values instead of appending duplicates.
+        await self.db.execute(delete(LabResultValue).where(LabResultValue.result_id == lab_result.id))
         for v in data.values:
             self.db.add(
                 LabResultValue(
@@ -332,6 +336,8 @@ class ResultsService:
         lab_result = result.scalar_one_or_none()
         if not lab_result:
             raise ValueError("Result not found")
+        if lab_result.status not in (ResultStatus.VERIFIED, ResultStatus.AMENDED, ResultStatus.RELEASED):
+            raise ValueError("Enter the result values before releasing")
         lab_result.status = ResultStatus.RELEASED
         lab_result.released_at = datetime.now(timezone.utc)
         await self.db.flush()

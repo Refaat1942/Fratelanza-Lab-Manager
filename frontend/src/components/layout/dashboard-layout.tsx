@@ -7,6 +7,8 @@ import { AnimatedPage } from "./animated-page";
 import { SmartAssistant } from "@/components/assistant/smart-assistant";
 import { useLocale } from "@/hooks/use-locale";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
+import { ShieldAlert } from "lucide-react";
+import { useAuthStore } from "@/stores/auth-store";
 
 export function DashboardLayout({
   children,
@@ -18,6 +20,9 @@ export function DashboardLayout({
   const { locale } = useLocale(variant);
   const dir = locale === "ar" ? "rtl" : "ltr";
   const [mobileOpen, setMobileOpen] = useState(false);
+  const usingDefaultPassword = useAuthStore(
+    (s) => variant === "platform" && Boolean(s.platformAdmin?.using_default_password)
+  );
 
   return (
     <div className="flex h-screen overflow-hidden mesh-bg" dir={dir}>
@@ -39,6 +44,19 @@ export function DashboardLayout({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <AppHeader onMenuClick={() => setMobileOpen(true)} variant={variant} />
+        {usingDefaultPassword && (
+          <div
+            role="alert"
+            className="flex items-center gap-2 border-b border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/40 dark:text-amber-200 sm:px-6"
+          >
+            <ShieldAlert className="h-4 w-4 shrink-0" />
+            <span>
+              {locale === "ar"
+                ? "أنت تستخدم كلمة المرور الافتراضية العامة. غيّرها الآن من قائمة الحساب أعلى الصفحة."
+                : "You're using the public default password. Change it now from the account menu above."}
+            </span>
+          </div>
+        )}
         <main className="relative flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="pointer-events-none absolute inset-0 overflow-hidden">
             <div className="animate-float absolute -top-20 end-0 h-56 w-56 rounded-full bg-emerald-400/10 blur-3xl" />

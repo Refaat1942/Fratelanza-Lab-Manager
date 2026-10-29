@@ -28,6 +28,9 @@ Full stack: `docker compose up -d` from repo root (frontend :3000, API :8000).
 
 - After dependency installs, restart dev servers if hot reload does not pick up new packages.
 - Production deploy on VPS: `docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build` plus `alembic upgrade head` in the backend container.
+- **Admin passwords:** bootstrap creates `superadmin` / `labadmin` only if missing (initial password from `PLATFORM_ADMIN_PASSWORD` / `DEMO_ADMIN_PASSWORD`) and never resets them on restart. Recover with `python scripts/ensure_platform_admin.py --reset 'NewPass'`. Production refuses the default `SECRET_KEY`.
+- **Subscriptions:** `TenantAccessService.assert_tenant_active` cuts off labs after `grace_ends_at` (demos at `expires_at`). Demos are `TRIAL` tenants; pausing one cancels its subscription rather than changing status.
+- **Demo links:** `/demo?token=…` → `POST /auth/demo-login` signs in as the demo lab admin; the token is a JWT expiring with the demo.
 - Platform tenant feature saves can 500 if admin password fields are sent unchanged; tenants edit flow uses `passwordDirty` to avoid that.
 - **Data “missing” after re-login:** usually wrong tenant DB routing or data left in platform DB. On login, missing rows are synced from platform → dedicated DB. Manual repair: `docker compose ... exec backend python scripts/sync_tenant_data_from_platform.py <lab-code>`.
 - **Backups:** No backup container. Host cron runs `deploy/hostinger/run-backup.sh` daily at 02:00 into Docker volume `labmaster_backups`. Install: `sudo bash deploy/hostinger/install-backup-cron.sh`. Manual: `sudo bash deploy/hostinger/run-backup.sh`. After VPS reboot: `bash deploy/hostinger/post-reboot.sh`.

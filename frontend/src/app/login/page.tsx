@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import { api, getApiError } from "@/lib/api";
+import { api, getApiError, localizeApiMessage } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useBrandingStore } from "@/stores/branding-store";
 import { BrandingLogo } from "@/components/branding/branding-logo";
@@ -71,7 +71,7 @@ function LoginPageContent() {
     const stored = sessionStorage.getItem("login_error");
     if (stored || searchParams.get("suspended")) {
       const msg =
-        stored ||
+        (stored && localizeApiMessage(stored, locale)) ||
         (locale === "ar"
           ? "تم تعليق حساب المختبر. تواصل مع إدارة المنصة."
           : "This laboratory account is suspended. Contact platform support.");

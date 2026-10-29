@@ -5,7 +5,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.auth import RefreshToken, User
-from app.models.platform import Tenant, TenantStatus
+from app.models.platform import SubscriptionStatus, Tenant, TenantStatus, TenantSubscription
 
 BLOCKED_STATUSES = (TenantStatus.SUSPENDED, TenantStatus.LOCKED, TenantStatus.EXPIRED)
 
@@ -26,7 +26,29 @@ class TenantAccessService:
             raise ValueError("Tenant not found")
         if tenant.status in BLOCKED_STATUSES:
             raise ValueError(f"Tenant account is {tenant.status.value}")
+        if await self.subscription_lapsed(tenant):
+            raise ValueError(f"Tenant account is {TenantStatus.EXPIRED.value}")
         return tenant
+
+    async def subscription_lapsed(self, tenant: Tenant) -> bool:
+        """True once the latest subscription is cancelled or past its cut-off.
+        Paid plans keep working through the grace period; demos stop at expiry."""
+        sub = (
+            await self.db.execute(
+                select(TenantSubscription)
+                .where(TenantSubscription.tenant_id == tenant.id)
+                .order_by(TenantSubscription.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if not sub:
+            return False
+        if sub.status in (SubscriptionStatus.CANCELLED, SubscriptionStatus.EXPIRED):
+            return True
+        cutoff = sub.expires_at
+        if tenant.status != TenantStatus.TRIAL and sub.grace_ends_at:
+            cutoff = sub.grace_ends_at
+        return datetime.now(timezone.utc) > cutoff
 
     async def revoke_tenant_sessions(self, tenant_id: UUID, tenant_db: AsyncSession | None = None) -> int:
         from app.db.manager import get_database_manager

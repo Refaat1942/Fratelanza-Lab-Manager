@@ -17,7 +17,6 @@ from app.models.auth import Permission, Role, RolePermission, User, UserRole
 from app.models.platform import (
     BillingCycle,
     PlanTier,
-    PlatformUser,
     SubscriptionPlan,
     SubscriptionStatus,
     Tenant,
@@ -31,8 +30,10 @@ from app.models.inventory import InventoryBatch, InventoryCategory, InventoryIte
 from app.models.orders import LabOrder, LabOrderItem, LabResult, OrderStatus, ResultStatus
 from app.models.patients import Gender, Patient, PatientVisit, VisitStatus
 from app.models.doctors import Doctor
+from app.models.tenant_config import Branch, TenantBranding
 from app.core.modules import ENTERPRISE_MODULES, PROFESSIONAL_MODULES, STARTER_MODULES
 from app.services.tenant_feature_service import TenantFeatureService
+from app.services.tenant_provisioning_service import TenantProvisioningService
 
 settings = get_settings()
 manager = get_database_manager()
@@ -357,20 +358,12 @@ async def seed_tenant_data(db, tenant: Tenant) -> None:
 
 async def seed() -> None:
     async with async_session_factory() as platform_db:
-        existing = await platform_db.execute(select(PlatformUser).limit(1))
+        # Plans are the first thing seeded; the platform admin is created separately
+        # by ensure_platform_admin, so it can't be used as the "already seeded" marker.
+        existing = await platform_db.execute(select(SubscriptionPlan).limit(1))
         if existing.scalar_one_or_none():
             print("Database already seeded.")
             return
-
-        platform_db.add(
-            PlatformUser(
-                username="superadmin",
-                email=None,
-                password_hash=get_password_hash("Admin@123"),
-                full_name="Platform Administrator",
-                is_superadmin=True,
-            )
-        )
 
         for name, name_ar, tier, cycle, price, branches, users in PLANS:
             if tier == PlanTier.STARTER:
@@ -438,7 +431,6 @@ async def seed() -> None:
 
         await platform_db.commit()
         print("Seed completed successfully!")
-        print("Platform admin username: superadmin")
         print("Demo lab admin username: labadmin (tenant code: demo-lab)")
         if settings.TENANT_DATABASE_PER_CUSTOMER:
             print(f"Demo laboratory database: {tenant.database_name}")

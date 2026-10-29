@@ -43,9 +43,14 @@ if [ ! -f .env.production ]; then
     cp .env.production.example .env.production
     SECRET=$(openssl rand -hex 32)
     DB_PASS=$(openssl rand -hex 16)
+    ADMIN_PASS=$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 16)
     sed -i "s/CHANGE_ME_OPENSSL_RAND_HEX_32/$SECRET/" .env.production
     sed -i "s/CHANGE_ME_STRONG_PASSWORD/$DB_PASS/" .env.production
-    echo "Generated SECRET_KEY and POSTGRES_PASSWORD in .env.production"
+    sed -i "s/CHANGE_ME_ADMIN_PASSWORD/$ADMIN_PASS/" .env.production
+    echo "Generated SECRET_KEY, POSTGRES_PASSWORD and PLATFORM_ADMIN_PASSWORD in .env.production"
+    echo ""
+    echo "  Platform owner login:  superadmin / $ADMIN_PASS"
+    echo "  (saved in .env.production as PLATFORM_ADMIN_PASSWORD)"
     echo "⚠️  Edit NEXT_PUBLIC_API_URL and CORS_ORIGINS with your domain before going live."
 fi
 
